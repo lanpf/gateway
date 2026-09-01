@@ -1,0 +1,167 @@
+spring:
+  application:
+    name: gateway
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        username: ${NACOS_USERNAME:}
+        password: ${NACOS_PASSWORD:}
+        import-check:
+          enabled: false
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: user-auth
+              uri: ${USER_AUTH_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/user-auth/**,/admin/user-auth/**,/oauth2/**,/.well-known/**
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: 8080
+
+gateway:
+  policy:
+    nacos:
+      group: ${GATEWAY_POLICY_NACOS_GROUP:GATEWAY}
+      data-id: ${GATEWAY_POLICY_NACOS_DATA_ID:gateway-ingress-policy.yaml}
+      endpoint-definition-data-id: ${GATEWAY_POLICY_ENDPOINT_DEFINITION_DATA_ID:gateway-endpoints.yaml}
+      client-app-definition-data-id: ${GATEWAY_POLICY_CLIENT_APP_DEFINITION_DATA_ID:gateway-client-app-policies.yaml}
+      channel-access-definition-data-id: ${GATEWAY_POLICY_CHANNEL_ACCESS_DEFINITION_DATA_ID:gateway-channel-access-policies.yaml}
+      channel-credential-definition-data-id: ${GATEWAY_POLICY_CHANNEL_CREDENTIAL_DEFINITION_DATA_ID:gateway-channel-credential-policies.yaml}
+      route-access-definition-data-id: ${GATEWAY_POLICY_ROUTE_ACCESS_DEFINITION_DATA_ID:gateway-route-access-policies.yaml}
+      read-timeout: ${GATEWAY_POLICY_NACOS_READ_TIMEOUT:5s}
+      recovery-interval: ${GATEWAY_POLICY_NACOS_RECOVERY_INTERVAL:30s}
+      last-known-good-location: ${GATEWAY_POLICY_LKG_LOCATION:./data/gateway-ingress-policy.yaml}
+      history:
+        admin-access-token: ${NACOS_ADMIN_ACCESS_TOKEN:}
+        rest-client:
+          connect-timeout: ${GATEWAY_POLICY_NACOS_HISTORY_CONNECT_TIMEOUT:2s}
+          read-timeout: ${GATEWAY_POLICY_NACOS_HISTORY_READ_TIMEOUT:5s}
+  ingress-policy:
+    endpoints:
+      - endpoint-id: USER_AUTH.LOGIN_PUBLIC
+        owner-service: user-auth
+        delivery-route-id: user-auth
+        matchers:
+          - { http-method: POST, path-pattern: /api/user-auth/challenges }
+          - { http-method: POST, path-pattern: /api/user-auth/login/mobile-otp }
+          - { http-method: POST, path-pattern: /api/user-auth/login/refresh }
+          - { http-method: POST, path-pattern: /api/user-auth/login/external/proof }
+          - { http-method: POST, path-pattern: /api/user-auth/login/external/attempt }
+          - { http-method: POST, path-pattern: /api/user-auth/login/external/complete }
+          - { http-method: POST, path-pattern: /api/user-auth/login/external/bound-credential }
+      - endpoint-id: USER_AUTH.LOGIN_PARTNER_TRUSTED_MOBILE
+        owner-service: user-auth
+        delivery-route-id: user-auth
+        matchers:
+          - { http-method: POST, path-pattern: /api/user-auth/login/partner/trusted-mobile }
+      - endpoint-id: USER_AUTH.AUTHENTICATED_API
+        owner-service: user-auth
+        delivery-route-id: user-auth
+        matchers:
+          - { http-method: POST, path-pattern: /api/user-auth/credentials/bind }
+          - { http-method: POST, path-pattern: /api/user-auth/logout }
+          - { http-method: POST, path-pattern: /api/user-auth/handoffs }
+      - endpoint-id: USER_AUTH.HANDOFF_EXCHANGE
+        owner-service: user-auth
+        delivery-route-id: user-auth
+        matchers:
+          - { http-method: POST, path-pattern: /api/user-auth/handoffs/exchange }
+      - endpoint-id: USER_AUTH.ADMIN
+        owner-service: user-auth
+        delivery-route-id: user-auth
+        matchers:
+          - { http-method: POST, path-pattern: /admin/user-auth/** }
+          - { http-method: PUT, path-pattern: /admin/user-auth/** }
+      - endpoint-id: USER_AUTH.OAUTH2_PROTOCOL
+        owner-service: user-auth
+        delivery-route-id: user-auth
+        matchers:
+          - { http-method: GET, path-pattern: /oauth2/** }
+          - { http-method: POST, path-pattern: /oauth2/** }
+          - { http-method: GET, path-pattern: /.well-known/** }
+    client-apps:
+      mini-program: { status: ENABLED, platform: WECHAT_MINI_PROGRAM }
+      app: { status: ENABLED, platform: APP }
+      admin: { status: ENABLED, platform: WEB }
+      oauth2-client: { status: ENABLED, platform: SERVER }
+    channel-access:
+      DIRECT:
+        allowed-client-app-ids: [mini-program, app]
+      MINI_PROGRAM_REVIEW:
+        allowed-client-app-ids: [mini-program]
+      PARTNER_A:
+        allowed-client-app-ids: [mini-program]
+    channel-credentials:
+      PARTNER_A:
+        active-credential:
+          credential-id: partner-a-current
+          valid-from: 2026-01-01T00:00:00Z
+          expires-at: 2030-01-01T00:00:00Z
+          signature-payload-contract: SECRET_TIMESTAMP_BODY_HMAC_SHA256
+          secret-ref: partner-a
+    routes:
+      "[USER_AUTH.LOGIN_PUBLIC]":
+        channel-credential-requirement: IGNORE
+        channel-requirement: REQUIRED
+        subject-requirement: IGNORE
+      "[USER_AUTH.LOGIN_PARTNER_TRUSTED_MOBILE]":
+        channel-credential-requirement: REQUEST_SIGNATURE
+        channel-requirement: REQUIRED
+        subject-requirement: IGNORE
+      "[USER_AUTH.AUTHENTICATED_API]":
+        channel-credential-requirement: IGNORE
+        channel-requirement: REQUIRED
+        subject-requirement: HOST_SESSION_REQUIRED
+        required-audiences: [cloud-api]
+      "[USER_AUTH.HANDOFF_EXCHANGE]":
+        channel-credential-requirement: IGNORE
+        channel-requirement: REQUIRED
+        subject-requirement: IGNORE
+      "[USER_AUTH.ADMIN]":
+        channel-credential-requirement: IGNORE
+        channel-requirement: FORBIDDEN
+        subject-requirement: HOST_SESSION_REQUIRED
+        required-scopes: [admin]
+        required-audiences: [gateway-admin]
+      "[USER_AUTH.OAUTH2_PROTOCOL]":
+        channel-credential-requirement: IGNORE
+        channel-requirement: FORBIDDEN
+        subject-requirement: IGNORE
+        forwarding:
+          authorization-header: PRESERVE
+          cookies: STRIP_ALL
+  security:
+    admin-audience: gateway-admin
+    access-token:
+      format: ${GATEWAY_ACCESS_TOKEN_FORMAT:SELF_CONTAINED}
+      issuer: ${USER_AUTH_OAUTH2_ISSUER:http://localhost:8081}
+      jwt:
+        jwk-set-uri: ${USER_AUTH_JWK_SET_URI:http://localhost:8081/oauth2/jwks}
+      reference:
+        introspection-uri: ${USER_AUTH_INTROSPECTION_URI:http://localhost:8081/oauth2/introspect}
+        client-id: ${GATEWAY_INTROSPECTION_CLIENT_ID:gateway-introspection-client}
+        client-secret: ${GATEWAY_INTROSPECTION_CLIENT_SECRET:local-gateway-introspection-secret}
+    request-signature:
+      secrets:
+        partner-a: ${PARTNER_A_REQUEST_SIGNATURE_SECRET:local-partner-a-secret}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+framework:
+  lock:
+    redis:
+      provider: SPRING_INTEGRATION
+      lease-time: 30s
+      auto-renewal: true

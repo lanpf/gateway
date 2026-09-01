@@ -1,0 +1,7 @@
+---
+- endpointId: "USER_AUTH.LOGIN"
+  ownerService: "user-auth"
+  matchers:
+  - httpMethod: "POST"
+    pathPattern: "/api/user-auth/login"
+  deliveryRouteId: "user-auth"

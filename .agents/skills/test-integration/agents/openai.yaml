@@ -1,0 +1,4 @@
+interface:
+  display_name: "Integration Testing"
+  short_description: "Run smoke-phase integration tests with real infrastructure"
+  default_prompt: "Use $test-integration to write or review integration tests in the smoke-test phase."

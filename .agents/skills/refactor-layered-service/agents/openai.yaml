@@ -1,0 +1,4 @@
+interface:
+  display_name: "Layered Service Refactoring"
+  short_description: "Plan and apply standards-driven service refactors"
+  default_prompt: "Use $refactor-layered-service to plan a coordinated standards-driven service refactor."

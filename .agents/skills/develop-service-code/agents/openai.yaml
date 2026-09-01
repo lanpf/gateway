@@ -1,0 +1,4 @@
+interface:
+  display_name: "Service Code Development"
+  short_description: "Develop service code under the shared engineering standards"
+  default_prompt: "Use $develop-service-code to develop or review service code under the shared standards."

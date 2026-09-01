@@ -1,0 +1,38 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Maven
+target/
+.flattened-pom.xml
+dependency-reduced-pom.xml
+release.properties
+pom.xml.releaseBackup
+
+# Logs and JVM diagnostics
+*.log
+logs/
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# Local environment
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Local Spring Boot configuration
+application-local.yml
+application-local.yaml
+
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and temporary files
+*.swp
+*.swo
+*~

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Distributed Capabilities"
+  short_description: "Build distributed IDs, locking, and messaging safely"
+  default_prompt: "Use $develop-distributed-capabilities to implement or review distributed IDs, locks, or messaging."

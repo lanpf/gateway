@@ -1,0 +1,4 @@
+interface:
+  display_name: "Compensation Workflows"
+  short_description: "Build compensation, reconciliation, and fallback flows"
+  default_prompt: "Use $develop-compensation-workflows to design or implement a reliable business compensation workflow."
