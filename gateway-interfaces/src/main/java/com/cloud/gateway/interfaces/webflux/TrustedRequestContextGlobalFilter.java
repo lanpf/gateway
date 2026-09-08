@@ -4,11 +4,11 @@ import com.cloud.framework.core.RequestHeader;
 import com.cloud.gateway.application.policy.PolicySnapshotProvider;
 import com.cloud.gateway.application.security.ChannelCredentialAuthenticator;
 import com.cloud.gateway.application.security.ChannelSignatureEvidence;
-import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationResult;
+import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationOutcome;
 import com.cloud.gateway.domain.access.IngressAccessDecision;
 import com.cloud.gateway.domain.access.IngressAccessDenyReason;
 import com.cloud.gateway.domain.access.IngressAccessPolicyEvaluator;
-import com.cloud.gateway.domain.access.SubjectAuthenticationResult;
+import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.access.TrustedRequestContext;
 import com.cloud.gateway.domain.endpoint.EndpointDefinition;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderPolicy;
@@ -22,7 +22,7 @@ import com.cloud.gateway.domain.policy.IngressClientAppPolicy;
 import com.cloud.gateway.domain.policy.IngressPolicySnapshot;
 import com.cloud.gateway.domain.policy.IngressRouteAccessPolicy;
 import com.cloud.gateway.domain.policy.ClientAppId;
-import com.cloud.gateway.domain.policy.SubjectRequirement;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -30,6 +30,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpCookie;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
@@ -44,39 +45,26 @@ import reactor.core.publisher.Mono;
 import java.time.Clock;
 import java.util.Optional;
 
+@RequiredArgsConstructor
 public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Ordered {
     private static final int MAX_CLIENT_VERSION_LENGTH = 64;
+    private static final String BROWSER_SESSION_COOKIE = "BROWSER_SESSION";
+
     private final PolicySnapshotProvider snapshotProvider;
     private final ChannelCredentialAuthenticator channelCredentialAuthenticator;
     private final SubjectAuthenticator<Authentication> hostSessionSubjectAuthenticator;
     private final SubjectAuthenticator<String> browserSessionSubjectAuthenticator;
     private final IngressAccessPolicyEvaluator evaluator;
-    private final SnapshotEndpointResolver endpointResolver;
     private final Clock clock;
 
-    public TrustedRequestContextGlobalFilter(
-            PolicySnapshotProvider snapshotProvider,
-            ChannelCredentialAuthenticator channelCredentialAuthenticator,
-            SubjectAuthenticator<Authentication> hostSessionSubjectAuthenticator,
-            SubjectAuthenticator<String> browserSessionSubjectAuthenticator,
-            IngressAccessPolicyEvaluator evaluator,
-            Clock clock
-    ) {
-        this.snapshotProvider = snapshotProvider;
-        this.channelCredentialAuthenticator = channelCredentialAuthenticator;
-        this.hostSessionSubjectAuthenticator = hostSessionSubjectAuthenticator;
-        this.browserSessionSubjectAuthenticator = browserSessionSubjectAuthenticator;
-        this.evaluator = evaluator;
-        this.endpointResolver = new SnapshotEndpointResolver();
-        this.clock = clock;
-    }
+    private final SnapshotEndpointResolver endpointResolver = new SnapshotEndpointResolver();
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         IngressPolicySnapshot snapshot = snapshotProvider.current().snapshot();
-        String method = exchange.getRequest().getMethod().name();
+        String httpMethod = exchange.getRequest().getMethod().name();
         String path = exchange.getRequest().getPath().value();
-        Optional<EndpointDefinition> endpoint = endpointResolver.resolve(snapshot.content().endpointCatalog(), method, path);
+        Optional<EndpointDefinition> endpoint = endpointResolver.resolve(snapshot.content().endpointCatalog(), httpMethod, path);
         if (endpoint.isEmpty()) {
             return reject(exchange, HttpStatus.NOT_FOUND);
         }
@@ -101,20 +89,30 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
             Authentication authentication
     ) {
         ServerWebExchange exchange = cached.exchange();
-        String clientAppIdHeader = exchange.getRequest().getHeaders().getFirst(RequestHeader.CLIENT_APP_ID);
-        String channelCodeHeader = exchange.getRequest().getHeaders().getFirst(RequestHeader.CHANNEL_CODE);
-        ClientAppId clientAppId = StringUtils.hasText(clientAppIdHeader) ? new ClientAppId(clientAppIdHeader) : null;
-        ChannelCode channelCode = StringUtils.hasText(channelCodeHeader) ? new ChannelCode(channelCodeHeader) : null;
-        IngressClientAppPolicy clientApp = snapshot.content().clientAppPolicies().get(clientAppId);
+
+        HttpHeaders headers = exchange.getRequest().getHeaders();
+        String clientAppIdHeaderValue = headers.getFirst(RequestHeader.CLIENT_APP_ID);
+        String channelCodeHeaderValue = headers.getFirst(RequestHeader.CHANNEL_CODE);
+        ClientAppId clientAppId = StringUtils.hasText(clientAppIdHeaderValue) ? new ClientAppId(clientAppIdHeaderValue) : null;
+        ChannelCode channelCode = StringUtils.hasText(channelCodeHeaderValue) ? new ChannelCode(channelCodeHeaderValue) : null;
+        IngressClientAppPolicy clientApp = clientAppId == null
+                ? null : snapshot.content().clientAppPolicies().get(clientAppId);
         IngressChannelAccessPolicy channelAccess = channelCode == null
                 ? null : snapshot.content().channelAccessPolicies().get(channelCode);
-        Mono<ChannelCredentialAuthenticationResult> channelCredential =
-                authenticateChannelCredential(exchange, cached.payload(), snapshot, route, channelCode);
-        Mono<SubjectAuthenticationResult> subject = authenticateSubject(exchange, route, authentication);
-        return Mono.zip(channelCredential, subject)
+
+        Mono<ChannelCredentialAuthenticationOutcome> channelCredentialAuthentication =
+                authenticateChannelCredential(exchange, cached.payload(), channelCode, route, snapshot);
+        Mono<SubjectAuthenticationOutcome> subjectAuthentication =
+                authenticateSubject(exchange, route, authentication);
+
+        return Mono.zip(channelCredentialAuthentication, subjectAuthentication)
                 .flatMap(authentications -> {
-                    IngressAccessDecision decision = evaluator.evaluate(snapshot.snapshotVersion(), clientApp,
-                            channelAccess, route, channelCode, authentications.getT1(), authentications.getT2());
+                    IngressAccessDecision decision = evaluator.evaluate(
+                            snapshot.snapshotVersion(), channelCode,
+                            clientApp, channelAccess, route,
+                            exchange.getRequest().getHeaders().getFirst(HttpHeaders.ORIGIN),
+                            isUnsafe(exchange.getRequest().getMethod()),
+                            authentications.getT1(), authentications.getT2());
                     if (decision instanceof IngressAccessDecision.Denied denied) {
                         return reject(exchange, status(denied.reason()));
                     }
@@ -124,56 +122,63 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
                 });
     }
 
-    private Mono<ChannelCredentialAuthenticationResult> authenticateChannelCredential(
+    private Mono<ChannelCredentialAuthenticationOutcome> authenticateChannelCredential(
             ServerWebExchange exchange,
             byte[] payload,
-            IngressPolicySnapshot snapshot,
+            ChannelCode channelCode,
             IngressRouteAccessPolicy route,
-            ChannelCode channelCode
+            IngressPolicySnapshot snapshot
     ) {
         if (route.channelCredentialRequirement() != ChannelCredentialRequirement.REQUEST_SIGNATURE
                 || channelCode == null) {
-            return Mono.just(ChannelCredentialAuthenticationResult.absent());
+            return Mono.just(ChannelCredentialAuthenticationOutcome.absent());
         }
-        IngressChannelCredentialPolicy channelCredentialPolicy = snapshot.content().channelCredentialPolicies().get(channelCode);
-        if (channelCredentialPolicy == null) {
-            return Mono.just(ChannelCredentialAuthenticationResult.rejected());
+        IngressChannelCredentialPolicy channelCredential = snapshot.content().channelCredentialPolicies().get(channelCode);
+        if (channelCredential == null) {
+            return Mono.just(ChannelCredentialAuthenticationOutcome.rejected());
         }
         HttpHeaders headers = exchange.getRequest().getHeaders();
-        String timestamp = headers.getFirst(GatewayRequestHeaders.TIMESTAMP);
-        String signature = headers.getFirst(GatewayRequestHeaders.SIGNATURE);
-        if (!StringUtils.hasText(timestamp) || !StringUtils.hasText(signature)) {
-            return Mono.just(ChannelCredentialAuthenticationResult.absent());
+        String timestampHeaderValue = headers.getFirst(GatewayRequestHeaders.TIMESTAMP);
+        String signatureHeaderValue = headers.getFirst(GatewayRequestHeaders.SIGNATURE);
+        if (!StringUtils.hasText(timestampHeaderValue) || !StringUtils.hasText(signatureHeaderValue)) {
+            return Mono.just(ChannelCredentialAuthenticationOutcome.absent());
         }
         try {
             return Mono.fromCompletionStage(channelCredentialAuthenticator.authenticate(
-                    channelCredentialPolicy,
-                    new ChannelSignatureEvidence(timestamp, payload, signature),
+                    channelCredential,
+                    new ChannelSignatureEvidence(payload, timestampHeaderValue, signatureHeaderValue),
                     clock.instant()));
         } catch (IllegalArgumentException exception) {
-            return Mono.just(ChannelCredentialAuthenticationResult.rejected());
+            return Mono.just(ChannelCredentialAuthenticationOutcome.rejected());
         }
     }
 
-    Mono<SubjectAuthenticationResult> authenticateSubject(
+    Mono<SubjectAuthenticationOutcome> authenticateSubject(
             ServerWebExchange exchange, IngressRouteAccessPolicy route, Authentication authentication) {
         return switch (route.subjectRequirement()) {
-            case IGNORE -> Mono.just(SubjectAuthenticationResult.absent());
+            case IGNORE -> Mono.just(SubjectAuthenticationOutcome.absent());
             case BROWSER_SESSION_REQUIRED -> {
-                HttpCookie cookie = exchange.getRequest().getCookies()
-                        .getFirst(GatewayRequestHeaders.BROWSER_SESSION_COOKIE);
+                HttpCookie cookie = exchange.getRequest().getCookies().getFirst(BROWSER_SESSION_COOKIE);
                 yield cookie == null
-                        ? Mono.just(SubjectAuthenticationResult.absent())
+                        ? Mono.just(SubjectAuthenticationOutcome.absent())
                         : browserSessionSubjectAuthenticator.authenticate(cookie.getValue());
             }
             case HOST_SESSION_REQUIRED, HOST_SESSION_OPTIONAL -> isAuthenticationAbsent(authentication)
-                    ? Mono.just(SubjectAuthenticationResult.absent())
+                    ? Mono.just(SubjectAuthenticationOutcome.absent())
                     : hostSessionSubjectAuthenticator.authenticate(authentication);
         };
     }
 
     private static boolean isAuthenticationAbsent(Authentication authentication) {
         return authentication == null || authentication instanceof AnonymousAuthenticationToken;
+    }
+
+    private static boolean isUnsafe(HttpMethod method) {
+        return method == null
+                || !(method == HttpMethod.GET
+                || method == HttpMethod.HEAD
+                || method == HttpMethod.OPTIONS
+                || method == HttpMethod.TRACE);
     }
 
     private static ServerWebExchange forward(
@@ -189,7 +194,7 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
                 headers.set(RequestHeader.CHANNEL_CODE, context.channelContext().channelCode().value());
             }
             if (context.subjectContext() != null) {
-                headers.set(GatewayRequestHeaders.SUBJECT_TYPE, context.subjectContext().subjectType().name());
+                headers.set(RequestHeader.SUBJECT_TYPE, context.subjectContext().subjectType().name());
                 headers.set(RequestHeader.USER_ID, context.subjectContext().subjectId());
                 headers.set(RequestHeader.SESSION_ID, context.subjectContext().loginSessionId());
             }
@@ -217,7 +222,7 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
         headers.remove(RequestHeader.CHANNEL_CODE);
         headers.remove(RequestHeader.USER_ID);
         headers.remove(RequestHeader.SESSION_ID);
-        headers.remove(GatewayRequestHeaders.SUBJECT_TYPE);
+        headers.remove(RequestHeader.SUBJECT_TYPE);
     }
 
     private static void setIfPresent(HttpHeaders headers, String name, String value) {
@@ -228,7 +233,8 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
 
     private static String sanitizeClientVersion(String value) {
         if (!StringUtils.hasText(value)) {
-            return null;}
+            return null;
+        }
         String trimmed = value.trim();
         if (trimmed.length() > MAX_CLIENT_VERSION_LENGTH || !trimmed.matches("[A-Za-z0-9._+-]+")) {
             return null;
@@ -236,11 +242,13 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
         return trimmed;
     }
 
-    private static HttpStatus status(IngressAccessDenyReason reason) {
+    static HttpStatus status(IngressAccessDenyReason reason) {
         return switch (reason) {
             case CLIENT_APP_NOT_FOUND, CHANNEL_REQUIRED -> HttpStatus.BAD_REQUEST;
             case ENDPOINT_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case SUBJECT_REQUIRED, SUBJECT_AUTHENTICATION_FAILED, SUBJECT_TYPE_MISMATCH -> HttpStatus.UNAUTHORIZED;
+            case SUBJECT_AUTHENTICATION_DEPENDENCY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case SUBJECT_AUTHENTICATION_RESPONSE_INVALID -> HttpStatus.BAD_GATEWAY;
             default -> HttpStatus.FORBIDDEN;
         };
     }

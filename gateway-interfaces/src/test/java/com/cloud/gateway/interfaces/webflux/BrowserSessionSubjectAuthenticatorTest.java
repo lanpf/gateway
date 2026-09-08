@@ -4,25 +4,27 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import com.cloud.gateway.domain.access.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.SubjectAuthenticationResult;
+import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
+import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.access.SubjectAuthenticationUnavailableReason;
 import com.cloud.gateway.domain.access.SubjectType;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 class BrowserSessionSubjectAuthenticatorTest {
     @Test
-    void shouldCreateAuthenticatedResultForVerifiedBrowserSession() {
+    void shouldCreateAuthenticatedOutcomeForVerifiedBrowserSession() {
         AuthenticatedSubject subject = new AuthenticatedSubject(
                 SubjectType.BROWSER_SESSION, "user-1", "session-1", null,
                 Set.of(), Set.of(), Instant.parse("2030-01-01T00:00:00Z"));
         BrowserSessionSubjectAuthenticator authenticator = new BrowserSessionSubjectAuthenticator(
-                token -> CompletableFuture.completedFuture(Optional.of(subject)));
+                token -> CompletableFuture.completedFuture(
+                        BrowserSessionVerificationOutcome.verified(subject)));
 
-        SubjectAuthenticationResult.Authenticated authenticated = assertInstanceOf(
-                SubjectAuthenticationResult.Authenticated.class,
+        SubjectAuthenticationOutcome.Authenticated authenticated = assertInstanceOf(
+                SubjectAuthenticationOutcome.Authenticated.class,
                 authenticator.authenticate("cookie-value").block());
 
         assertEquals(subject, authenticated.subject());
@@ -31,10 +33,23 @@ class BrowserSessionSubjectAuthenticatorTest {
     @Test
     void shouldRejectUnverifiedBrowserSession() {
         BrowserSessionSubjectAuthenticator authenticator = new BrowserSessionSubjectAuthenticator(
-                token -> CompletableFuture.completedFuture(Optional.empty()));
+                token -> CompletableFuture.completedFuture(BrowserSessionVerificationOutcome.invalid()));
 
-        SubjectAuthenticationResult result = authenticator.authenticate("invalid-cookie").block();
+        SubjectAuthenticationOutcome result = authenticator.authenticate("invalid-cookie").block();
 
-        assertInstanceOf(SubjectAuthenticationResult.Rejected.class, result);
+        assertInstanceOf(SubjectAuthenticationOutcome.Rejected.class, result);
+    }
+
+    @Test
+    void shouldPreserveUnavailableVerificationReason() {
+        BrowserSessionSubjectAuthenticator authenticator = new BrowserSessionSubjectAuthenticator(
+                token -> CompletableFuture.completedFuture(BrowserSessionVerificationOutcome.unavailable(
+                        SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE)));
+
+        SubjectAuthenticationOutcome.Unavailable result = assertInstanceOf(
+                SubjectAuthenticationOutcome.Unavailable.class,
+                authenticator.authenticate("cookie-value").block());
+
+        assertEquals(SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE, result.reason());
     }
 }

@@ -1,13 +1,13 @@
 {
   "name": "engineering-guidance-publisher",
   "source": "https://github.com/lanpf/engineering-guidance-publisher.git",
-  "version": "2.1.9",
-  "artifact_sha256": "0a983e8de63f854cdb20e31cc13a4566eab9d33f2c9831f9c988207357c27bbc",
+  "version": "3.0.2",
+  "artifact_sha256": "59a377956848b36a45b7653277298ee1c62347a66e8260d204853975bb1980ef",
   "managed_skills": [
-    "develop-service-code",
-    "develop-distributed-capabilities",
-    "develop-compensation-workflows",
+    "develop-service",
+    "develop-distributed",
+    "develop-compensation",
     "test-integration",
-    "refactor-layered-service"
+    "refactor-service"
   ]
 }

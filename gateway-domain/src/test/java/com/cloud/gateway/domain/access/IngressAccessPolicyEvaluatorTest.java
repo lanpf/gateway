@@ -27,8 +27,9 @@ class IngressAccessPolicyEvaluatorTest {
     @Test
     void shouldAllowWhenClientChannelSubjectAudienceAndScopeAllMatch() {
         IngressAccessDecision decision = evaluator.evaluate(
-                7, client(), channel(), route(), new ChannelCode("DIRECT"),
-                ChannelCredentialAuthenticationResult.absent(),
+                7, new ChannelCode("DIRECT"), client(), channel(), route(),
+                null, false,
+                ChannelCredentialAuthenticationOutcome.absent(),
                 authenticated(subject()));
 
         IngressAccessDecision.Allowed allowed = assertInstanceOf(IngressAccessDecision.Allowed.class, decision);
@@ -43,8 +44,9 @@ class IngressAccessPolicyEvaluatorTest {
                 "issuer", Set.of("another-api"), Set.of("read"), Instant.parse("2030-01-01T00:00:00Z"));
 
         IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
-                evaluator.evaluate(7, client(), channel(), route(), new ChannelCode("DIRECT"),
-                        ChannelCredentialAuthenticationResult.absent(),
+                evaluator.evaluate(7, new ChannelCode("DIRECT"), client(), channel(), route(),
+                        null, false,
+                        ChannelCredentialAuthenticationOutcome.absent(),
                         authenticated(subject)));
 
         assertEquals(IngressAccessDenyReason.AUDIENCE_NOT_ALLOWED, denied.reason());
@@ -56,9 +58,10 @@ class IngressAccessPolicyEvaluatorTest {
                 ChannelRequirement.FORBIDDEN, SubjectRequirement.IGNORE, Set.of(), Set.of(), forwarding(), true);
 
         IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
-                evaluator.evaluate(1, client(), channel(), route, new ChannelCode("DIRECT"),
-                        ChannelCredentialAuthenticationResult.absent(),
-                        SubjectAuthenticationResult.absent()));
+                evaluator.evaluate(1, new ChannelCode("DIRECT"), client(), channel(), route,
+                        null, false,
+                        ChannelCredentialAuthenticationOutcome.absent(),
+                        SubjectAuthenticationOutcome.absent()));
 
         assertEquals(IngressAccessDenyReason.CHANNEL_NOT_PERMITTED_FOR_ENDPOINT, denied.reason());
     }
@@ -68,9 +71,10 @@ class IngressAccessPolicyEvaluatorTest {
         IngressRouteAccessPolicy route = optionalHostRoute();
 
         IngressAccessDecision decision = evaluator.evaluate(
-                7, client(), channel(), route, new ChannelCode("DIRECT"),
-                ChannelCredentialAuthenticationResult.absent(),
-                SubjectAuthenticationResult.absent());
+                7, new ChannelCode("DIRECT"), client(), channel(), route,
+                        null, false,
+                        ChannelCredentialAuthenticationOutcome.absent(),
+                        SubjectAuthenticationOutcome.absent());
 
         IngressAccessDecision.Allowed allowed = assertInstanceOf(IngressAccessDecision.Allowed.class, decision);
         assertNull(allowed.trustedRequestContext().subjectContext());
@@ -79,19 +83,34 @@ class IngressAccessPolicyEvaluatorTest {
     @Test
     void shouldRejectInvalidCredentialForOptionalHostSession() {
         IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
-                evaluator.evaluate(7, client(), channel(), optionalHostRoute(), new ChannelCode("DIRECT"),
-                        ChannelCredentialAuthenticationResult.absent(),
-                        SubjectAuthenticationResult.rejected()));
+                evaluator.evaluate(7, new ChannelCode("DIRECT"), client(), channel(), optionalHostRoute(),
+                        null, false,
+                        ChannelCredentialAuthenticationOutcome.absent(),
+                        SubjectAuthenticationOutcome.rejected()));
 
         assertEquals(IngressAccessDenyReason.SUBJECT_AUTHENTICATION_FAILED, denied.reason());
     }
 
     @Test
+    void shouldPreserveSubjectAuthenticationDependencyFailure() {
+        IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
+                evaluator.evaluate(7, new ChannelCode("DIRECT"), client(), channel(), route(),
+                        null, false,
+                        ChannelCredentialAuthenticationOutcome.absent(),
+                        SubjectAuthenticationOutcome.unavailable(
+                                SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE)));
+
+        assertEquals(IngressAccessDenyReason.SUBJECT_AUTHENTICATION_DEPENDENCY_UNAVAILABLE,
+                denied.reason());
+    }
+
+    @Test
     void shouldRequireMissingChannelCredential() {
         IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
-                evaluator.evaluate(7, client(), channel(), signedRoute(), new ChannelCode("DIRECT"),
-                        ChannelCredentialAuthenticationResult.absent(),
-                        SubjectAuthenticationResult.absent()));
+                evaluator.evaluate(7, new ChannelCode("DIRECT"), client(), channel(), signedRoute(),
+                        null, false,
+                        ChannelCredentialAuthenticationOutcome.absent(),
+                        SubjectAuthenticationOutcome.absent()));
 
         assertEquals(IngressAccessDenyReason.CHANNEL_CREDENTIAL_REQUIRED, denied.reason());
     }
@@ -99,15 +118,63 @@ class IngressAccessPolicyEvaluatorTest {
     @Test
     void shouldRejectInvalidChannelCredential() {
         IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
-                evaluator.evaluate(7, client(), channel(), signedRoute(), new ChannelCode("DIRECT"),
-                        ChannelCredentialAuthenticationResult.rejected(),
-                        SubjectAuthenticationResult.absent()));
+                evaluator.evaluate(7, new ChannelCode("DIRECT"), client(), channel(), signedRoute(),
+                        null, false,
+                        ChannelCredentialAuthenticationOutcome.rejected(),
+                        SubjectAuthenticationOutcome.absent()));
 
         assertEquals(IngressAccessDenyReason.CHANNEL_CREDENTIAL_INVALID, denied.reason());
     }
 
+    @Test
+    void shouldRequireAllowedOriginForUnsafeBrowserSessionRequest() {
+        IngressAccessDecision.Denied missing = assertInstanceOf(
+                IngressAccessDecision.Denied.class,
+                evaluator.evaluate(
+                        7, new ChannelCode("DIRECT"), client(), channel(), browserRoute(),
+                        null, true,
+                        ChannelCredentialAuthenticationOutcome.absent(),
+                        authenticated(browserSubject())));
+        IngressAccessDecision.Denied mismatched = assertInstanceOf(
+                IngressAccessDecision.Denied.class,
+                evaluator.evaluate(
+                        7, new ChannelCode("DIRECT"), client(), channel(), browserRoute(),
+                        "https://evil.example.com", true,
+                        ChannelCredentialAuthenticationOutcome.absent(),
+                        authenticated(browserSubject())));
+
+        assertEquals(IngressAccessDenyReason.BROWSER_ORIGIN_NOT_ALLOWED, missing.reason());
+        assertEquals(IngressAccessDenyReason.BROWSER_ORIGIN_NOT_ALLOWED, mismatched.reason());
+    }
+
+    @Test
+    void shouldAllowMatchingOriginForUnsafeBrowserSessionRequest() {
+        IngressAccessDecision decision = evaluator.evaluate(
+                7, new ChannelCode("DIRECT"), client(), channel(), browserRoute(),
+                "https://h5.example.com", true,
+                ChannelCredentialAuthenticationOutcome.absent(),
+                authenticated(browserSubject()));
+
+        assertInstanceOf(IngressAccessDecision.Allowed.class, decision);
+    }
+
+    @Test
+    void shouldNotRequireOriginForSafeBrowserSessionRequest() {
+        IngressAccessDecision decision = evaluator.evaluate(
+                7, new ChannelCode("DIRECT"), client(), channel(), browserRoute(),
+                null, false,
+                ChannelCredentialAuthenticationOutcome.absent(),
+                authenticated(browserSubject()));
+
+        assertInstanceOf(IngressAccessDecision.Allowed.class, decision);
+    }
+
     private static IngressClientAppPolicy client() {
-        return new IngressClientAppPolicy(new ClientAppId("mini-program"), ClientAppStatus.ENABLED, "WECHAT_MINI_PROGRAM");
+        return new IngressClientAppPolicy(
+                new ClientAppId("mini-program"),
+                ClientAppStatus.ENABLED,
+                "WECHAT_MINI_PROGRAM",
+                Set.of("https://h5.example.com"));
     }
     private static IngressChannelAccessPolicy channel() {
         return new IngressChannelAccessPolicy(new ChannelCode("DIRECT"), Set.of(new ClientAppId("mini-program")));
@@ -121,8 +188,26 @@ class IngressAccessPolicyEvaluatorTest {
         return new AuthenticatedSubject(SubjectType.HOST_SESSION, "user-1", "session-1", "issuer",
                 Set.of("cloud-api"), Set.of("read"), Instant.parse("2030-01-01T00:00:00Z"));
     }
-    private static SubjectAuthenticationResult authenticated(AuthenticatedSubject subject) {
-        return SubjectAuthenticationResult.authenticated(subject);
+    private static SubjectAuthenticationOutcome authenticated(AuthenticatedSubject subject) {
+        return SubjectAuthenticationOutcome.authenticated(subject);
+    }
+    private static IngressRouteAccessPolicy browserRoute() {
+        return new IngressRouteAccessPolicy(
+                new EndpointId("BROWSER"),
+                ChannelCredentialRequirement.IGNORE,
+                ChannelRequirement.REQUIRED,
+                SubjectRequirement.BROWSER_SESSION_REQUIRED,
+                Set.of(), Set.of(), forwarding(), true);
+    }
+    private static AuthenticatedSubject browserSubject() {
+        return new AuthenticatedSubject(
+                SubjectType.BROWSER_SESSION,
+                "user-1",
+                "session-1",
+                null,
+                Set.of(),
+                Set.of(),
+                Instant.parse("2030-01-01T00:00:00Z"));
     }
     private static IngressRouteAccessPolicy optionalHostRoute() {
         return new IngressRouteAccessPolicy(new EndpointId("OPTIONAL"), ChannelCredentialRequirement.IGNORE,

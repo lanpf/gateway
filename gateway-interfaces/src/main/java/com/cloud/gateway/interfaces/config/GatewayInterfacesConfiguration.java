@@ -9,6 +9,7 @@ import com.cloud.gateway.interfaces.webflux.BrowserSessionSubjectAuthenticator;
 import com.cloud.gateway.interfaces.webflux.HostSessionSubjectAuthenticator;
 import com.cloud.gateway.interfaces.webflux.TrustedRequestContextGlobalFilter;
 import java.time.Clock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.ReactiveAdapterRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,11 +48,14 @@ public class GatewayInterfacesConfiguration {
     }
 
     @Bean
-    WebFluxConfigurer gatewayWebFluxConfigurer(ClientRequestBodyArgumentResolver clientRequestBodyArgumentResolver) {
+    WebFluxConfigurer gatewayWebFluxConfigurer(
+            ObjectProvider<ClientRequestBodyArgumentResolver> resolverProvider) {
+        // 延迟解析：resolver 依赖的 ServerCodecConfigurer 由 WebFlux 自动配置提供，
+        // 直接注入会与 EnableWebFluxConfiguration 的创建形成循环依赖。
         return new WebFluxConfigurer() {
             @Override
             public void configureArgumentResolvers(ArgumentResolverConfigurer configurer) {
-                configurer.addCustomResolver(clientRequestBodyArgumentResolver);
+                configurer.addCustomResolver(resolverProvider.getObject());
             }
         };
     }

@@ -52,11 +52,21 @@ public record CanonicalPolicyContent(
     }
 
     @JsonPropertyOrder({
+            "allowedBrowserOrigins",
             "clientAppId",
             "status",
             "platform"
     })
-    public record ClientApp(String clientAppId, ClientAppStatus status, String platform) { }
+    public record ClientApp(
+            String clientAppId,
+            ClientAppStatus status,
+            String platform,
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> allowedBrowserOrigins
+    ) {
+        public ClientApp {
+            allowedBrowserOrigins = List.copyOf(allowedBrowserOrigins);
+        }
+    }
 
     @JsonPropertyOrder({
             "allowedClientAppIds",

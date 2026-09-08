@@ -1,6 +1,7 @@
 package com.cloud.gateway.infrastructure.policy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import com.cloud.gateway.domain.endpoint.EndpointCatalog;
 import com.cloud.gateway.domain.endpoint.EndpointDefinition;
@@ -12,8 +13,10 @@ import com.cloud.gateway.domain.policy.IngressClientAppPolicy;
 import com.cloud.gateway.domain.policy.IngressPolicyContent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class CanonicalPolicySnapshotHasherTest {
@@ -58,6 +61,24 @@ class CanonicalPolicySnapshotHasherTest {
         assertEquals(MIGRATION_COMPATIBLE_HASH, hasher.hash(content(clientApps)));
     }
 
+    @Test
+    void shouldIncludeNormalizedBrowserOriginsInHashIndependentOfSetOrder() {
+        IngressClientAppPolicy forward = client(FIRST_CLIENT_APP_ID,
+                Set.of("https://one.example.com", "https://two.example.com"));
+        IngressClientAppPolicy reverse = client(FIRST_CLIENT_APP_ID,
+                new LinkedHashSet<>(List.of(
+                        "https://two.example.com", "https://one.example.com")));
+        IngressClientAppPolicy changed = client(FIRST_CLIENT_APP_ID,
+                Set.of("https://three.example.com"));
+
+        assertEquals(
+                hasher.hash(content(Map.of(forward.clientAppId(), forward))),
+                hasher.hash(content(Map.of(reverse.clientAppId(), reverse))));
+        assertNotEquals(
+                hasher.hash(content(Map.of(forward.clientAppId(), forward))),
+                hasher.hash(content(Map.of(changed.clientAppId(), changed))));
+    }
+
     private static IngressPolicyContent content(Map<ClientAppId, IngressClientAppPolicy> clientApps) {
         return content(clientApps, List.of(new EndpointMatcher("GET", "/test")));
     }
@@ -73,6 +94,11 @@ class CanonicalPolicySnapshotHasherTest {
     }
 
     private static IngressClientAppPolicy client(String clientAppId) {
-        return new IngressClientAppPolicy(new ClientAppId(clientAppId), ClientAppStatus.ENABLED, "TEST");
+        return client(clientAppId, Set.of());
+    }
+
+    private static IngressClientAppPolicy client(String clientAppId, Set<String> allowedBrowserOrigins) {
+        return new IngressClientAppPolicy(
+                new ClientAppId(clientAppId), ClientAppStatus.ENABLED, "TEST", allowedBrowserOrigins);
     }
 }

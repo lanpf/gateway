@@ -5,7 +5,7 @@ import com.cloud.gateway.application.security.ChannelSignatureEvidence;
 import com.cloud.gateway.application.security.ReplayGuard;
 import com.cloud.gateway.application.security.SecretResolver;
 import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationMethod;
-import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationResult;
+import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationOutcome;
 import com.cloud.gateway.domain.access.VerifiedChannelCredential;
 import com.cloud.gateway.domain.policy.IngressChannelCredentialPolicy;
 import com.cloud.gateway.domain.policy.RequestSignatureChannelCredential;
@@ -19,36 +19,36 @@ import java.util.concurrent.CompletionStage;
 
 @RequiredArgsConstructor
 public final class RequestSignatureChannelCredentialAuthenticator implements ChannelCredentialAuthenticator {
-    private static final char REPLAY_KEY_SEPARATOR = ':';
     private final SecretResolver secretResolver;
     private final ReplayGuard replayGuard;
     private final RequestSignatureVerifierRegistry verifierRegistry;
     private final Duration maxClockSkew;
 
     @Override
-    public CompletionStage<ChannelCredentialAuthenticationResult> authenticate(
+    public CompletionStage<ChannelCredentialAuthenticationOutcome> authenticate(
             IngressChannelCredentialPolicy policy, ChannelSignatureEvidence evidence, Instant now) {
         Instant requestTimestamp = parseTimestamp(evidence.timestamp());
         if (requestTimestamp == null
                 || Duration.between(requestTimestamp, now).abs().compareTo(maxClockSkew) > 0) {
-            return CompletableFuture.completedFuture(ChannelCredentialAuthenticationResult.rejected());
+            return CompletableFuture.completedFuture(ChannelCredentialAuthenticationOutcome.rejected());
         }
         Optional<RequestSignatureChannelCredential> matched = verify(policy.activeCredential(), evidence, now)
                 ? Optional.of(policy.activeCredential())
                 : policy.graceCredentialOptional().filter(value -> verify(value, evidence, now));
         if (matched.isEmpty()) {
-            return CompletableFuture.completedFuture(ChannelCredentialAuthenticationResult.rejected());
+            return CompletableFuture.completedFuture(ChannelCredentialAuthenticationOutcome.rejected());
         }
-        String replayKey = RequestSignatureCryptography.digest(RequestSignatureCryptography.SHA_256,
-                policy.channelCode().value() + REPLAY_KEY_SEPARATOR
-                        + evidence.timestamp() + REPLAY_KEY_SEPARATOR
-                        + evidence.signature());
-        RequestSignatureChannelCredential credential = matched.orElseThrow();
-        return replayGuard.register(replayKey, now.plus(maxClockSkew)).thenApply(registered -> registered
-                ? ChannelCredentialAuthenticationResult.authenticated(new VerifiedChannelCredential(
-                        ChannelCredentialAuthenticationMethod.REQUEST_SIGNATURE,
-                        credential.credentialId(), credential.channelCode(), now))
-                : ChannelCredentialAuthenticationResult.rejected());
+        String replayKey = RequestSignatureCryptography.digest(
+                RequestSignatureCryptography.SHA_256,
+                String.join(":", policy.channelCode().value(), evidence.timestamp(), evidence.signature())
+        );
+        return replayGuard.register(replayKey, now.plus(maxClockSkew))
+                .thenApply(registered -> registered
+                        ? ChannelCredentialAuthenticationOutcome.authenticated(
+                                new VerifiedChannelCredential(
+                                        ChannelCredentialAuthenticationMethod.REQUEST_SIGNATURE,
+                                        matched.get().credentialId(), matched.get().channelCode(), now))
+                        : ChannelCredentialAuthenticationOutcome.rejected());
     }
 
     private static Instant parseTimestamp(String timestamp) {

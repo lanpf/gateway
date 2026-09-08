@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.cloud</groupId>
         <artifactId>gateway</artifactId>
-        <version>0.2.0-SNAPSHOT</version>
+        <version>0.3.0-SNAPSHOT</version>
     </parent>
     <artifactId>gateway-domain</artifactId>
     <dependencies>

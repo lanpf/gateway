@@ -91,9 +91,10 @@ public class IngressPolicyDefinitionProperties {
     public static class ClientApp {
         @NotNull private ClientAppStatus status = ClientAppStatus.ENABLED;
         @NotBlank private String platform;
+        @NotNull private final Set<@NotBlank String> allowedBrowserOrigins = new LinkedHashSet<>();
 
         private StoredPolicySnapshot.ClientApp toStored() {
-            return new StoredPolicySnapshot.ClientApp(status, platform);
+            return new StoredPolicySnapshot.ClientApp(status, platform, allowedBrowserOrigins);
         }
     }
 

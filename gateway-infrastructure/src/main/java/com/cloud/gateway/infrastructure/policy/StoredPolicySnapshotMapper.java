@@ -59,7 +59,10 @@ public class StoredPolicySnapshotMapper {
     ) {
         return source.entrySet().stream().collect(Collectors.toMap(
                 entry -> entry.getKey().value(),
-                entry -> new StoredPolicySnapshot.ClientApp(entry.getValue().status(), entry.getValue().platform()),
+                entry -> new StoredPolicySnapshot.ClientApp(
+                        entry.getValue().status(),
+                        entry.getValue().platform(),
+                        entry.getValue().allowedBrowserOrigins()),
                 (left, right) -> left,
                 TreeMap::new));
     }
@@ -108,7 +111,9 @@ public class StoredPolicySnapshotMapper {
                 .collect(Collectors.toMap(
                         entry -> new ClientAppId(entry.getKey()),
                         entry -> new IngressClientAppPolicy(new ClientAppId(entry.getKey()),
-                                entry.getValue().status(), entry.getValue().platform())));
+                                entry.getValue().status(),
+                                entry.getValue().platform(),
+                                entry.getValue().allowedBrowserOrigins())));
     }
 
     public Map<ChannelCode, IngressChannelAccessPolicy> toDomainChannelAccess(

@@ -47,7 +47,8 @@ class GatewaySecurityPropertiesTest {
                 "https://issuer.example/introspect",
                 GatewaySecurityProperties.ACCESS_TOKEN_PREFIX + ".reference.client-id", "gateway-client",
                 GatewaySecurityProperties.ACCESS_TOKEN_PREFIX + ".reference.client-secret", "secret",
-                GatewaySecurityProperties.PREFIX + ".request-signature.max-clock-skew", "5m")));
+                GatewaySecurityProperties.PREFIX + ".request-signature.max-clock-skew", "5m",
+                GatewaySecurityProperties.PREFIX + ".browser-session.service-id", "identity-service")));
 
         GatewaySecurityProperties properties = binder.bind(
                 GatewaySecurityProperties.PREFIX, Bindable.of(GatewaySecurityProperties.class))
@@ -55,5 +56,6 @@ class GatewaySecurityPropertiesTest {
 
         assertEquals(GatewaySecurityProperties.Format.REFERENCE, properties.getAccessToken().getFormat());
         assertEquals(Duration.ofMinutes(5), properties.getRequestSignature().getMaxClockSkew());
+        assertEquals("identity-service", properties.getBrowserSession().getServiceId());
     }
 }

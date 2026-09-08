@@ -3,7 +3,7 @@ package com.cloud.gateway.interfaces.webflux;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import com.cloud.gateway.domain.access.SubjectAuthenticationResult;
+import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +28,8 @@ class HostSessionSubjectAuthenticatorTest {
                 OAuth2ParameterNames.SCOPE, "read write",
                 HostSessionSubjectAuthenticator.EXPIRATION_CLAIM, expiresAt));
 
-        SubjectAuthenticationResult.Authenticated authenticated = assertInstanceOf(
-                SubjectAuthenticationResult.Authenticated.class,
+        SubjectAuthenticationOutcome.Authenticated authenticated = assertInstanceOf(
+                SubjectAuthenticationOutcome.Authenticated.class,
                 authenticator.authenticate(authentication).block());
 
         assertEquals("user-1", authenticated.subject().subjectId());
@@ -39,11 +39,11 @@ class HostSessionSubjectAuthenticatorTest {
 
     @Test
     void shouldRejectUnsupportedAuthentication() {
-        SubjectAuthenticationResult result = authenticator
+        SubjectAuthenticationOutcome result = authenticator
                 .authenticate(new TestingAuthenticationToken("principal", "credential"))
                 .block();
 
-        assertInstanceOf(SubjectAuthenticationResult.Rejected.class, result);
+        assertInstanceOf(SubjectAuthenticationOutcome.Rejected.class, result);
     }
 
     private static final class TestTokenAuthentication

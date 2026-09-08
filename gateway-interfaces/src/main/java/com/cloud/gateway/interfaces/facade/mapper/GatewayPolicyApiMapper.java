@@ -41,7 +41,8 @@ public interface GatewayPolicyApiMapper {
     default SaveClientAppPolicyCommand toCommand(SaveClientAppPolicyApiCommand source) {
         return new SaveClientAppPolicyCommand(source.expectedSourceRevision(),
                 new IngressClientAppPolicy(new ClientAppId(source.clientAppId()),
-                        ClientAppStatus.valueOf(source.status().name()), source.platform()));
+                        ClientAppStatus.valueOf(source.status().name()), source.platform(),
+                        source.allowedBrowserOrigins()));
     }
 
     default SaveChannelAccessPolicyCommand toCommand(SaveChannelAccessPolicyApiCommand source) {

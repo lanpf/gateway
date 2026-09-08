@@ -6,25 +6,31 @@ import com.cloud.gateway.application.security.ChannelCredentialAuthenticator;
 import com.cloud.gateway.application.security.ReplayGuard;
 import com.cloud.gateway.application.security.SecretResolver;
 import com.cloud.gateway.application.policy.PolicySnapshotProvider;
-import java.util.List;
 
-import com.cloud.gateway.infrastructure.security.spring.signature.UnavailableBrowserSessionVerifier;
 import com.cloud.gateway.infrastructure.security.spring.signature.LegacySecretParamsTimestampMd5UpperSignatureVerifier;
 import com.cloud.gateway.infrastructure.security.spring.signature.LegacySecretTimestampBodySha256SignatureVerifier;
 import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureChannelCredentialAuthenticator;
 import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureVerifier;
 import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureVerifierRegistry;
 import com.cloud.gateway.infrastructure.security.spring.signature.SecretTimestampBodyHmacSha256SignatureVerifier;
+import com.cloud.gateway.infrastructure.security.spring.session.BrowserSessionVerifierAdapter;
+import java.time.Clock;
+import java.util.Collection;
+
+import com.cloud.userauth.api.authentication.OAuth2Scope;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.client.loadbalancer.reactive.ReactorLoadBalancerExchangeFilterFunction;
 import org.springframework.context.annotation.Bean;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -34,21 +40,24 @@ import org.springframework.security.oauth2.server.resource.introspection.Reactiv
 import org.springframework.security.oauth2.server.resource.introspection.SpringReactiveOpaqueTokenIntrospector;
 import org.springframework.security.oauth2.server.resource.authentication.AbstractOAuth2TokenAuthenticationToken;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.reactive.function.client.WebClient;
 
 @AutoConfiguration
 @EnableWebFluxSecurity
 @EnableConfigurationProperties(GatewaySecurityProperties.class)
 public class GatewaySecurityAutoConfiguration {
-    private static final String ADMIN_SCOPE_AUTHORITY = "SCOPE_admin";
+    private static final String DEFAULT_AUTHORITY_PREFIX = "SCOPE_";
 
     @Bean
     SecurityWebFilterChain gatewaySecurityWebFilterChain(ServerHttpSecurity http, GatewaySecurityProperties properties) {
         http.authorizeExchange(authorize -> authorize
-                        .pathMatchers(GatewayPathApiConstants.ADMIN_BASE_PATH + "/**").access((authentication, context) -> authentication
+                        .pathMatchers(GatewayPathApiConstants.ADMIN_BASE_PATH + "/**")
+                        .access((authentication, context) -> authentication
                                 .map(value -> new AuthorizationDecision(hasAdminAccess(value, properties)))
                                 .defaultIfEmpty(new AuthorizationDecision(false)))
-                        .anyExchange().permitAll())
-                .csrf(ServerHttpSecurity.CsrfSpec::disable);
+                        .anyExchange()
+                        .permitAll()
+                ).csrf(ServerHttpSecurity.CsrfSpec::disable);
         if (properties.getAccessToken().getFormat() == GatewaySecurityProperties.Format.REFERENCE) {
             http.oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> { }));
         } else {
@@ -63,7 +72,7 @@ public class GatewaySecurityAutoConfiguration {
             havingValue = "SELF_CONTAINED")
     ReactiveJwtDecoder reactiveJwtDecoder(GatewaySecurityProperties properties) {
         GatewaySecurityProperties.AccessToken accessToken = properties.getAccessToken();
-        NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withJwkSetUri(accessToken.getJwt().getJwkSetUri()).build();
+        NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withJwkSetUri(accessToken.getJwt().getSetUri()).build();
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(accessToken.getIssuer())));
         return decoder;
@@ -79,17 +88,20 @@ public class GatewaySecurityAutoConfiguration {
                 .clientId(reference.getClientId()).clientSecret(reference.getClientSecret()).build();
     }
 
-    @Bean SecretResolver channelSecretResolver(GatewaySecurityProperties properties) {
+    @Bean
+    SecretResolver channelSecretResolver(GatewaySecurityProperties properties) {
         return new PropertySecretResolver(properties);
     }
-    @Bean SmartInitializingSingleton channelCredentialSecretValidator(
+    @Bean
+    SmartInitializingSingleton channelCredentialSecretValidator(
             PolicySnapshotProvider provider, SecretResolver resolver) {
         return () -> provider.current().snapshot().content().channelCredentialPolicies().values().forEach(policy -> {
             resolver.resolve(policy.activeCredential().secretRef());
             policy.graceCredentialOptional().ifPresent(value -> resolver.resolve(value.secretRef()));
         });
     }
-    @Bean ChannelCredentialAuthenticator channelCredentialAuthenticator(
+    @Bean
+    ChannelCredentialAuthenticator channelCredentialAuthenticator(
             SecretResolver resolver,
             ReplayGuard replayGuard,
             RequestSignatureVerifierRegistry verifierRegistry,
@@ -102,26 +114,46 @@ public class GatewaySecurityAutoConfiguration {
     RequestSignatureVerifier legacySecretParamsTimestampMd5UpperSignatureVerifier() {
         return new LegacySecretParamsTimestampMd5UpperSignatureVerifier();
     }
-    @Bean RequestSignatureVerifier legacySecretTimestampBodySha256SignatureVerifier() {
+    @Bean
+    RequestSignatureVerifier legacySecretTimestampBodySha256SignatureVerifier() {
         return new LegacySecretTimestampBodySha256SignatureVerifier();
     }
-    @Bean RequestSignatureVerifier secretTimestampBodyHmacSha256SignatureVerifier() {
+    @Bean
+    RequestSignatureVerifier secretTimestampBodyHmacSha256SignatureVerifier() {
         return new SecretTimestampBodyHmacSha256SignatureVerifier();
     }
-    @Bean RequestSignatureVerifierRegistry requestSignatureVerifierRegistry(
-            List<RequestSignatureVerifier> verifiers) {
-        return new RequestSignatureVerifierRegistry(verifiers);
+    @Bean
+    RequestSignatureVerifierRegistry requestSignatureVerifierRegistry(
+            ObjectProvider<RequestSignatureVerifier> verifiers) {
+        return new RequestSignatureVerifierRegistry(verifiers.stream().toList());
     }
-    @Bean @ConditionalOnMissingBean BrowserSessionVerifier browserSessionVerifier() {
-        return new UnavailableBrowserSessionVerifier();
+    @Bean
+    @ConditionalOnMissingBean(BrowserSessionVerifier.class)
+    BrowserSessionVerifier browserSessionVerifier(
+            WebClient.Builder webClientBuilder,
+            ReactorLoadBalancerExchangeFilterFunction loadBalancerExchangeFilter,
+            GatewaySecurityProperties properties,
+            Clock clock
+    ) {
+        String serviceBaseUrl = "http://" + properties.getBrowserSession().getServiceId();
+        return new BrowserSessionVerifierAdapter(
+                webClientBuilder.clone()
+                        .baseUrl(serviceBaseUrl)
+                        .filter(loadBalancerExchangeFilter)
+                        .build(),
+                clock);
     }
 
     private static boolean hasAdminAccess(Authentication authentication, GatewaySecurityProperties properties) {
+        String adminScope = DEFAULT_AUTHORITY_PREFIX + OAuth2Scope.ADMIN.value();
         boolean scopeAllowed = authentication.getAuthorities().stream()
-                .anyMatch(authority -> ADMIN_SCOPE_AUTHORITY.equals(authority.getAuthority()));
-        if (!scopeAllowed || !(authentication instanceof AbstractOAuth2TokenAuthenticationToken<?> token)) return false;
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(adminScope::equals);
+        if (!scopeAllowed || !(authentication instanceof AbstractOAuth2TokenAuthenticationToken<?> token)) {
+            return false;
+        }
         Object audiences = token.getTokenAttributes().get(JwtClaimNames.AUD);
-        if (audiences instanceof java.util.Collection<?> collection) {
+        if (audiences instanceof Collection<?> collection) {
             return collection.stream().map(String::valueOf).anyMatch(properties.getAdminAudience()::equals);
         }
         return properties.getAdminAudience().equals(String.valueOf(audiences));

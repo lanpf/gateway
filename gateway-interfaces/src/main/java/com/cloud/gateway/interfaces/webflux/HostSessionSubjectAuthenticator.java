@@ -1,7 +1,7 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.gateway.domain.access.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.SubjectAuthenticationResult;
+import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.access.SubjectType;
 import java.time.Instant;
 import java.util.Collection;
@@ -24,10 +24,10 @@ public final class HostSessionSubjectAuthenticator implements SubjectAuthenticat
     public static final String SCOPE_ALIAS_CLAIM = "scp";
 
     @Override
-    public Mono<SubjectAuthenticationResult> authenticate(Authentication authentication) {
+    public Mono<SubjectAuthenticationOutcome> authenticate(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()
                 || authentication instanceof AnonymousAuthenticationToken) {
-            return Mono.just(SubjectAuthenticationResult.rejected());
+            return Mono.just(SubjectAuthenticationOutcome.rejected());
         }
         Map<String, Object> attributes = tokenAttributes(authentication);
         String subjectId = text(attributes.get(SUBJECT_CLAIM));
@@ -36,12 +36,12 @@ public final class HostSessionSubjectAuthenticator implements SubjectAuthenticat
         Instant expiresAt = instant(attributes.get(EXPIRATION_CLAIM));
         if (!StringUtils.hasText(subjectId) || !StringUtils.hasText(sessionId)
                 || !StringUtils.hasText(issuer) || expiresAt == null) {
-            return Mono.just(SubjectAuthenticationResult.rejected());
+            return Mono.just(SubjectAuthenticationOutcome.rejected());
         }
         AuthenticatedSubject subject = new AuthenticatedSubject(
                 SubjectType.HOST_SESSION, subjectId, sessionId, issuer,
                 strings(attributes.get(AUDIENCE_CLAIM)), scopes(attributes), expiresAt);
-        return Mono.just(SubjectAuthenticationResult.authenticated(subject));
+        return Mono.just(SubjectAuthenticationOutcome.authenticated(subject));
     }
 
     private static Map<String, Object> tokenAttributes(Authentication authentication) {

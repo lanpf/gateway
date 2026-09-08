@@ -14,7 +14,7 @@ gateway 把外部不可信请求转换为内部可信请求上下文，回答五
 
 | 能力 | 所有者 |
 | --- | --- |
-| ClientApp 的入口状态和平台 | `IngressClientAppPolicy` |
+| ClientApp 的入口状态、平台和浏览器 Origin 白名单 | `IngressClientAppPolicy` |
 | Channel 允许使用的 ClientApp 集合 | `IngressChannelAccessPolicy` |
 | Channel 的请求签名凭据及其轮换生命周期 | `IngressChannelCredentialPolicy` |
 | Endpoint 的 Channel Credential、Channel、Subject、scope、audience 和转发规则 | `IngressRouteAccessPolicy` |
@@ -89,6 +89,7 @@ IngressClientAppPolicy
   clientAppId
   status: ENABLED | DISABLED
   platform
+  allowedBrowserOrigins
 
 # CHANNEL
 IngressChannelAccessPolicy
@@ -115,11 +116,15 @@ IngressRouteAccessPolicy
 
 `IngressChannelCredentialPolicy` 以 `channelCode` 为身份，与 `IngressChannelAccessPolicy` 相互独立维护、统一随完整快照发布：前者回答"这个渠道用什么凭据验签"，后者回答"哪些 ClientApp 允许使用这个渠道"，两者通过 `channelCode` 关联。一个渠道的密钥轮换不需要修改该渠道的 ClientApp 访问集合，但发布时仍对四类策略执行统一 CAS 和交叉校验。
 
+`channelCode` 的渠道目录由渠道/网关边界管理；gateway 只维护 `appId + channelCode` 合法组合（IngressChannelAccessPolicy）与渠道验签凭据（IngressChannelCredentialPolicy），不拥有渠道主数据。同一个 ClientApp 可以进入多个渠道，同一个渠道也可以由多个 ClientApp 进入。
+
 规则：
 
 - ClientAppId、ChannelCode、EndpointId 不可原地改名；修改身份等同于删除旧项并创建新项。
 - ClientAppId、ChannelCode、EndpointId 和 ChannelCredentialId 在 domain 内使用继承 `EntityId` 的强类型；API、配置和 Header 仅保留其字符串传输表示。
-- 一个 ClientAppId 唯一绑定一个 platform，platform 不接受外部 Header 指定，也不能原地迁移；不同平台注册不同 ClientAppId。
+- 一个 ClientAppId 唯一绑定一个 platform，platform 不接受外部 Header 指定，也不能原地迁移；不同平台注册不同 ClientAppId。ClientApp 被停用或替代时登记新的 appId，platform 不在原 appId 上迁移；下游 `user-auth` 的 `LoginSession.Client` 保存解析后的 appId/platform/version 历史快照，因此替换不影响历史会话表达当时的接入形态。
+- `allowedBrowserOrigins` 是该 ClientApp 可以发起 Browser Session Cookie 请求的完整 Origin 集合，只接受 `http/https + host + 可选 port`，不接受 path、query、fragment、userinfo 或通配符；配置按规范化后的完整 Origin 精确匹配。
+- `BROWSER_SESSION_REQUIRED` Endpoint 的非安全方法必须携带命中当前 ClientApp 白名单的 `Origin`；缺失、格式非法、白名单为空或不匹配都拒绝。`GET/HEAD/OPTIONS/TRACE` 不要求 Origin，但不得产生状态变更。
 - DISABLED ClientApp 不能产生 Allow，包括匿名登录入口。
 - 未配置的 ClientApp、Channel 组合或 Endpoint 默认拒绝。
 - 每个请求必须先解析出一个已登记且 ENABLED 的 ClientAppId，这是所有策略判断的共同前置事实。
@@ -251,10 +256,15 @@ AuthenticatedSubject
   credentialExpiresAt
 ```
 
-Subject 认证结果显式区分三种状态：`Absent` 表示没有提交该路由要求的 Subject 凭据，
-`Authenticated(subject)` 表示认证成功并产生可信 Subject，`Rejected` 表示调用方提交了凭据但认证失败。
+Subject 认证结果显式区分四种状态：`Absent` 表示没有提交该路由要求的 Subject 凭据，
+`Authenticated(subject)` 表示认证成功并产生可信 Subject，`Rejected` 表示调用方提交了凭据但认证失败，
+`Unavailable(reason)` 表示认证依赖不可达或其响应协议非法。
 `HOST_SESSION_OPTIONAL` 只允许 `Absent` 匿名通过；`Rejected` 必须以
 `SUBJECT_AUTHENTICATION_FAILED` 拒绝，不能静默降级为匿名。
+
+`SubjectAuthenticationOutcome` 只表达领域认证结局，不携带 Redis TTL 是否已延长等会话存储细节。
+Browser Session 的在线验证与 idle TTL 滑动续期均由 user-auth 在一次原子操作中完成；gateway 只消费
+验证结局和当前有效期边界，不接收“本次是否续期”标记，也不刷新或重写 Browser Session Cookie。
 
 Spring Security adapter 对 JWT 和 Reference Token 执行等价校验：签名或 active 状态、允许算法、issuer、时间声明以及必需 claims；interfaces 的 `HostSessionSubjectAuthenticator` 再将已认证的 `Authentication` 统一归一化为 `subjectType=HOST_SESSION` 的 AuthenticatedSubject。IngressAccessPolicyEvaluator 按下述明确的子集关系校验 Route Policy 的 requiredAudiences/requiredScopes，防止面向其他资源服务器的 Token 被挪用。
 
@@ -327,24 +337,26 @@ evaluate(
   clientAppPolicy,
   channelAccessPolicy,
   routeAccessPolicy,
-  channelCredentialAuthenticationResult,
+  channelCredentialAuthenticationOutcome,
   requestedChannelCode?,
-  subjectAuthenticationResult
+  subjectAuthenticationOutcome
 ) -> IngressAccessDecision
 ```
 
-它校验 ClientApp 状态、ChannelCredentialRequirement、ChannelRequirement、Channel Credential 认证结果及已验证凭据的渠道绑定、SubjectRequirement、requiredAudiences 和 requiredScopes。它不解析 HTTP、不验签、不调用 introspection、不操作 Redis，也不查询业务权限。
+它校验 ClientApp 状态、Browser Session 非安全请求的 Origin、ChannelCredentialRequirement、ChannelRequirement、Channel Credential 认证结果及已验证凭据的渠道绑定、SubjectRequirement、requiredAudiences 和 requiredScopes。它不解析 HTTP、不验签、不调用 introspection、不操作 Redis，也不查询业务权限。
 
 请求用例按以下顺序执行：
 
 1. 从 `PolicySnapshotProvider` 读取一次当前完整快照。
 2. 使用该快照内的 EndpointCatalog 根据 method/path 解析唯一 EndpointId，并从同一快照取得四类入口策略。
 3. `channelCredentialRequirement=REQUEST_SIGNATURE` 时，interfaces 先区分缺失签名 Header，再使用 `IngressChannelCredentialPolicy` 调用 ChannelCredentialAuthenticator；Authenticator 通过 `RequestSignatureVerifierRegistry` 按 `signaturePayloadContract` 选择 verifier，并在验签成功后登记 replay evidence。ClientApp 只由 ClientApp Policy 和 Channel Access Policy 校验，不从 Channel Credential 推导。
-4. interfaces 按 SubjectRequirement 选择 `SubjectAuthenticator<T>`：Host Session 将 Spring Security
+4. interfaces 从请求中提取 HTTP 方法与原始 `Origin`，并按 SubjectRequirement 选择 `SubjectAuthenticator<T>`：Host Session 将 Spring Security
    `Authentication` 归一化为 Subject 认证结果；Browser Session 将 Cookie value 交给
-   `BrowserSessionVerifier` 在线验证。`HOST_SESSION_OPTIONAL` 仅在没有 Authentication 时产生 `Absent`，
-   Authentication 存在但认证失败时产生 `Rejected`。
-5. 调用 IngressAccessPolicyEvaluator。
+   `BrowserSessionVerifier` 在线验证。验证结局显式区分 `Verified`、`Invalid` 和 `Unavailable`：`Verified`
+   只携带已认证主体；user-auth 在验证过程中自行管理 Redis idle TTL 的按需滑动续期，不向 gateway 暴露
+   存储写入结果。凭据无效映射为认证拒绝；验证依赖不可达与响应协议非法映射为不同的不可用原因，均不得建立 Subject。
+   `HOST_SESSION_OPTIONAL` 仅在没有 Authentication 时产生 `Absent`，Authentication 存在但认证失败时产生 `Rejected`。
+5. 将 Caller、Subject 认证结果以及 HTTP 方法、原始 `Origin` 一起交给 IngressAccessPolicyEvaluator。`subjectRequirement=BROWSER_SESSION_REQUIRED` 且 HTTP 方法不安全时，Evaluator 使用已匹配的 `IngressClientAppPolicy.allowedBrowserOrigins` 精确校验 `Origin`；认证适配器可能已并行完成技术验证，但 Origin 校验失败仍不得产生可信上下文。
 6. Allow 时形成 TrustedRequestContext，执行流量策略并写入受保护 Header；interfaces 层可把已清洗但不可信的 DeclaredClientMetadata 独立转发；Deny 时停止转发。
 7. 记录不含凭据明文的安全审计。
 
@@ -412,7 +424,7 @@ Nacos 官方配置模型以 `namespaceId + groupName + dataId` 标识一份完�
 | `PolicySnapshotHistory` | 按业务版本读取历史快照，供控制面回退 | Nacos v3 Admin History API adapter |
 | `PolicyRollbackState` | 持久标识回退未完成并阻断普通发布 | Redis 无 TTL 状态键 |
 | `ChannelCredentialAuthenticator` | 使用 Channel Credential 验证 Request Signature | 请求签名 adapter |
-| `BrowserSessionVerifier` | 在线验证 Browser Session | user-auth adapter 或共享 Session Store adapter |
+| `BrowserSessionVerifier` | 在线验证 Browser Session，并区分凭据无效、验证依赖不可达与响应协议非法 | user-auth adapter 或共享 Session Store adapter |
 | `ReplayGuard` | 原子登记 timestamp/nonce 证据 | Redis adapter |
 | `TrafficGuard` | 执行入口流量策略 | Redis RateLimiter/Sentinel adapter |
 | `SecurityAuditPublisher` | 输出安全和 Admin 变更审计 | 日志/审计存储 adapter |
@@ -450,7 +462,7 @@ Nacos 官方配置模型以 `namespaceId + groupName + dataId` 标识一份完�
 - 外部入口不能路由到内部管理地址，受保护 Header 在公网边界统一清除。
 - 部署验收和持续扫描验证网络规则没有漂移。
 
-当前暂不增加 service identity、delegation 或 on-behalf-of。只要上述网络隔离无法被证明，这个简化就不成立，届时必须另行设计 workload identity 等零信任方案。
+当前暂不增加 service identity、delegation 或 on-behalf-of。内部服务与 Job 也分配 ClientApp，`platform` 表示调用载体而非操作系统（`SERVICE`、`JOB`），受 IngressClientAppPolicy 同一套状态与唯一性规则约束；代理终端用户请求时保留并传播最终用户 Client、Channel、User、Session、Subject Type 与 trace 上下文。只要上述网络隔离无法被证明，这个简化就不成立，届时必须另行设计 workload identity 等零信任方案。
 
 ## 九、当前实现状态与后续边界
 
@@ -465,12 +477,14 @@ Nacos 官方配置模型以 `namespaceId + groupName + dataId` 标识一份完�
 7. Endpoint 解析、入口判定、受保护 Header 重写、clientVersion 非可信声明转发，以及 Authorization/Cookie 独立转发策略。
 8. Nacos History 回退、Redis publishLock/rollbackLock 和永久 rollbackState；回退可重入并允许更换目标版本。
 9. 本地配置由共享 infrastructure 作为默认只读 Definition/Snapshot 实现；独立 policy-local adapter 已废弃。
+10. Browser Session 的 `BrowserSessionVerifierAdapter` 在线验证 adapter（固定内部路径，按受管理的 `serviceId` 经 Spring Cloud LoadBalancer/Nacos 服务发现调用 user-auth；无可用实例时 fail-closed）与 `X-Subject-Type` 覆盖写（framework `RequestHeader.SUBJECT_TYPE` 统一常量）；Redis idle TTL 的滑动续期由 user-auth 管理，gateway 不写 Cookie。
 
 尚未完成的目标能力：
 
-1. Browser Session 的真实在线验证 adapter；当前缺省实现 fail-closed，配置 `BROWSER_SESSION_REQUIRED` 的 Endpoint 不会被放行。
-2. EndpointManifest 聚合、deliveryRouteId 到实际 SCG routeId 的启动校验，以及下游接口漂移的自动契约校验。
-3. 高危凭据撤销的实例确认或流量摘除机制；普通策略更新仍接受配置传播窗口。
+1. EndpointManifest 聚合、deliveryRouteId 到实际 SCG routeId 的启动校验，以及下游接口漂移的自动契约校验。
+2. 高危凭据撤销的实例确认或流量摘除机制；普通策略更新仍接受配置传播窗口。
+
+已交付的浏览器会话能力：`USER_AUTH.BROWSER_SESSION_API` Endpoint（`BROWSER_SESSION_REQUIRED` + Cookie 白名单转发）已登记，Browser Session 端点由 user-auth 按 `/api/user-auth/browser-sessions/**` 前缀逐个交付。宿主 App 内 WebView H5 是该通用 Browser Session 的一种获取和使用场景，不构成独立入口策略类型。
 
 ## 十、测试边界
 

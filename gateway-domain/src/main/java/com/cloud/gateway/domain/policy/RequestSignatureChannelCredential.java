@@ -25,7 +25,6 @@ public record RequestSignatureChannelCredential(
     }
 
     public boolean validAt(Instant now) {
-        Require.notNull(now, DomainException::missingField);
         return !now.isBefore(validFrom) && now.isBefore(expiresAt);
     }
 }

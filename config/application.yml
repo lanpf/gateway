@@ -4,46 +4,25 @@ spring:
   cloud:
     nacos:
       config:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
-        namespace: ${NACOS_NAMESPACE:public}
-        username: ${NACOS_USERNAME:}
-        password: ${NACOS_PASSWORD:}
+        server-addr: 127.0.0.1:8848
         import-check:
           enabled: false
+      discovery:
+        server-addr: 127.0.0.1:8848
     gateway:
       server:
         webflux:
           routes:
             - id: user-auth
-              uri: ${USER_AUTH_URI:http://localhost:8081}
+              uri: lb://user-auth
               predicates:
                 - Path=/api/user-auth/**,/admin/user-auth/**,/oauth2/**,/.well-known/**
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-
-server:
-  port: 8080
+              filters:
+                # 服务前缀由网关剥离：/api/user-auth/** → /api/**，/admin/user-auth/** → /admin/**
+                - RewritePath=/api/user-auth/(?<segment>.*), /api/$\{segment}
+                - RewritePath=/admin/user-auth/(?<segment>.*), /admin/$\{segment}
 
 gateway:
-  policy:
-    nacos:
-      group: ${GATEWAY_POLICY_NACOS_GROUP:GATEWAY}
-      data-id: ${GATEWAY_POLICY_NACOS_DATA_ID:gateway-ingress-policy.yaml}
-      endpoint-definition-data-id: ${GATEWAY_POLICY_ENDPOINT_DEFINITION_DATA_ID:gateway-endpoints.yaml}
-      client-app-definition-data-id: ${GATEWAY_POLICY_CLIENT_APP_DEFINITION_DATA_ID:gateway-client-app-policies.yaml}
-      channel-access-definition-data-id: ${GATEWAY_POLICY_CHANNEL_ACCESS_DEFINITION_DATA_ID:gateway-channel-access-policies.yaml}
-      channel-credential-definition-data-id: ${GATEWAY_POLICY_CHANNEL_CREDENTIAL_DEFINITION_DATA_ID:gateway-channel-credential-policies.yaml}
-      route-access-definition-data-id: ${GATEWAY_POLICY_ROUTE_ACCESS_DEFINITION_DATA_ID:gateway-route-access-policies.yaml}
-      read-timeout: ${GATEWAY_POLICY_NACOS_READ_TIMEOUT:5s}
-      recovery-interval: ${GATEWAY_POLICY_NACOS_RECOVERY_INTERVAL:30s}
-      last-known-good-location: ${GATEWAY_POLICY_LKG_LOCATION:./data/gateway-ingress-policy.yaml}
-      history:
-        admin-access-token: ${NACOS_ADMIN_ACCESS_TOKEN:}
-        rest-client:
-          connect-timeout: ${GATEWAY_POLICY_NACOS_HISTORY_CONNECT_TIMEOUT:2s}
-          read-timeout: ${GATEWAY_POLICY_NACOS_HISTORY_READ_TIMEOUT:5s}
   ingress-policy:
     endpoints:
       - endpoint-id: USER_AUTH.LOGIN_PUBLIC
@@ -74,6 +53,11 @@ gateway:
         delivery-route-id: user-auth
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/handoffs/exchange }
+      - endpoint-id: USER_AUTH.BROWSER_SESSION_API
+        owner-service: user-auth
+        delivery-route-id: user-auth
+        matchers:
+          - { http-method: POST, path-pattern: /api/user-auth/browser-sessions/** }
       - endpoint-id: USER_AUTH.ADMIN
         owner-service: user-auth
         delivery-route-id: user-auth
@@ -88,7 +72,10 @@ gateway:
           - { http-method: POST, path-pattern: /oauth2/** }
           - { http-method: GET, path-pattern: /.well-known/** }
     client-apps:
-      mini-program: { status: ENABLED, platform: WECHAT_MINI_PROGRAM }
+      mini-program:
+        status: ENABLED
+        platform: WECHAT_MINI_PROGRAM
+        allowed-browser-origins: [https://h5.example.com]
       app: { status: ENABLED, platform: APP }
       admin: { status: ENABLED, platform: WEB }
       oauth2-client: { status: ENABLED, platform: SERVER }
@@ -125,6 +112,13 @@ gateway:
         channel-credential-requirement: IGNORE
         channel-requirement: REQUIRED
         subject-requirement: IGNORE
+      "[USER_AUTH.BROWSER_SESSION_API]":
+        channel-credential-requirement: IGNORE
+        channel-requirement: REQUIRED
+        subject-requirement: BROWSER_SESSION_REQUIRED
+        forwarding:
+          cookies: ALLOW_LIST
+          allowed-cookie-names: [BROWSER_SESSION]
       "[USER_AUTH.ADMIN]":
         channel-credential-requirement: IGNORE
         channel-requirement: FORBIDDEN
@@ -141,27 +135,20 @@ gateway:
   security:
     admin-audience: gateway-admin
     access-token:
-      format: ${GATEWAY_ACCESS_TOKEN_FORMAT:SELF_CONTAINED}
-      issuer: ${USER_AUTH_OAUTH2_ISSUER:http://localhost:8081}
+      format: SELF_CONTAINED
+      issuer: http://localhost:8081
       jwt:
-        jwk-set-uri: ${USER_AUTH_JWK_SET_URI:http://localhost:8081/oauth2/jwks}
+        set-uri: http://localhost:8081/oauth2/jwks
       reference:
-        introspection-uri: ${USER_AUTH_INTROSPECTION_URI:http://localhost:8081/oauth2/introspect}
-        client-id: ${GATEWAY_INTROSPECTION_CLIENT_ID:gateway-introspection-client}
-        client-secret: ${GATEWAY_INTROSPECTION_CLIENT_SECRET:local-gateway-introspection-secret}
+        introspection-uri: http://localhost:8081/oauth2/introspect
+        client-id: gateway-introspection-client
+        client-secret: local-gateway-introspection-secret
     request-signature:
       secrets:
-        partner-a: ${PARTNER_A_REQUEST_SIGNATURE_SECRET:local-partner-a-secret}
+        partner-a: local-partner-a-secret
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
-
-framework:
-  lock:
-    redis:
-      provider: SPRING_INTEGRATION
-      lease-time: 30s
-      auto-renewal: true

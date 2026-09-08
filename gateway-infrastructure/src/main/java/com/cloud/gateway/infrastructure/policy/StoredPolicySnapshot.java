@@ -38,7 +38,16 @@ public record StoredPolicySnapshot(
 
     public record Matcher(String httpMethod, String pathPattern) { }
 
-    public record ClientApp(ClientAppStatus status, String platform) { }
+    public record ClientApp(
+            ClientAppStatus status,
+            String platform,
+            Set<String> allowedBrowserOrigins
+    ) {
+        public ClientApp {
+            allowedBrowserOrigins = allowedBrowserOrigins == null
+                    ? Set.of() : Set.copyOf(allowedBrowserOrigins);
+        }
+    }
 
     public record ChannelAccess(Set<String> allowedClientAppIds) {
         public ChannelAccess {

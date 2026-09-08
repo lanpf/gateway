@@ -13,12 +13,14 @@ import com.cloud.gateway.domain.policy.SubjectRequirement;
 public final class IngressAccessPolicyEvaluator {
     public IngressAccessDecision evaluate(
             long snapshotVersion,
+            ChannelCode requestedChannelCode,
             IngressClientAppPolicy clientAppPolicy,
             IngressChannelAccessPolicy channelAccessPolicy,
             IngressRouteAccessPolicy routeAccessPolicy,
-            ChannelCode requestedChannelCode,
-            ChannelCredentialAuthenticationResult channelCredentialAuthentication,
-            SubjectAuthenticationResult subjectAuthentication
+            String requestedOrigin,
+            boolean unsafeRequest,
+            ChannelCredentialAuthenticationOutcome channelCredentialAuthentication,
+            SubjectAuthenticationOutcome subjectAuthentication
     ) {
         Require.notNull(channelCredentialAuthentication, DomainException::missingField);
         Require.notNull(subjectAuthentication, DomainException::missingField);
@@ -34,6 +36,11 @@ public final class IngressAccessPolicyEvaluator {
         if (!routeAccessPolicy.enabled()) {
             return denied(IngressAccessDenyReason.ENDPOINT_DISABLED, snapshotVersion);
         }
+        if (unsafeRequest
+                && routeAccessPolicy.subjectRequirement() == SubjectRequirement.BROWSER_SESSION_REQUIRED
+                && !clientAppPolicy.allowsBrowserOrigin(requestedOrigin)) {
+            return denied(IngressAccessDenyReason.BROWSER_ORIGIN_NOT_ALLOWED, snapshotVersion);
+        }
 
         IngressAccessDecision channelDecision = evaluateChannel(
                 snapshotVersion, clientAppPolicy, channelAccessPolicy, routeAccessPolicy, requestedChannelCode);
@@ -42,14 +49,14 @@ public final class IngressAccessPolicyEvaluator {
         }
 
         if (routeAccessPolicy.channelCredentialRequirement() == ChannelCredentialRequirement.REQUEST_SIGNATURE) {
-            if (channelCredentialAuthentication instanceof ChannelCredentialAuthenticationResult.Absent) {
+            if (channelCredentialAuthentication instanceof ChannelCredentialAuthenticationOutcome.Absent) {
                 return denied(IngressAccessDenyReason.CHANNEL_CREDENTIAL_REQUIRED, snapshotVersion);
             }
-            if (channelCredentialAuthentication instanceof ChannelCredentialAuthenticationResult.Rejected) {
+            if (channelCredentialAuthentication instanceof ChannelCredentialAuthenticationOutcome.Rejected) {
                 return denied(IngressAccessDenyReason.CHANNEL_CREDENTIAL_INVALID, snapshotVersion);
             }
             VerifiedChannelCredential verifiedChannelCredential =
-                    ((ChannelCredentialAuthenticationResult.Authenticated) channelCredentialAuthentication).credential();
+                    ((ChannelCredentialAuthenticationOutcome.Authenticated) channelCredentialAuthentication).credential();
             if (!verifiedChannelCredential.channelCode().equals(requestedChannelCode)) {
                 return denied(IngressAccessDenyReason.CHANNEL_CREDENTIAL_INVALID, snapshotVersion);
             }
@@ -61,10 +68,10 @@ public final class IngressAccessPolicyEvaluator {
             return subjectDecision;
         }
 
-        AuthenticatedSubject authenticatedSubject = subjectAuthentication instanceof SubjectAuthenticationResult.Authenticated authenticated
+        AuthenticatedSubject authenticatedSubject = subjectAuthentication instanceof SubjectAuthenticationOutcome.Authenticated authenticated
                 ? authenticated.subject() : null;
         VerifiedChannelCredential verifiedChannelCredential =
-                channelCredentialAuthentication instanceof ChannelCredentialAuthenticationResult.Authenticated authenticated
+                channelCredentialAuthentication instanceof ChannelCredentialAuthenticationOutcome.Authenticated authenticated
                         ? authenticated.credential() : null;
 
         return new IngressAccessDecision.Allowed(new TrustedRequestContext(
@@ -100,20 +107,23 @@ public final class IngressAccessPolicyEvaluator {
     private static IngressAccessDecision evaluateSubject(
             long version,
             IngressRouteAccessPolicy route,
-            SubjectAuthenticationResult authentication
+            SubjectAuthenticationOutcome authentication
     ) {
         SubjectRequirement requirement = route.subjectRequirement();
         if (requirement == SubjectRequirement.IGNORE) {
             return null;
         }
-        if (authentication instanceof SubjectAuthenticationResult.Rejected) {
+        if (authentication instanceof SubjectAuthenticationOutcome.Rejected) {
             return denied(IngressAccessDenyReason.SUBJECT_AUTHENTICATION_FAILED, version);
         }
-        if (authentication instanceof SubjectAuthenticationResult.Absent) {
+        if (authentication instanceof SubjectAuthenticationOutcome.Unavailable unavailable) {
+            return denied(denyReason(unavailable.reason()), version);
+        }
+        if (authentication instanceof SubjectAuthenticationOutcome.Absent) {
             return requirement == SubjectRequirement.HOST_SESSION_OPTIONAL
                     ? null : denied(IngressAccessDenyReason.SUBJECT_REQUIRED, version);
         }
-        AuthenticatedSubject subject = ((SubjectAuthenticationResult.Authenticated) authentication).subject();
+        AuthenticatedSubject subject = ((SubjectAuthenticationOutcome.Authenticated) authentication).subject();
         SubjectType requiredType = requirement == SubjectRequirement.BROWSER_SESSION_REQUIRED
                 ? SubjectType.BROWSER_SESSION : SubjectType.HOST_SESSION;
         if (subject.subjectType() != requiredType) {
@@ -131,6 +141,16 @@ public final class IngressAccessPolicyEvaluator {
     private static TrustedRequestContext.SubjectContext subjectContext(AuthenticatedSubject subject) {
         return new TrustedRequestContext.SubjectContext(subject.subjectType(), subject.subjectId(),
                 subject.loginSessionId(), subject.audiences(), subject.scopes(), subject.credentialExpiresAt());
+    }
+
+    private static IngressAccessDenyReason denyReason(
+            SubjectAuthenticationUnavailableReason unavailableReason
+    ) {
+        return switch (unavailableReason) {
+            case DEPENDENCY_UNAVAILABLE ->
+                    IngressAccessDenyReason.SUBJECT_AUTHENTICATION_DEPENDENCY_UNAVAILABLE;
+            case INVALID_RESPONSE -> IngressAccessDenyReason.SUBJECT_AUTHENTICATION_RESPONSE_INVALID;
+        };
     }
 
     private static IngressAccessDecision.Denied denied(IngressAccessDenyReason reason, long version) {

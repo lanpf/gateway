@@ -43,6 +43,7 @@ import com.cloud.gateway.domain.policy.ChannelCode;
 import com.cloud.gateway.domain.policy.ClientAppId;
 import com.cloud.gateway.domain.policy.IngressPolicyContent;
 import com.cloud.gateway.domain.policy.IngressPolicySnapshot;
+import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
@@ -79,13 +80,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.util.StringUtils;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import org.springframework.web.client.RestClient;
@@ -98,15 +100,27 @@ class NacosPolicyAdministrationIT {
     private static final String ENDPOINT_ID = "USER_AUTH.LOGIN";
     private static final String CLIENT_APP_ID = "web-client";
     private static final String CHANNEL_CODE = "WEB";
-    private static final int HOST_HTTP_PORT = availablePortFamily();
-    private static final int HOST_CONSOLE_PORT = HOST_HTTP_PORT + 1;
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(2))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    @Container
-    private static final FixedPortNacosContainer NACOS = new FixedPortNacosContainer(HOST_HTTP_PORT);
+    private static int hostHttpPort;
+    private static FixedPortNacosContainer NACOS;
+
+    @BeforeAll
+    static void startNacosContainer() {
+        hostHttpPort = availablePortFamily();
+        NACOS = new FixedPortNacosContainer(hostHttpPort);
+        NACOS.start();
+    }
+
+    @AfterAll
+    static void stopNacosContainer() {
+        if (NACOS != null) {
+            NACOS.stop();
+        }
+    }
 
     @TempDir Path temporaryDirectory;
 
@@ -120,7 +134,7 @@ class NacosPolicyAdministrationIT {
 
     @BeforeEach
     void setUp() throws Exception {
-        String serverAddress = NACOS.getHost() + ":" + HOST_HTTP_PORT;
+        String serverAddress = NACOS.getHost() + ":" + hostHttpPort;
         configService = NacosFactory.createConfigService(serverAddress);
 
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -214,7 +228,8 @@ class NacosPolicyAdministrationIT {
                 NacosPolicySnapshotStore.sourceRevision(initialClientApps),
                 CLIENT_APP_ID,
                 ClientAppStatusApiEnum.ENABLED,
-                "browser"));
+                "browser",
+                Set.of("https://browser.example.com")));
         facade.saveChannelAccessPolicy(new SaveChannelAccessPolicyApiCommand(
                 NacosPolicySnapshotStore.sourceRevision(initialChannelAccess),
                 CHANNEL_CODE,
@@ -260,7 +275,13 @@ class NacosPolicyAdministrationIT {
         assertEquals(2, currentSnapshot.snapshotVersion());
         assertTrue(currentSnapshot.content().routeAccessPolicies().get(new EndpointId(ENDPOINT_ID)).enabled());
 
-        await(() -> snapshotHistory.find(1).isPresent());
+        await(() -> {
+            try {
+                return snapshotHistory.find(1).isPresent();
+            } catch (InfrastructureException ignored) {
+                return false;
+            }
+        });
         IngressPolicySnapshot historicalSnapshot = snapshotHistory.find(1).orElseThrow();
         assertEquals(firstOutput.contentHash(), historicalSnapshot.contentHash());
         assertTrue(historicalSnapshot.content().routeAccessPolicies().isEmpty());
@@ -269,7 +290,7 @@ class NacosPolicyAdministrationIT {
     }
 
     private void manualObservationPoint() throws Exception {
-        URI consoleUri = URI.create("http://" + NACOS.getHost() + ":" + HOST_CONSOLE_PORT + "/");
+        URI consoleUri = URI.create("http://" + NACOS.getHost() + ":" + (hostHttpPort + 1) + "/");
         awaitConsole(consoleUri);
         System.out.println("Nacos console: " + consoleUri);
         // Set an IDE breakpoint on the next statement with "Suspend: All".

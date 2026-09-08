@@ -16,9 +16,7 @@ import com.cloud.gateway.application.policy.PolicySnapshotCommandService;
 import com.cloud.gateway.application.policy.RouteAccessPolicyCommandService;
 import com.cloud.gateway.interfaces.facade.mapper.GatewayPolicyApiMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
 
-@Validated
 @RequiredArgsConstructor
 public class DefaultGatewayPolicyCommandFacade implements GatewayPolicyCommandFacade {
     private final ClientAppPolicyCommandService clientAppService;

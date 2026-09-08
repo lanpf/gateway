@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,6 +26,7 @@ public class GatewaySecurityProperties {
     @NotBlank private String adminAudience;
     @Valid private final AccessToken accessToken = new AccessToken();
     @Valid private final RequestSignature requestSignature = new RequestSignature();
+    @Valid private final BrowserSession browserSession = new BrowserSession();
 
     @Getter
     @Setter
@@ -36,7 +38,7 @@ public class GatewaySecurityProperties {
         @AssertTrue(message = "The selected Access Token format is missing required configuration")
         public boolean isSelectedFormatConfigured() {
             return format == Format.SELF_CONTAINED
-                    ? StringUtils.hasText(jwt.jwkSetUri)
+                    ? StringUtils.hasText(jwt.setUri)
                     : StringUtils.hasText(reference.introspectionUri)
                     && StringUtils.hasText(reference.clientId)
                     && StringUtils.hasText(reference.clientSecret);
@@ -48,7 +50,7 @@ public class GatewaySecurityProperties {
     @Getter
     @Setter
     public static class Jwt {
-        private String jwkSetUri;
+        private String setUri;
     }
 
     @Getter
@@ -65,5 +67,14 @@ public class GatewaySecurityProperties {
         @NotNull @DurationMin(seconds = 1)
         private Duration maxClockSkew = Duration.ofMinutes(5);
         private final Map<String, String> secrets = new LinkedHashMap<>();
+    }
+
+    /** BROWSER_SESSION Cookie 的在线验证服务配置。 */
+    @Getter
+    @Setter
+    public static class BrowserSession {
+        @NotBlank
+        @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]*")
+        private String serviceId = "user-auth";
     }
 }

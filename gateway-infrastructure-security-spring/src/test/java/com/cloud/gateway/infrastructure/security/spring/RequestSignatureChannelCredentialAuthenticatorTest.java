@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import com.cloud.gateway.application.security.ChannelSignatureEvidence;
 import com.cloud.gateway.application.security.ReplayGuard;
-import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationResult;
+import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationOutcome;
 import com.cloud.gateway.domain.access.VerifiedChannelCredential;
 import com.cloud.gateway.domain.policy.IngressChannelCredentialPolicy;
 import com.cloud.gateway.domain.policy.ChannelCode;
@@ -45,19 +45,19 @@ class RequestSignatureChannelCredentialAuthenticatorTest {
         byte[] body = "payload".getBytes(StandardCharsets.UTF_8);
         String timestamp = String.valueOf(now.toEpochMilli());
         String signature = hmac("old-value", timestamp, body);
-        ChannelSignatureEvidence evidence = new ChannelSignatureEvidence(timestamp, body, signature);
+        ChannelSignatureEvidence evidence = new ChannelSignatureEvidence(body, timestamp, signature);
 
-        ChannelCredentialAuthenticationResult first = authenticator.authenticate(
+        ChannelCredentialAuthenticationOutcome first = authenticator.authenticate(
                 new IngressChannelCredentialPolicy(new ChannelCode("PARTNER"), active, grace), evidence, now)
                 .toCompletableFuture().join();
-        ChannelCredentialAuthenticationResult replay = authenticator.authenticate(
+        ChannelCredentialAuthenticationOutcome replay = authenticator.authenticate(
                 new IngressChannelCredentialPolicy(new ChannelCode("PARTNER"), active, grace), evidence, now)
                 .toCompletableFuture().join();
 
         VerifiedChannelCredential verified = assertInstanceOf(
-                ChannelCredentialAuthenticationResult.Authenticated.class, first).credential();
+                ChannelCredentialAuthenticationOutcome.Authenticated.class, first).credential();
         assertEquals("grace", verified.credentialId().value());
-        assertInstanceOf(ChannelCredentialAuthenticationResult.Rejected.class, replay);
+        assertInstanceOf(ChannelCredentialAuthenticationOutcome.Rejected.class, replay);
     }
 
     @Test
@@ -69,14 +69,14 @@ class RequestSignatureChannelCredentialAuthenticatorTest {
                 (key, expiresAt) -> CompletableFuture.completedFuture(true),
                 verifierRegistry(),
                 Duration.ofMinutes(5));
-        ChannelSignatureEvidence evidence = new ChannelSignatureEvidence("not-a-timestamp", new byte[0], "signature");
+        ChannelSignatureEvidence evidence = new ChannelSignatureEvidence(new byte[0], "not-a-timestamp", "signature");
 
-        ChannelCredentialAuthenticationResult result = authenticator.authenticate(
+        ChannelCredentialAuthenticationOutcome result = authenticator.authenticate(
                         new IngressChannelCredentialPolicy(new ChannelCode("PARTNER"), credential, null), evidence, now)
                 .toCompletableFuture()
                 .join();
 
-        assertInstanceOf(ChannelCredentialAuthenticationResult.Rejected.class, result);
+        assertInstanceOf(ChannelCredentialAuthenticationOutcome.Rejected.class, result);
     }
 
     private static RequestSignatureChannelCredential credential(String id, String ref, Instant now) {

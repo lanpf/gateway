@@ -14,7 +14,7 @@ final class GatewayPolicyAdminRestMapper {
 
     static SaveClientAppPolicyApiCommand toCommand(GatewayPolicyAdminRequest.SaveClientAppPolicy request) {
         return new SaveClientAppPolicyApiCommand(request.getExpectedSourceRevision(), request.getTargetClientAppId(),
-                request.getStatus(), request.getPlatform());
+                request.getStatus(), request.getPlatform(), request.getAllowedBrowserOrigins());
     }
 
     static SaveChannelAccessPolicyApiCommand toCommand(GatewayPolicyAdminRequest.SaveChannelAccessPolicy request) {

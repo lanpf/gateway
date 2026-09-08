@@ -25,7 +25,7 @@ class IngressPolicySnapshotTest {
                 SignaturePayloadContract.SECRET_TIMESTAMP_BODY_HMAC_SHA256, "partner");
         IngressPolicyContent content = new IngressPolicyContent(catalog(),
                 Map.of(new ClientAppId("app"), new IngressClientAppPolicy(
-                        new ClientAppId("app"), ClientAppStatus.ENABLED, "APP")),
+                        new ClientAppId("app"), ClientAppStatus.ENABLED, "APP", Set.of())),
                 Map.of(new ChannelCode("PARTNER"), new IngressChannelAccessPolicy(
                         new ChannelCode("PARTNER"), Set.of(new ClientAppId("app")))),
                 Map.of(new ChannelCode("PARTNER"), new IngressChannelCredentialPolicy(

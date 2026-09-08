@@ -61,7 +61,10 @@ public final class CanonicalPolicyContentMapper {
 
     private CanonicalPolicyContent.ClientApp clientApp(IngressClientAppPolicy source) {
         return new CanonicalPolicyContent.ClientApp(
-                source.clientAppId().value(), source.status(), source.platform());
+                source.clientAppId().value(),
+                source.status(),
+                source.platform(),
+                sorted(source.allowedBrowserOrigins(), Function.identity()));
     }
 
     private CanonicalPolicyContent.Credential credential(RequestSignatureChannelCredential source) {

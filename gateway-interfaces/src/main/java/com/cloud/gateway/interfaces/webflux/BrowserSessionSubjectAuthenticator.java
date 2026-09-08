@@ -1,7 +1,8 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
-import com.cloud.gateway.domain.access.SubjectAuthenticationResult;
+import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
+import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
@@ -10,9 +11,19 @@ public final class BrowserSessionSubjectAuthenticator implements SubjectAuthenti
     private final BrowserSessionVerifier verifier;
 
     @Override
-    public Mono<SubjectAuthenticationResult> authenticate(String cookieValue) {
+    public Mono<SubjectAuthenticationOutcome> authenticate(String cookieValue) {
         return Mono.fromCompletionStage(verifier.verify(cookieValue))
-                .map(subject -> subject.<SubjectAuthenticationResult>map(SubjectAuthenticationResult::authenticated)
-                        .orElseGet(SubjectAuthenticationResult::rejected));
+                .map(BrowserSessionSubjectAuthenticator::toAuthenticationOutcome);
+    }
+
+    private static SubjectAuthenticationOutcome toAuthenticationOutcome(
+            BrowserSessionVerificationOutcome verification) {
+        if (verification instanceof BrowserSessionVerificationOutcome.Verified verified) {
+            return SubjectAuthenticationOutcome.authenticated(verified.subject());
+        }
+        if (verification instanceof BrowserSessionVerificationOutcome.Unavailable unavailable) {
+            return SubjectAuthenticationOutcome.unavailable(unavailable.reason());
+        }
+        return SubjectAuthenticationOutcome.rejected();
     }
 }

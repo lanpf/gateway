@@ -51,7 +51,7 @@ class RequestSignatureVerifierTest {
     }
 
     private static ChannelSignatureEvidence evidence(String signature) {
-        return new ChannelSignatureEvidence(TIMESTAMP, PAYLOAD, signature);
+        return new ChannelSignatureEvidence(PAYLOAD, TIMESTAMP, signature);
     }
 
     private static String digest(String algorithm, String value) throws Exception {

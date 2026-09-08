@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.cloud</groupId>
     <artifactId>gateway</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>gateway</name>
     <description>Ingress access control gateway</description>
@@ -29,6 +29,7 @@
         <mapstruct.version>1.6.3</mapstruct.version>
         <framework-dependencies.version>0.3.0-SNAPSHOT</framework-dependencies.version>
         <framework-starter-dependencies.version>0.3.0-SNAPSHOT</framework-starter-dependencies.version>
+        <user-auth-api.version>0.4.3-SNAPSHOT</user-auth-api.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -45,6 +46,11 @@
                 <version>${framework-starter-dependencies.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.cloud</groupId>
+                <artifactId>user-auth-api</artifactId>
+                <version>${user-auth-api.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.cloud</groupId>

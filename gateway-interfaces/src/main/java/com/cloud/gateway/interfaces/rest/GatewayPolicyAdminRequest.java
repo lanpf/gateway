@@ -15,28 +15,30 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 
-final class GatewayPolicyAdminRequest {
+public final class GatewayPolicyAdminRequest {
     private static final String CLIENT_APP_ID_PROPERTY = "clientAppId";
 
     private GatewayPolicyAdminRequest() { }
 
     @Getter
     @Setter
-    static final class SaveClientAppPolicy extends AuthenticatedSessionClientRequest {
+    public static final class SaveClientAppPolicy extends AuthenticatedSessionClientRequest {
         @NotBlank private String expectedSourceRevision;
         @NotBlank @JsonProperty(CLIENT_APP_ID_PROPERTY) private String targetClientAppId;
         @NotNull private ClientAppStatusApiEnum status;
         @NotBlank private String platform;
+        @NotNull private final Set<@NotBlank String> allowedBrowserOrigins = new LinkedHashSet<>();
 
     }
 
     @Getter
     @Setter
-    static final class SaveChannelAccessPolicy extends AuthenticatedSessionClientRequest {
+    public static final class SaveChannelAccessPolicy extends AuthenticatedSessionClientRequest {
         @NotBlank private String expectedSourceRevision;
         @NotBlank private String channelCode;
         @NotNull private Set<@NotBlank String> allowedClientAppIds;
@@ -45,7 +47,7 @@ final class GatewayPolicyAdminRequest {
 
     @Getter
     @Setter
-    static final class SaveChannelCredentialPolicy extends AuthenticatedSessionClientRequest {
+    public static final class SaveChannelCredentialPolicy extends AuthenticatedSessionClientRequest {
         @NotBlank private String expectedSourceRevision;
         @NotBlank private String channelCode;
         @NotNull @Valid private ChannelCredential activeCredential;
@@ -55,7 +57,7 @@ final class GatewayPolicyAdminRequest {
 
     @Getter
     @Setter
-    static final class SaveRouteAccessPolicy extends AuthenticatedSessionClientRequest {
+    public static final class SaveRouteAccessPolicy extends AuthenticatedSessionClientRequest {
         @NotBlank private String expectedSourceRevision;
         @NotBlank private String endpointId;
         @NotNull private ChannelCredentialRequirementApiEnum channelCredentialRequirement;
@@ -70,17 +72,17 @@ final class GatewayPolicyAdminRequest {
 
     @Getter
     @Setter
-    static final class RollbackPolicySnapshot extends AuthenticatedSessionClientRequest {
+    public static final class RollbackPolicySnapshot extends AuthenticatedSessionClientRequest {
         @PositiveOrZero private long targetSnapshotVersion;
     }
 
     @Getter
     @Setter
-    static final class PublishPolicySnapshot extends AuthenticatedSessionClientRequest { }
+    public static final class PublishPolicySnapshot extends AuthenticatedSessionClientRequest { }
 
     @Getter
     @Setter
-    static final class ChannelCredential {
+    public static final class ChannelCredential {
         @NotBlank private String credentialId;
         @NotNull private Instant validFrom;
         @NotNull @Future private Instant expiresAt;
@@ -91,7 +93,7 @@ final class GatewayPolicyAdminRequest {
 
     @Getter
     @Setter
-    static final class CredentialForwarding {
+    public static final class CredentialForwarding {
         @NotNull private AuthorizationHeaderPolicyApiEnum authorizationHeader;
         @NotNull private CookieForwardingModeApiEnum cookies;
         @NotNull private Set<String> allowedCookieNames;

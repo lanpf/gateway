@@ -1,6 +1,7 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.alibaba.nacos.api.NacosFactory;
@@ -43,11 +44,13 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
@@ -57,20 +60,47 @@ class PolicySnapshotPropagationIT {
             "gateway.it.manual-observation-seconds";
     private static final String DATA_ID = "gateway-ingress-policy.yaml";
     private static final String GROUP = "GATEWAY";
-    private static final int HOST_HTTP_PORT = availablePortFamily();
-    private static final int HOST_CONSOLE_PORT = HOST_HTTP_PORT + 1;
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(2))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    @Container
-    private static final FixedPortNacosContainer NACOS = new FixedPortNacosContainer(HOST_HTTP_PORT);
+    private static int hostHttpPort;
+    private static FixedPortNacosContainer NACOS;
+
+    @BeforeAll
+    static void startNacosContainer() {
+        hostHttpPort = availablePortFamily();
+        NACOS = new FixedPortNacosContainer(hostHttpPort);
+        NACOS.start();
+    }
+
+    @AfterAll
+    static void stopNacosContainer() {
+        if (NACOS != null) {
+            NACOS.stop();
+        }
+    }
 
     @TempDir Path temporaryDirectory;
     private ConfigService configService;
+    private StoredPolicySnapshotCodec codec;
     private NacosPolicySnapshotStore firstStore;
     private NacosPolicySnapshotStore secondStore;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        configService = NacosFactory.createConfigService(
+                NACOS.getHost() + ":" + hostHttpPort);
+        codec = codec();
+        String initialContent = codec.encodeSnapshot(snapshot(1, true));
+        assertTrue(configService.publishConfig(DATA_ID, GROUP, initialContent, ConfigType.YAML.getType()));
+        await(() -> isConfigReadable(configService, initialContent));
+        firstStore = store(configService, codec, "first.yaml");
+        secondStore = store(configService, codec, "second.yaml");
+        firstStore.initialize();
+        secondStore.initialize();
+    }
 
     @AfterEach
     void tearDown() throws Exception {
@@ -88,17 +118,6 @@ class PolicySnapshotPropagationIT {
 
     @Test
     void shouldPublishWithCasAndPropagateToAnotherGatewayInstance() throws Exception {
-        configService = NacosFactory.createConfigService(
-                NACOS.getHost() + ":" + HOST_HTTP_PORT);
-        StoredPolicySnapshotCodec codec = codec();
-        String initialContent = codec.encodeSnapshot(snapshot(1, true));
-        assertTrue(configService.publishConfig(DATA_ID, GROUP, initialContent, ConfigType.YAML.getType()));
-        await(() -> isConfigReadable(configService, initialContent));
-        firstStore = store(configService, codec, "first.yaml");
-        secondStore = store(configService, codec, "second.yaml");
-        firstStore.initialize();
-        secondStore.initialize();
-
         assertTrue(firstStore.compareAndSet(firstStore.current().sourceRevision(), snapshot(2, false)));
 
         await(() -> secondStore.current().snapshot().snapshotVersion() == 2);
@@ -107,8 +126,26 @@ class PolicySnapshotPropagationIT {
         manualObservationPoint();
     }
 
+    @Test
+    void shouldKeepInFlightRequestOnSingleSnapshotVersionDuringPropagation() {
+        IngressPolicySnapshot inFlightSnapshot = firstStore.current().snapshot();
+        assertEquals(1, inFlightSnapshot.snapshotVersion());
+        assertTrue(inFlightSnapshot.content().routeAccessPolicies().get(new EndpointId("USER_AUTH.LOGIN")).enabled());
+
+        assertTrue(firstStore.compareAndSet(firstStore.current().sourceRevision(), snapshot(2, false)));
+
+        await(() -> secondStore.current().snapshot().snapshotVersion() == 2);
+        assertEquals(2, firstStore.current().snapshot().snapshotVersion());
+
+        assertEquals(1, inFlightSnapshot.snapshotVersion(),
+                "In-flight request must keep using the single snapshot version it originally read");
+        assertTrue(inFlightSnapshot.content().routeAccessPolicies().get(new EndpointId("USER_AUTH.LOGIN")).enabled());
+        assertFalse(firstStore.current().snapshot().content().routeAccessPolicies().get(new EndpointId("USER_AUTH.LOGIN")).enabled(),
+                "Fresh reads after propagation must observe the new version atomically, never a mixed state");
+    }
+
     private void manualObservationPoint() throws Exception {
-        URI consoleUri = URI.create("http://" + NACOS.getHost() + ":" + HOST_CONSOLE_PORT + "/");
+        URI consoleUri = URI.create("http://" + NACOS.getHost() + ":" + (hostHttpPort + 1) + "/");
         awaitConsole(consoleUri);
         System.out.println("Nacos console: " + consoleUri);
         // Set an IDE breakpoint on the next statement with "Suspend: All".

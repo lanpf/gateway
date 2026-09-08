@@ -1,8 +1,10 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.cloud.gateway.domain.access.SubjectAuthenticationResult;
+import com.cloud.gateway.domain.access.IngressAccessDenyReason;
+import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.policy.ChannelCredentialRequirement;
 import com.cloud.gateway.domain.policy.ChannelRequirement;
@@ -13,25 +15,26 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import reactor.core.publisher.Mono;
 
 class TrustedRequestContextGlobalFilterSubjectAuthenticationTest {
     private final SubjectAuthenticator<String> browserAuthenticator = credential ->
-            Mono.just(SubjectAuthenticationResult.rejected());
+            Mono.just(SubjectAuthenticationOutcome.rejected());
 
     @Test
     void shouldUseHostAuthenticatorWhenOptionalAuthenticationIsPresent() {
         SubjectAuthenticator<Authentication> hostAuthenticator = credential ->
-                Mono.just(SubjectAuthenticationResult.rejected());
+                Mono.just(SubjectAuthenticationOutcome.rejected());
         TrustedRequestContextGlobalFilter filter = filter(hostAuthenticator);
         Authentication authentication = new TestingAuthenticationToken("principal", "credential");
 
-        SubjectAuthenticationResult result = filter.authenticateSubject(
+        SubjectAuthenticationOutcome result = filter.authenticateSubject(
                 exchange(), optionalHostRoute(), authentication).block();
 
-        assertInstanceOf(SubjectAuthenticationResult.Rejected.class, result);
+        assertInstanceOf(SubjectAuthenticationOutcome.Rejected.class, result);
     }
 
     @Test
@@ -40,10 +43,18 @@ class TrustedRequestContextGlobalFilterSubjectAuthenticationTest {
                 Mono.error(new AssertionError("host authenticator不应被调用"));
         TrustedRequestContextGlobalFilter filter = filter(hostAuthenticator);
 
-        SubjectAuthenticationResult result = filter.authenticateSubject(
+        SubjectAuthenticationOutcome result = filter.authenticateSubject(
                 exchange(), optionalHostRoute(), null).block();
 
-        assertInstanceOf(SubjectAuthenticationResult.Absent.class, result);
+        assertInstanceOf(SubjectAuthenticationOutcome.Absent.class, result);
+    }
+
+    @Test
+    void shouldMapBrowserSessionVerificationOutagesWithoutPretendingCredentialIsInvalid() {
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, TrustedRequestContextGlobalFilter.status(
+                IngressAccessDenyReason.SUBJECT_AUTHENTICATION_DEPENDENCY_UNAVAILABLE));
+        assertEquals(HttpStatus.BAD_GATEWAY, TrustedRequestContextGlobalFilter.status(
+                IngressAccessDenyReason.SUBJECT_AUTHENTICATION_RESPONSE_INVALID));
     }
 
     private TrustedRequestContextGlobalFilter filter(SubjectAuthenticator<Authentication> hostAuthenticator) {

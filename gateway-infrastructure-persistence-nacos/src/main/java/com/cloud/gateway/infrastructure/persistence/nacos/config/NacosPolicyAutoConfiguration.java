@@ -33,6 +33,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.util.StringUtils;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.web.client.RestClient;
 
 @AutoConfiguration(beforeName = "com.cloud.gateway.infrastructure.policy.config.PolicyInfrastructureAutoConfiguration")
@@ -92,6 +93,14 @@ public class NacosPolicyAutoConfiguration {
     WritableRouteAccessPolicyDefinitionRepository nacosRouteAccessPolicyDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
         return new NacosRouteAccessPolicyDefinitionRepository(operations, properties, codec);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    RestClient.Builder nacosPolicyRestClientBuilder() {
+        // 反应式网关没有 servlet 的 RestClientAutoConfiguration，History REST 客户端
+        // 需要自备 Builder；servlet 部署已有该 bean 时让位于既有实现。
+        return RestClient.builder();
     }
 
     @Bean

@@ -13,11 +13,11 @@ import java.util.Optional;
 final class SnapshotEndpointResolver {
     private final PathPatternParser parser = new PathPatternParser();
 
-    Optional<EndpointDefinition> resolve(EndpointCatalog catalog, String method, String path) {
+    Optional<EndpointDefinition> resolve(EndpointCatalog catalog, String httpMethod, String path) {
         PathContainer requestPath = PathContainer.parsePath(path);
         List<EndpointDefinition> matched = catalog.definitions().stream()
                 .filter(definition -> definition.matchers().stream().anyMatch(matcher ->
-                        matcher.httpMethod().equalsIgnoreCase(method)
+                        matcher.httpMethod().equalsIgnoreCase(httpMethod)
                                 && parser.parse(matcher.pathPattern()).matches(requestPath)))
                 .toList();
         if (matched.size() > 1) {

@@ -46,7 +46,7 @@ class PolicyCommandServicesTest {
         TestStore store = new TestStore(snapshot(1, true), content(true));
         store.endpoints.failOnLoad = true;
         IngressClientAppPolicy policy = new IngressClientAppPolicy(
-                new ClientAppId("new-app"), ClientAppStatus.ENABLED, "IOS");
+                new ClientAppId("new-app"), ClientAppStatus.ENABLED, "IOS", Set.of());
 
         clientAppService(store).save(new SaveClientAppPolicyCommand(store.clients.revision(), policy));
 
@@ -131,7 +131,8 @@ class PolicyCommandServicesTest {
     void shouldResumeRollbackWithoutRewritingAlreadyRestoredDefinitions() {
         TestStore store = new TestStore(snapshot(2, false), content(false));
         IngressPolicyContent targetContent = content(true, Map.of(new ClientAppId("restored-app"),
-                new IngressClientAppPolicy(new ClientAppId("restored-app"), ClientAppStatus.ENABLED, "WEB")));
+                new IngressClientAppPolicy(
+                        new ClientAppId("restored-app"), ClientAppStatus.ENABLED, "WEB", Set.of())));
         IngressPolicySnapshot target = new IngressPolicySnapshot(1, targetContent, "enabled",
                 Instant.parse("2026-08-24T00:00:01Z"));
         store.routes.rejectNextWrite = true;
