@@ -17,6 +17,7 @@
         <module>gateway-infrastructure-coordination-redis</module>
         <module>gateway-infrastructure-security-spring</module>
         <module>gateway-infrastructure-replay-redis</module>
+        <module>gateway-infrastructure-ratelimit-redis</module>
         <module>gateway-interfaces</module>
         <module>gateway-boot</module>
         <module>gateway-integration-tests</module>
