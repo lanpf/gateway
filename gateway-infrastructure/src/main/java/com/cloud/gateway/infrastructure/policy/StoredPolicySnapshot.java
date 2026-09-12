@@ -1,92 +1,94 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.domain.policy.AuthorizationHeaderPolicy;
-import com.cloud.gateway.domain.policy.ChannelCredentialRequirement;
-import com.cloud.gateway.domain.policy.ChannelRequirement;
-import com.cloud.gateway.domain.policy.ClientAppStatus;
+import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
+import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
-import com.cloud.gateway.domain.policy.SignaturePayloadContract;
-import com.cloud.gateway.domain.policy.SubjectRequirement;
+import com.cloud.gateway.domain.client.SignatureContract;
+import com.cloud.gateway.domain.endpoint.EndpointStatus;
+import com.cloud.gateway.domain.client.ClientStatus;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 public record StoredPolicySnapshot(
         long snapshotVersion,
         List<Endpoint> endpoints,
-        Map<String, ClientApp> clientApps,
-        Map<String, ChannelAccess> channelAccess,
-        Map<String, ChannelCredential> channelCredentials,
-        Map<String, RouteAccess> routes,
+        Map<String, App> apps,
+        Map<String, Client> clients,
+        Map<String, Route> routes,
+        StoredPolicyComposition policies,
         String contentHash,
         Instant publishedAt
 ) {
     public StoredPolicySnapshot {
-        endpoints = endpoints == null ? null : List.copyOf(endpoints);
-        clientApps = clientApps == null ? null : Map.copyOf(clientApps);
-        channelAccess = channelAccess == null ? null : Map.copyOf(channelAccess);
-        channelCredentials = channelCredentials == null ? null : Map.copyOf(channelCredentials);
-        routes = routes == null ? null : Map.copyOf(routes);
+        endpoints = endpoints == null ? List.of() : List.copyOf(endpoints);
+        apps = apps == null ? Map.of() : Map.copyOf(apps);
+        clients = clients == null ? Map.of() : Map.copyOf(clients);
+        routes = routes == null ? Map.of() : Map.copyOf(routes);
     }
 
-    public record Endpoint(String endpointId, String ownerService, List<Matcher> matchers, String deliveryRouteId) {
+    public record Endpoint(String endpointId, String serviceId, String routeId, List<Matcher> matchers, Set<String> tags) {
         public Endpoint {
-            matchers = matchers == null ? null : List.copyOf(matchers);
+            tags = tags == null ? Set.of() : Set.copyOf(new TreeSet<>(tags));
+            matchers = matchers == null ? List.of() : List.copyOf(matchers);
         }
     }
 
     public record Matcher(String httpMethod, String pathPattern) { }
 
-    public record ClientApp(
-            ClientAppStatus status,
+    public record App(
+            PolicyStatus status,
             String platform,
-            Set<String> allowedBrowserOrigins
+            Set<String> allowedOrigins
     ) {
-        public ClientApp {
-            allowedBrowserOrigins = allowedBrowserOrigins == null
-                    ? Set.of() : Set.copyOf(allowedBrowserOrigins);
+        public App {
+            allowedOrigins = allowedOrigins == null ? Set.of() : Set.copyOf(allowedOrigins);
         }
     }
 
-    public record ChannelAccess(Set<String> allowedClientAppIds) {
-        public ChannelAccess {
-            allowedClientAppIds = allowedClientAppIds == null ? null : Set.copyOf(allowedClientAppIds);
+    public record Client(Set<String> allowedAppIds, ClientStatus status, ClientCredentials credentials) {
+        public Client {
+            allowedAppIds = allowedAppIds == null ? Set.of() : Set.copyOf(allowedAppIds);
         }
     }
 
-    public record ChannelCredential(Credential activeCredential, Credential graceCredential) { }
+    public record ClientCredentials(Credential activeCredential, Credential graceCredential) { }
 
     public record Credential(
             String credentialId,
             Instant validFrom,
             Instant expiresAt,
-            SignaturePayloadContract signaturePayloadContract,
+            SignatureContract signatureContract,
             String secretRef
     ) { }
 
-    public record RouteAccess(
-            ChannelCredentialRequirement channelCredentialRequirement,
-            ChannelRequirement channelRequirement,
-            SubjectRequirement subjectRequirement,
+    public record Route(
+            ClientVerificationMode clientVerificationMode,
+            ClientVerificationRequirement clientVerificationRequirement,
+            SubjectAuthencationRequirement subjectAuthencationRequirement,
             Set<String> requiredScopes,
             Set<String> requiredAudiences,
-            Forwarding forwarding,
-            boolean enabled
+            Forwarding credentialForwarding,
+            EndpointStatus status
     ) {
-        public RouteAccess {
-            requiredScopes = requiredScopes == null ? null : Set.copyOf(requiredScopes);
-            requiredAudiences = requiredAudiences == null ? null : Set.copyOf(requiredAudiences);
+        public Route {
+            requiredScopes = requiredScopes == null ? Set.of() : Set.copyOf(requiredScopes);
+            requiredAudiences = requiredAudiences == null ? Set.of() : Set.copyOf(requiredAudiences);
         }
     }
 
     public record Forwarding(
-            AuthorizationHeaderPolicy authorizationHeader,
+            AuthorizationHeaderForwardingMode authorizationHeader,
             CookieForwardingMode cookies,
             Set<String> allowedCookieNames
     ) {
         public Forwarding {
-            allowedCookieNames = allowedCookieNames == null ? null : Set.copyOf(allowedCookieNames);
+            allowedCookieNames = allowedCookieNames == null ? Set.of() : Set.copyOf(new TreeSet<>(allowedCookieNames));
         }
     }
 }

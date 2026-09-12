@@ -1,32 +1,31 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.framework.core.RequestHeader;
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
-import com.cloud.gateway.application.security.ChannelCredentialAuthenticator;
-import com.cloud.gateway.application.security.ChannelSignatureEvidence;
-import com.cloud.gateway.domain.access.ChannelCredentialAuthenticationOutcome;
-import com.cloud.gateway.domain.access.IngressAccessDecision;
+import com.cloud.gateway.application.ingress.IngressAccessCommand;
+import com.cloud.gateway.application.ingress.IngressAccessCommandService;
+import com.cloud.gateway.application.ingress.IngressAccessOutput;
+import com.cloud.gateway.application.ingress.IngressAdmissionCommandService;
+import com.cloud.gateway.api.constants.GatewayPathApiConstants;
+import com.cloud.gateway.application.security.ClientSignatureEvidence;
 import com.cloud.gateway.domain.access.IngressAccessDenyReason;
-import com.cloud.gateway.domain.access.IngressAccessPolicyEvaluator;
-import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
-import com.cloud.gateway.domain.access.TrustedRequestContext;
-import com.cloud.gateway.domain.endpoint.EndpointDefinition;
-import com.cloud.gateway.domain.policy.AuthorizationHeaderPolicy;
-import com.cloud.gateway.domain.policy.ChannelCode;
-import com.cloud.gateway.domain.policy.ChannelCredentialRequirement;
-import com.cloud.gateway.domain.policy.CookieForwardingMode;
-import com.cloud.gateway.domain.policy.CredentialForwardingPolicy;
-import com.cloud.gateway.domain.policy.IngressChannelAccessPolicy;
-import com.cloud.gateway.domain.policy.IngressChannelCredentialPolicy;
-import com.cloud.gateway.domain.policy.IngressClientAppPolicy;
-import com.cloud.gateway.domain.policy.IngressPolicySnapshot;
-import com.cloud.gateway.domain.policy.IngressRouteAccessPolicy;
-import com.cloud.gateway.domain.policy.ClientAppId;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.endpoint.Endpoint;
+import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.access.IngressAccessSnapshot;
+import com.cloud.gateway.domain.app.AppId;
+import com.cloud.gateway.domain.client.ClientId;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.cloud.gateway.route.Route;
+import org.springframework.cloud.gateway.support.ServerWebExchangeUtils;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpCookie;
 import org.springframework.http.HttpHeaders;
@@ -42,131 +41,133 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Clock;
-import java.util.Optional;
-
 @RequiredArgsConstructor
 public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Ordered {
-    private static final int MAX_CLIENT_VERSION_LENGTH = 64;
     private static final String BROWSER_SESSION_COOKIE = "BROWSER_SESSION";
+    private static final String LOCAL_ROUTE_PREFIX = GatewayPathApiConstants.ADMIN_BASE_PATH + "/";
+    private static final int MAX_EVIDENCE_BODY_BYTES = 1024 * 1024;
 
-    private final PolicySnapshotProvider snapshotProvider;
-    private final ChannelCredentialAuthenticator channelCredentialAuthenticator;
+    private final IngressAccessCommandService ingress;
     private final SubjectAuthenticator<Authentication> hostSessionSubjectAuthenticator;
     private final SubjectAuthenticator<String> browserSessionSubjectAuthenticator;
-    private final IngressAccessPolicyEvaluator evaluator;
-    private final Clock clock;
-
-    private final SnapshotEndpointResolver endpointResolver = new SnapshotEndpointResolver();
+    private final RequestQuotaGuard quotas;
+    private final DownstreamPolicyHandler downstream;
+    private final RequestHeaderWriter headerWriter = new RequestHeaderWriter();
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        IngressPolicySnapshot snapshot = snapshotProvider.current().snapshot();
-        String httpMethod = exchange.getRequest().getMethod().name();
+        IngressAccessSnapshot snapshot = exchange.getAttribute(GatewayRequestAttributes.SNAPSHOT);
         String path = exchange.getRequest().getPath().value();
-        Optional<EndpointDefinition> endpoint = endpointResolver.resolve(snapshot.content().endpointCatalog(), httpMethod, path);
-        if (endpoint.isEmpty()) {
+        Endpoint captured = exchange.getAttribute(GatewayRequestAttributes.ENDPOINT);
+        if (snapshot == null || captured == null
+                || !Boolean.TRUE.equals(exchange.getAttribute(GatewayRequestAttributes.PREPARATION_COMPLETE))
+                || exchange.getAttribute(GatewayRequestAttributes.APPLIED_IP_RULES) == null) {
             return reject(exchange, HttpStatus.NOT_FOUND);
         }
-        IngressRouteAccessPolicy route = snapshot.content().routeAccessPolicies().get(endpoint.get().endpointId());
+        Route delivery = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR);
+        boolean local = GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(captured.routeId());
+        if ((!local && (delivery == null || !delivery.getId().equals(captured.routeId())))
+                || (local && !path.startsWith(LOCAL_ROUTE_PREFIX))) {
+            return reject(exchange, HttpStatus.NOT_FOUND);
+        }
+        EndpointPolicy route = snapshot.content().endpointPolicies().get(captured.endpointId());
         if (route == null) {
             return reject(exchange, HttpStatus.FORBIDDEN);
         }
 
-        Mono<CachedRequest> cachedRequest = route.channelCredentialRequirement() == ChannelCredentialRequirement.REQUEST_SIGNATURE
+        Mono<CachedRequest> cachedRequest = route.clientVerificationMode() == ClientVerificationMode.REQUEST_SIGNATURE
+                || exchange.getRequest().getMethod() == HttpMethod.GET
                 ? cacheBody(exchange) : Mono.just(new CachedRequest(exchange, new byte[0]));
+        IngressAccessSnapshot requestSnapshot = snapshot;
         return cachedRequest.flatMap(cached -> ReactiveSecurityContextHolder.getContext()
                 .map(context -> Optional.ofNullable(context.getAuthentication()))
                 .defaultIfEmpty(Optional.empty())
-                .flatMap(authentication -> evaluate(cached, chain, snapshot, route, authentication.orElse(null))));
+                .flatMap(authentication -> evaluate(cached, chain, requestSnapshot, route, authentication.orElse(null))))
+                .onErrorResume(DataBufferLimitException.class, error -> reject(exchange, HttpStatus.PAYLOAD_TOO_LARGE));
     }
 
     private Mono<Void> evaluate(
             CachedRequest cached,
             GatewayFilterChain chain,
-            IngressPolicySnapshot snapshot,
-            IngressRouteAccessPolicy route,
+            IngressAccessSnapshot snapshot,
+            EndpointPolicy route,
             Authentication authentication
     ) {
         ServerWebExchange exchange = cached.exchange();
 
         HttpHeaders headers = exchange.getRequest().getHeaders();
-        String clientAppIdHeaderValue = headers.getFirst(RequestHeader.CLIENT_APP_ID);
-        String channelCodeHeaderValue = headers.getFirst(RequestHeader.CHANNEL_CODE);
-        ClientAppId clientAppId = StringUtils.hasText(clientAppIdHeaderValue) ? new ClientAppId(clientAppIdHeaderValue) : null;
-        ChannelCode channelCode = StringUtils.hasText(channelCodeHeaderValue) ? new ChannelCode(channelCodeHeaderValue) : null;
-        IngressClientAppPolicy clientApp = clientAppId == null
-                ? null : snapshot.content().clientAppPolicies().get(clientAppId);
-        IngressChannelAccessPolicy channelAccess = channelCode == null
-                ? null : snapshot.content().channelAccessPolicies().get(channelCode);
+        String appIdHeaderValue = headers.getFirst(RequestHeader.APP_ID.headerName());
+        String clientIdHeaderValue = headers.getFirst(RequestHeader.CLIENT_ID.headerName());
+        AppId appId = StringUtils.hasText(appIdHeaderValue) ? new AppId(appIdHeaderValue) : null;
+        ClientId clientId = StringUtils.hasText(clientIdHeaderValue) ? new ClientId(clientIdHeaderValue) : null;
+        Endpoint endpoint = exchange.getRequiredAttribute(GatewayRequestAttributes.ENDPOINT);
+        IngressAccessCommand command = new IngressAccessCommand(snapshot, endpoint, appId, clientId,
+                headers.getFirst(HttpHeaders.ORIGIN), isUnsafe(exchange.getRequest().getMethod()),
+                PolicySnapshotWebFilter.remoteIp(exchange));
 
-        Mono<ChannelCredentialAuthenticationOutcome> channelCredentialAuthentication =
-                authenticateChannelCredential(exchange, cached.payload(), channelCode, route, snapshot);
-        Mono<SubjectAuthenticationOutcome> subjectAuthentication =
-                authenticateSubject(exchange, route, authentication);
-
-        return Mono.zip(channelCredentialAuthentication, subjectAuthentication)
-                .flatMap(authentications -> {
-                    IngressAccessDecision decision = evaluator.evaluate(
-                            snapshot.snapshotVersion(), channelCode,
-                            clientApp, channelAccess, route,
-                            exchange.getRequest().getHeaders().getFirst(HttpHeaders.ORIGIN),
-                            isUnsafe(exchange.getRequest().getMethod()),
-                            authentications.getT1(), authentications.getT2());
-                    if (decision instanceof IngressAccessDecision.Denied denied) {
-                        return reject(exchange, status(denied.reason()));
+        Set<String> applied = exchange.getRequiredAttribute(GatewayRequestAttributes.APPLIED_IP_RULES);
+        IngressAdmissionCommandService admission = new IngressAdmissionCommandService(ingress, quotas);
+        return Mono.deferContextual(reactorContext -> Mono.fromCompletionStage(() -> admission.admit(command,
+                signatureEvidence(exchange, cached.payload(), clientId),
+                () -> isAuthenticationAbsent(authentication)
+                        ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
+                        : hostSessionSubjectAuthenticator.authenticate(authentication).contextWrite(reactorContext).toFuture(),
+                () -> {
+                    HttpCookie cookie = exchange.getRequest().getCookies().getFirst(BROWSER_SESSION_COOKIE);
+                    return cookie == null
+                            ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
+                            : browserSessionSubjectAuthenticator.authenticate(cookie.getValue()).contextWrite(reactorContext).toFuture();
+                }, applied)))
+                .flatMap(admitted -> {
+                    IngressAccessOutput output = admitted.access();
+                    if (output instanceof IngressAccessOutput.Denied denied) {
+                        return reject(exchange, status(denied.decision().reason()));
                     }
-                    TrustedRequestContext context =
-                            ((IngressAccessDecision.Allowed) decision).trustedRequestContext();
-                    return chain.filter(forward(exchange, context, route));
+                    IngressAccessOutput.Allowed allowed = (IngressAccessOutput.Allowed) output;
+                    exchange.getAttributes().put(GatewayRequestAttributes.TRUSTED_CONTEXT, allowed.context());
+                    return quotas.respond(exchange, admitted.quota())
+                            .flatMap(permitted -> {
+                                if (!permitted) {
+                                    return Mono.empty();
+                                }
+                                ServerWebExchange forwarded = headerWriter.write(exchange, allowed.context(),
+                                        allowed.headers(), snapshot.content().policies().trustedHeaderNames());
+                                if (GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.routeId())) {
+                                    return chain.filter(forwarded);
+                                }
+                                return downstream.handle(exchange, forwarded, chain, endpoint,
+                                        allowed.context(), allowed.policy());
+                            });
                 });
     }
 
-    private Mono<ChannelCredentialAuthenticationOutcome> authenticateChannelCredential(
-            ServerWebExchange exchange,
-            byte[] payload,
-            ChannelCode channelCode,
-            IngressRouteAccessPolicy route,
-            IngressPolicySnapshot snapshot
-    ) {
-        if (route.channelCredentialRequirement() != ChannelCredentialRequirement.REQUEST_SIGNATURE
-                || channelCode == null) {
-            return Mono.just(ChannelCredentialAuthenticationOutcome.absent());
-        }
-        IngressChannelCredentialPolicy channelCredential = snapshot.content().channelCredentialPolicies().get(channelCode);
-        if (channelCredential == null) {
-            return Mono.just(ChannelCredentialAuthenticationOutcome.rejected());
-        }
+    private static ClientSignatureEvidence signatureEvidence(
+            ServerWebExchange exchange, byte[] payload, ClientId clientId) {
         HttpHeaders headers = exchange.getRequest().getHeaders();
-        String timestampHeaderValue = headers.getFirst(GatewayRequestHeaders.TIMESTAMP);
-        String signatureHeaderValue = headers.getFirst(GatewayRequestHeaders.SIGNATURE);
-        if (!StringUtils.hasText(timestampHeaderValue) || !StringUtils.hasText(signatureHeaderValue)) {
-            return Mono.just(ChannelCredentialAuthenticationOutcome.absent());
+        String timestamp = headers.getFirst(RequestHeader.TIMESTAMP.headerName());
+        String signature = headers.getFirst(RequestHeader.SIGNATURE.headerName());
+        if (clientId == null || !StringUtils.hasText(timestamp) || !StringUtils.hasText(signature)) {
+            return null;
         }
-        try {
-            return Mono.fromCompletionStage(channelCredentialAuthenticator.authenticate(
-                    channelCredential,
-                    new ChannelSignatureEvidence(payload, timestampHeaderValue, signatureHeaderValue),
-                    clock.instant()));
-        } catch (IllegalArgumentException exception) {
-            return Mono.just(ChannelCredentialAuthenticationOutcome.rejected());
-        }
+        return new ClientSignatureEvidence(payload, timestamp, signature,
+                exchange.getRequest().getMethod().name(), exchange.getRequest().getURI().getRawPath(),
+                exchange.getRequest().getURI().getRawQuery(), headers.getFirst(RequestHeader.APP_ID.headerName()),
+                clientId.value(), headers.getFirst(RequestHeader.CREDENTIAL_ID.headerName()),
+                headers.getFirst(RequestHeader.NONCE.headerName()));
     }
 
     Mono<SubjectAuthenticationOutcome> authenticateSubject(
-            ServerWebExchange exchange, IngressRouteAccessPolicy route, Authentication authentication) {
-        return switch (route.subjectRequirement()) {
-            case IGNORE -> Mono.just(SubjectAuthenticationOutcome.absent());
-            case BROWSER_SESSION_REQUIRED -> {
-                HttpCookie cookie = exchange.getRequest().getCookies().getFirst(BROWSER_SESSION_COOKIE);
-                yield cookie == null
-                        ? Mono.just(SubjectAuthenticationOutcome.absent())
-                        : browserSessionSubjectAuthenticator.authenticate(cookie.getValue());
-            }
-            case HOST_SESSION_REQUIRED, HOST_SESSION_OPTIONAL -> isAuthenticationAbsent(authentication)
-                    ? Mono.just(SubjectAuthenticationOutcome.absent())
-                    : hostSessionSubjectAuthenticator.authenticate(authentication);
-        };
+            ServerWebExchange exchange, EndpointPolicy route, Authentication authentication) {
+        return Mono.deferContextual(context -> Mono.fromCompletionStage(() -> ingress.authenticateSubject(route.subjectAuthencationRequirement(),
+                () -> isAuthenticationAbsent(authentication)
+                        ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
+                        : hostSessionSubjectAuthenticator.authenticate(authentication).contextWrite(context).toFuture(),
+                () -> {
+                    HttpCookie cookie = exchange.getRequest().getCookies().getFirst(BROWSER_SESSION_COOKIE);
+                    return cookie == null
+                            ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
+                            : browserSessionSubjectAuthenticator.authenticate(cookie.getValue()).contextWrite(context).toFuture();
+                })));
     }
 
     private static boolean isAuthenticationAbsent(Authentication authentication) {
@@ -181,84 +182,26 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
                 || method == HttpMethod.TRACE);
     }
 
-    private static ServerWebExchange forward(
-            ServerWebExchange exchange, TrustedRequestContext context, IngressRouteAccessPolicy route) {
-        String declaredVersion = sanitizeClientVersion(
-                exchange.getRequest().getHeaders().getFirst(RequestHeader.CLIENT_VERSION));
-        ServerHttpRequest request = exchange.getRequest().mutate().headers(headers -> {
-            stripProtectedHeaders(headers);
-            headers.set(RequestHeader.CLIENT_APP_ID, context.clientContext().clientAppId().value());
-            headers.set(RequestHeader.CLIENT_PLATFORM, context.clientContext().platform());
-            setIfPresent(headers, RequestHeader.CLIENT_VERSION, declaredVersion);
-            if (context.channelContext() != null) {
-                headers.set(RequestHeader.CHANNEL_CODE, context.channelContext().channelCode().value());
-            }
-            if (context.subjectContext() != null) {
-                headers.set(RequestHeader.SUBJECT_TYPE, context.subjectContext().subjectType().name());
-                headers.set(RequestHeader.USER_ID, context.subjectContext().subjectId());
-                headers.set(RequestHeader.SESSION_ID, context.subjectContext().loginSessionId());
-            }
-            if (route.credentialForwardingPolicy().authorizationHeader() == AuthorizationHeaderPolicy.STRIP) {
-                headers.remove(HttpHeaders.AUTHORIZATION);
-            }
-            applyCookiePolicy(exchange, headers, route);
-        }).build();
-        return exchange.mutate().request(request).build();
-    }
-
-    private static void applyCookiePolicy(
-            ServerWebExchange exchange, HttpHeaders headers, IngressRouteAccessPolicy route) {
-        CredentialForwardingPolicy forwarding = route.credentialForwardingPolicy();
-        headers.remove(HttpHeaders.COOKIE);
-        if (forwarding.cookies() != CookieForwardingMode.ALLOW_LIST) return;
-        forwarding.allowedCookieNames().forEach(name -> exchange.getRequest().getCookies().getOrDefault(name, java.util.List.of())
-                .forEach(cookie -> headers.add(HttpHeaders.COOKIE, cookie.toString())));
-    }
-
-    private static void stripProtectedHeaders(HttpHeaders headers) {
-        headers.remove(RequestHeader.CLIENT_APP_ID);
-        headers.remove(RequestHeader.CLIENT_PLATFORM);
-        headers.remove(RequestHeader.CLIENT_VERSION);
-        headers.remove(RequestHeader.CHANNEL_CODE);
-        headers.remove(RequestHeader.USER_ID);
-        headers.remove(RequestHeader.SESSION_ID);
-        headers.remove(RequestHeader.SUBJECT_TYPE);
-    }
-
-    private static void setIfPresent(HttpHeaders headers, String name, String value) {
-        if (StringUtils.hasText(value)) {
-            headers.set(name, value);
-        }
-    }
-
-    private static String sanitizeClientVersion(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() > MAX_CLIENT_VERSION_LENGTH || !trimmed.matches("[A-Za-z0-9._+-]+")) {
-            return null;
-        }
-        return trimmed;
-    }
-
     static HttpStatus status(IngressAccessDenyReason reason) {
         return switch (reason) {
-            case CLIENT_APP_NOT_FOUND, CHANNEL_REQUIRED -> HttpStatus.BAD_REQUEST;
+            case APP_NOT_FOUND, CLIENT_REQUIRED -> HttpStatus.BAD_REQUEST;
             case ENDPOINT_NOT_FOUND -> HttpStatus.NOT_FOUND;
-            case SUBJECT_REQUIRED, SUBJECT_AUTHENTICATION_FAILED, SUBJECT_TYPE_MISMATCH -> HttpStatus.UNAUTHORIZED;
-            case SUBJECT_AUTHENTICATION_DEPENDENCY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case CLIENT_VERIFICATION_REQUIRED, CLIENT_VERIFICATION_MISMATCH,
+                 SUBJECT_REQUIRED, SUBJECT_AUTHENTICATION_REJECTED, SUBJECT_TYPE_MISMATCH -> HttpStatus.UNAUTHORIZED;
+            case CLIENT_VERIFICATION_FAILED,
+                 SUBJECT_AUTHENTICATION_UPSTREAM_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case SUBJECT_AUTHENTICATION_RESPONSE_INVALID -> HttpStatus.BAD_GATEWAY;
             default -> HttpStatus.FORBIDDEN;
         };
     }
 
     private static Mono<CachedRequest> cacheBody(ServerWebExchange exchange) {
-        return DataBufferUtils.join(exchange.getRequest().getBody())
+        return DataBufferUtils.join(exchange.getRequest().getBody(), MAX_EVIDENCE_BODY_BYTES)
                 .map(buffer -> {
                     byte[] bytes = new byte[buffer.readableByteCount()];
                     buffer.read(bytes);
                     DataBufferUtils.release(buffer);
+                    exchange.getAttributes().put(GatewayRequestAttributes.REQUEST_BODY_PRESENT, bytes.length > 0);
                     ServerHttpRequest decorated = new ServerHttpRequestDecorator(exchange.getRequest()) {
                         @Override public Flux<DataBuffer> getBody() {
                             return Flux.just(exchange.getResponse().bufferFactory().wrap(bytes));

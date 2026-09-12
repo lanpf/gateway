@@ -12,6 +12,11 @@
     <dependencies>
         <dependency>
             <groupId>com.cloud</groupId>
+            <artifactId>gateway-infrastructure-ratelimit-redis</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.cloud</groupId>
             <artifactId>gateway-infrastructure-persistence-nacos</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

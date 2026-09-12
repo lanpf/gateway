@@ -1,0 +1,7 @@
+package com.cloud.gateway.domain.client;
+public enum SignatureContract {
+    LEGACY_SECRET_PARAMS_TIMESTAMP_MD5_UPPER,
+    LEGACY_SECRET_TIMESTAMP_BODY_SHA256,
+    LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256,
+    HTTP_REQUEST_SIGNATURE_V1
+}

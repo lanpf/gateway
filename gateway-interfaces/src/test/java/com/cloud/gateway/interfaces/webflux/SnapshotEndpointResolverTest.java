@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.gateway.domain.endpoint.EndpointCatalog;
-import com.cloud.gateway.domain.endpoint.EndpointDefinition;
+import com.cloud.gateway.domain.endpoint.EndpointRegistry;
+import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import java.util.List;
@@ -16,18 +16,18 @@ class SnapshotEndpointResolverTest {
 
     @Test
     void shouldResolveTheOnlyMatchingEndpoint() {
-        EndpointCatalog catalog = new EndpointCatalog(List.of(
+        EndpointRegistry catalog = new EndpointRegistry(List.of(
                 endpoint("ORDER.GET", "GET", "/api/orders/{orderId}"),
                 endpoint("ORDER.CREATE", "POST", "/api/orders")));
 
-        EndpointDefinition resolved = resolver.resolve(catalog, "GET", "/api/orders/42").orElseThrow();
+        Endpoint resolved = resolver.resolve(catalog, "GET", "/api/orders/42").orElseThrow();
 
         assertEquals("ORDER.GET", resolved.endpointId().value());
     }
 
     @Test
     void shouldFailClosedWhenPatternsFromDifferentEndpointsOverlap() {
-        EndpointCatalog catalog = new EndpointCatalog(List.of(
+        EndpointRegistry catalog = new EndpointRegistry(List.of(
                 endpoint("API.ALL", "GET", "/api/**"),
                 endpoint("ORDER.ALL", "GET", "/api/orders/**")));
 
@@ -35,8 +35,8 @@ class SnapshotEndpointResolverTest {
                 () -> resolver.resolve(catalog, "GET", "/api/orders/42"));
     }
 
-    private static EndpointDefinition endpoint(String endpointId, String method, String pattern) {
-        return new EndpointDefinition(new EndpointId(endpointId), "order",
+    private static Endpoint endpoint(String endpointId, String method, String pattern) {
+        return new Endpoint(new EndpointId(endpointId), "order",
                 List.of(new EndpointMatcher(method, pattern)), "order");
     }
 }

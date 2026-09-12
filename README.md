@@ -1,65 +1,163 @@
 # gateway
 
-统一外部入口，负责验证 OAuth2 Access Token、校验客户端与渠道上下文，并向下游服务写入可信请求头。
+基于 Spring Cloud Gateway 的入口安全与策略治理服务。v1 使用 App / Client / Subject、EndpointRegistry、PolicyBundle / PolicyBinding 与完整 GatewayPolicySnapshot。
 
-gateway 的领域边界是 **Ingress Access Control（入口访问控制）**。它负责把外部不可信请求转换为内部可信请求上下文，但不拥有用户账户认证、功能权限或业务资源授权。完整模型见 [领域设计](docs/DOMAIN.md)。
+能力交付与限制见 [职责及交付状态](docs/RESPONSIBILITIES.md)。
+
+## 文档入口
+
+- [领域设计 · v1](docs/DOMAIN.md)：统一语言、模型、不变量、策略合并、签名、安全边界与分层。
+- [职责与协作 · v1](docs/RESPONSIBILITIES.md)：服务边界、下游协议、交付状态和验收条件。
+- 本文件：模块、配置、构建、启动、验证。不另建技术方案或交接文档。
 
 ## 模块
 
 | 模块 | 职责 |
 | --- | --- |
-| `gateway-api` | Admin Facade、Command、Output 和 REST 路径契约 |
-| `gateway-domain` | EndpointCatalog、四类策略、快照、Subject、可信上下文和入口判定规则 |
-| `gateway-application` | Definition 保存、显式发布、回退编排及安全端口 |
-| `gateway-infrastructure` | 本地配置 Definition、只读快照、LKG 抽象、统一存储模型和 contentHash |
-| `gateway-infrastructure-persistence-nacos` | Nacos Definition、完整快照、MD5 CAS、监听和 History adapter |
-| `gateway-infrastructure-coordination-redis` | Publish/Rollback 分布式锁装配和持久 rollbackState adapter |
-| `gateway-infrastructure-security-spring` | JWT/Reference Token、Channel Request Signature 与 Browser Session 在线验证 adapter |
-| `gateway-infrastructure-replay-redis` | 跨实例原子防重放 adapter |
-| `gateway-interfaces` | Admin REST、Facade 实现和 SCG GlobalFilter |
-| `gateway-boot` | 最终运行时装配和可执行 Jar |
-| `gateway-integration-tests` | 基于 Testcontainers 的真实中间件集成测试 |
+| gateway-api | 管理 Facade、请求/响应与协议常量 |
+| gateway-domain | 身份、端点、Bundle/Binding、Header、签名协议、配额聚合、缓存准入与快照规则 |
+| gateway-application | 发布/回退/保存、分阶段入口、签名认证、配额及下游治理用例与端口 |
+| gateway-infrastructure | 本地只读配置、规范化序列化、LKG、缓存与熔断适配 |
+| gateway-infrastructure-persistence-nacos | 五份 Definition、完整 Snapshot、CAS、监听及历史 |
+| gateway-infrastructure-coordination-redis | 发布/回退锁与持久回退状态 |
+| gateway-infrastructure-security-spring | Token 解码／introspection、Browser Session、密钥与密码学适配 |
+| gateway-infrastructure-replay-redis | 原子防重放 |
+| gateway-infrastructure-ratelimit-redis | EXACT 令牌桶及有界本地故障降级 |
+| gateway-interfaces | REST、Spring Security 入口、证据适配、Header 与 HTTP 治理生命周期 |
+| gateway-boot | 运行时装配与可执行 Jar |
+| gateway-integration-tests | 独立真实基础设施冒烟测试 |
 
-## 信任边界
+## 构建与启动
 
-- 外部调用方提供 `X-Client-App-Id`、`X-Client-Version` 和可选的 `X-Channel-Code`。
-- 网关根据 `gateway.ingress-policy.client-apps` 校验 ClientApp 状态与渠道合法性，并由 ClientApp 配置推导 `X-Client-Platform`。
-- 网关验证 Bearer Access Token；以 `sub` 和 `session_id` 写入 `X-Subject-Type=HOST_SESSION`、`X-User-Id`、`X-Session-Id`。Browser Session 验证后写入同样的用户/会话 Header，但 Subject Type 为 `BROWSER_SESSION`。
-- 所有受保护 Header 都会先删除再由网关写入，客户端提交的同名值不会透传。
-- `IngressClientAppPolicy`、`IngressChannelAccessPolicy`、`IngressChannelCredentialPolicy`、`IngressRouteAccessPolicy` 是 gateway 自有的四类入口策略，统一校验并发布为一份 `IngressPolicySnapshot`。ClientApp Policy 同时维护 Browser Session 的 Origin 白名单，非安全 Cookie 请求在入口层精确校验。运行时使用 Nacos adapter；`PolicySnapshotPublisher/Provider/History` 端口隔离了发布技术，Nacos 不是领域模型的一部分。
-- Browser Session 由 gateway 经 user-auth 内网验证端点 `POST /internal/browser-sessions/verification` 在线验证。验证客户端复用 `user-auth-api` 的路径与 API Command/Output 契约，使用 `gateway.security.browser-session.service-id`（默认 `user-auth`）通过 Spring Cloud LoadBalancer/Nacos 服务发现解析实例，实例地址变化不需要刷新验证 Bean。验证成功后以受限 `BROWSER_SESSION` Subject Type 转发；Redis idle TTL 的滑动续期由 user-auth 在验证过程中管理，gateway 不重写 Cookie。会话无效返回 `401`，服务无可用实例或调用失败返回 `503`，响应协议非法返回 `502`。
-- 内部服务调用暂时以可信内网为边界，可以直接调用并传播现有请求上下文，不额外设计服务身份或 delegation；该简化必须由私网、网络策略/安全组和禁止下游公网暴露共同保证。
-- 下游业务服务必须只允许来自 gateway 或可信内网的流量；Header 本身不是跨越不可信网络的认证机制。
+要求 Java 17、Maven。不要使用系统默认的其他 JDK 代替验证。依赖 framework 及 user-auth-api 当前开发构件，需配置可访问的 Maven 仓库。
 
-`gateway.security.access-token.format` 可选 `SELF_CONTAINED`（JWT + JWK）或 `REFERENCE`（OAuth2 Token Introspection）。它必须与 user-auth 的 Access Token 格式一致；该差异只属于 infrastructure 验证策略，不进入 `AuthenticatedSubject` 或下游可信请求上下文。
-
-## 启动
+当前引用 framework-dependencies `0.4.0-SNAPSHOT`，需要包含 RequestHeader 枚举及 HeaderType 的 framework-core；本地联合开发先在相邻 framework 工程执行 `mvn install`。Header 字符串使用 `RequestHeader.APP_ID.headerName()`；共享 Header 消费与暂缓的下游迁移见 [协作契约](docs/RESPONSIBILITIES.md#协作契约)。
 
 ```bash
-mvn test
-mvn package
-java -jar gateway-boot/target/gateway-boot-0.2.0-SNAPSHOT.jar \
+mvn clean test
+mvn -pl gateway-boot -am package -DskipTests
+java -jar gateway-boot/target/gateway-boot-0.3.0-SNAPSHOT.jar \
   --spring.config.additional-location=file:./config/application.yml
 ```
 
-本地启动需要 Redis 和 Nacos 3.x；`user-auth` 需要以 `spring.application.name=user-auth` 注册到同一个 Nacos 服务发现命名空间。启动前必须在目标 namespace 的 `GATEWAY` group 中准备[五份 Definition 示例](gateway-infrastructure-persistence-nacos/src/main/resources/examples/definitions)，并发布一份有效的[完整 Snapshot 示例](gateway-infrastructure-persistence-nacos/src/main/resources/examples/gateway-ingress-policy.yaml)：`gateway-ingress-policy.yaml`。首次启动时 Nacos 和本机 last-known-good 都没有有效 Snapshot 会 fail-fast；成功加载后，最后有效原始 YAML 原子写入 `./data/gateway-ingress-policy.yaml`。
+本地配置采用 Redis、Nacos 3.x 和 user-auth 服务发现。部署参数由部署侧配置覆盖；仓库配置不重复代码默认值，不包含环境变量占位符。不会自动升级或覆盖外部 Nacos/Redis 数据。
 
-部署配置约定：
+主要配置入口：
 
-- 仓库 `config/application.yml` 只承载与代码默认值不同的本地开发显式决策，不引用环境变量占位符；
-  `*Properties` 已提供的默认值（Nacos group/dataId、超时、last-known-good 路径、锁参数等）不在配置文件中重复。
-- 部署差异由部署环境通过自己的配置文件提供（`--spring.config.additional-location` 指向部署侧
-  `application.yml`），需覆盖的典型配置键：`spring.cloud.nacos.config.server-addr/namespace/username/password`、
-  `gateway.policy.nacos.history.admin-access-token`（Nacos History REST 客户端 token，未提供时使用
-  username/password 登录）、`gateway.security.access-token.*`（须与 user-auth 的 issuer/JWK/introspection
-  一致）、`gateway.security.request-signature.secrets`（合作方签名密钥）、`spring.cloud.gateway.server.webflux.routes`
-  的下游服务地址。Redis 资源 namespace 默认使用 `spring.application.name`。
+- `gateway.policy-definition`：本地只读 App、Client、端点、凭据、Bundle/Binding。
+- `gateway.policy.nacos`：配置中心 dataId、group、历史与 LKG。
+- `gateway.security.access-token`：JWT/JWK 或 Reference introspection，需与 user-auth 一致。
+- `gateway.security.request-signature`：密钥引用解析及时间窗口。
+- `spring.cloud.gateway.server.webflux.routes`：SCG 交付路由，id 与端点 routeId 同值。
+- `gateway.governance`：本地缓存与熔断器容量，具体属性以配置类为准。
+- `gateway.headers`：`extra-headers`、`forbidden-set-headers`、`forbidden-remove-headers`。名称匹配忽略大小写；集合在启动时生成不可变 HeaderRules，变更需重启，不使用可变 Properties 逐请求读取。
 
-Admin 保存只修改对应 Definition dataId，并通过 Nacos MD5 做 CAS；`POST /admin/gateway/policy-snapshots/publish` 才组装、校验并发布完整 Snapshot。`POST /admin/gateway/policy-snapshots/rollback` 从 Nacos History 读取目标内容，恢复全部 Definition 后以更大的 `snapshotVersion` 发布。回退失败时 Redis `rollbackState` 保留，普通 Publish 被阻断，但可以用相同或不同目标版本再次回退。没有配置中心时，`gateway.ingress-policy` 由共享 infrastructure 作为默认只读 Definition 数据源，只装配运行时读取能力，不装配 Publisher、Admin 命令、Facade 和 REST 入口。
+本机管理路由使用保留 routeId `gateway-admin`，端点必须登记，不能作为代理路由绕过认证。启动验证普通端点引用的实际路由存在。
 
-生产环境应通过部署配置替换 introspection client secret，并按 Endpoint 的 ChannelCredentialRequirement 完成 ClientApp、Channel Access 校验或 Channel Request Signature 验证。
+### 策略组合示例
 
-## 文档入口
+以下为本地 `gateway.policy-definition.policies` 下的配置片段。先给受管理的公开只读端点添加 `public-read` 标签；不要把缓存 Bundle 绑定到登录或主体相关端点。Nacos 第五份 Definition 使用对应 camelCase 字段及 ISO-8601 Duration，由管理接口/编码器生成，不能直接复制本地绑定格式。
 
-- [领域设计](docs/DOMAIN.md)：入口访问控制的统一语言、领域模型、策略、应用端口、分层建议和当前实现迁移方向。
-- [网关职责与信任边界](docs/RESPONSIBILITIES.md)：统一网关的目标职责、与 `user-auth` 及业务服务的边界、协作契约与上线验收清单。
+```yaml
+bundles:
+  ingress-protection:
+    bundle-id: ingress-protection
+    rate-limit:
+      on-redis-failure: CLOSED
+      rules:
+        - { rule-id: ingress-ip, dimension: IP, capacity: 100, refill-per-second: 20, mode: EXACT }
+  public-read:
+    bundle-id: public-read
+    timeout: { connect: 1s, read: 3s, total: 5s }
+    circuit-breaker:
+      failure-rate-threshold: 50
+      slow-call-rate-threshold: 50
+      slow-call-duration: 2s
+      minimum-calls: 20
+      sliding-window-size: 50
+      half-open-calls: 5
+      wait-duration: 10s
+      fallback: STALE_CACHE
+    cache: { ttl: 30s, stale-window: 10s, max-body-bytes: 65536, vary-headers: [accept-language] }
+    headers:
+      trusted-headers: [APP_ID, CLIENT_ID]
+      credential-forwarding: { authorization-header: STRIP, cookies: STRIP_ALL }
+bindings:
+  - { binding-id: all-ingress, bundle-id: ingress-protection }
+  - { binding-id: public-reads, bundle-id: public-read, tags: [public-read] }
+```
+
+Header 节点整体替换默认输出集合，示例没有选择的 Subject/Session 字段不会写入；需要时显式加入。普通 set/remove 的名称必须为 RequestHeader、extra-headers 或 X-Gateway- 前缀之一，再通过独立操作权限校验。标准协议字段不在 RequestHeader 中；仓库 config/application.yml 显式配置禁止设置/删除名单，不会因为加入 extra-headers 而绕过该名单。规则身份 `ingress-ip` 应保持稳定。快照发布前会校验 Bundle、Binding、端点和身份引用，配置错误不会静默降级。
+
+有 MeterRegistry 时采集 `gateway.ingress.requests`、`gateway.quota.decisions` 与 `gateway.governance.*` 缓存/熔断指标，固定标签不带调用方、端点或密钥；指标导出和告警由部署侧装配。不按每次限流输出 INFO 日志，Redis 故障进入/恢复时记录状态变化。
+
+## Definition 与发布
+
+Nacos group 默认为 GATEWAY，环境由 namespace 隔离。准备五份 Definition：
+
+1. gateway-endpoints.yaml
+2. gateway-app-policies.yaml
+3. gateway-client-policies.yaml
+4. gateway-endpoint-access-policies.yaml
+5. gateway-policy-configuration.yaml
+
+完整快照 dataId 为 `gateway-policy.yaml`，本地 LKG 默认为 `data/gateway-policy.yaml`。示例位于 [配置示例目录](gateway-infrastructure-persistence-nacos/src/main/resources/examples)。
+
+Admin 基础路径为 `/admin/gateway`；保存只修改 Definition，`POST /snapshot/publish` 显式发布，`POST /snapshot/rollback` 回退。策略组合通过 `PUT /policies/configuration` 保存。请求需通过 App 和管理 Bearer scope/audience 认证；具体载荷见 gateway-api。
+
+策略组合 Java 类型统一使用 `PolicyComposition`，对应 `StoredPolicyComposition`、`PolicyCompositionProperties` 和管理载荷类型；现有 `policies` 字段、`/policies/configuration` 路径及 `gateway-policy-configuration.yaml` dataId 不变。
+
+Client 配置合并为 `clients`，凭据内嵌于 `credentials.activeCredential/graceCredential`；本地入口为 `gateway.policy-definition.clients`。接入设置和凭据更新共用 `gateway-client-policies.yaml` 的 revision，任一操作成功后另一操作须使用最新 revision。凭据操作要求 Client 已存在，接入设置不会覆盖其凭据。端点配置及管理请求以 `status: ENABLED` 或 `DISABLED` 替代 `enabled` 布尔值。旧分离 Definition、旧布尔字段及旧快照需重建，不提供混合读取兼容层。
+
+端点与 Header 节点的凭据转发设置统一为 `credentialForwarding`（API/Nacos）或 `credential-forwarding`（本地 YAML），领域类型为 `CredentialForwarding`。不再使用 `credentialForwardingPolicy`、Header 下的 `credentials` 或端点下的 `forwarding`；Client 下的 `credentials` 不变。此更名会改变内容摘要，外部开发快照须重新生成，仓库示例已同步。
+
+仅快照发布身份可写 Snapshot，运行身份只读。首次启动远端和 LKG 均无有效快照时失败。开发阶段破坏式更新后，应按新模型重新准备开发配置；旧 snapshot schema 不兼容。保留三种历史签名计算方式并不意味着保留旧配置结构。
+
+无 Nacos 写入适配时，本地 Definition/Snapshot 只读，不装配 Admin 发布/回退命令。
+
+## 验证
+
+开发阶段：
+
+```bash
+mvn clean test
+mvn -pl gateway-boot -am package -DskipTests
+git diff --check
+```
+
+冒烟阶段需要 Docker；使用 Testcontainers 创建隔离资源，不使用外部业务 Redis/Nacos。运行方式：
+
+```bash
+mvn -pl gateway-integration-tests -am verify -Dit.test=RateLimitIT -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
+# 完整验证从根工程执行，先由 reactor 构建 BrowserSessionIngressIT 所需的 gateway-boot Jar
+mvn verify
+```
+
+Surefire 报告位于各模块 target/surefire-reports；Failsafe 报告位于 gateway-integration-tests/target/failsafe-reports。Docker 不可用造成的跳过不视为通过。
+
+本轮验证结果、历史冒烟结果及暂缓的下游迁移状态统一见 [职责及交付状态](docs/RESPONSIBILITIES.md)；历史通过数不代表当前工作区已通过相同验收。
+
+### RateLimitIT 观察
+
+使用官方 `redis:8.4.4`（已验证 amd64/arm64 支持），复用既有 smoke 镜像，作为轻量镜像偏好的明确例外。覆盖两个独立 Spring 上下文共享额度、24 个竞争请求分享 7 个令牌、拒绝保留分数令牌、Redis TIME 补充、热更新先按旧速率结算且不重新满额、同维度全规则与最大 Retry-After、命名空间隔离、真实 WRONGTYPE 故障下 CLOSED 与有界本地降级。
+
+手动观察可指定 `-Dit.test=RateLimitIT#shouldShareExactCapacityAcrossIndependentGatewayInstances -Dgateway.it.manual-observation-seconds=30`（此场景最大 60 秒）。测试输出隔离容器的 `redis-cli HGETALL` / `PTTL` 命令；预期 tokens=0、capacity=7、refill=1、TTL 为正。到期自动清理上下文、键与容器。以测试报告实际结果为准。
+
+### 其他既有场景
+
+可将上述命令的 `-Dit.test` 替换为以下测试类。单独运行 BrowserSessionIngressIT 前必须先执行 `mvn -pl gateway-boot -am package -DskipTests`，完整 smoke 则使用根目录 `mvn verify`，避免拿缺失或旧的启动 Jar 验证。Nacos 使用 3.0.3，需要允许临时绑定 API、Console、gRPC 端口族；测试创建隔离容器和配置，完成后自动清理。
+
+| 场景 | 自动断言及观察目标 |
+| --- | --- |
+| NacosPolicyAdministrationIT | 五份 Definition 与 Snapshot 共六个 dataId；接入与凭据共用 revision，旧接入写入被拒绝，嵌套凭据随快照发布；两次发布产生版本 1/2，History 保留版本 1，hash 改变。 |
+| PolicySnapshotPropagationIT | MD5 CAS、多实例监听收敛；旧请求引用完整保留版本 1，新读取观察版本 2，无混用。 |
+| RedisPolicyCoordinationIT | 跨连接锁互斥、异常释放、租约恢复；rollbackState 跨实例可见、TTL=-1、幂等清除、namespace 隔离。锁资源 ingress-policy 保留，不随模型改名迁移。 |
+| RedisReplayGuardIT | 两个连接工厂 10 个并发登记恰好一次成功；TTL 到期可重新登记，过期证据不写入，namespace 隔离。 |
+| GatewayPipelineIT | 随机端口真实 SCG 与 Reactor Netty 下游；身份/凭据清除、缓存命中后仍授权、完整快照切换后 Header 刷新、超时 504、未知端点及缺失 App 提前拒绝。快照为内存源，Redis 精确性由 RateLimitIT 单独覆盖。 |
+| BrowserSessionIngressIT | 双应用真实 Nacos/MySQL/Redis；有效 Cookie 及允许 Origin 放行并结束会话，无效 Cookie 401、非法 Origin 403；需同级 user-auth/config/db/schema.sql 及兼容的开发构件，不能用单元测试代替协作验收。 |
+
+上述既有场景可在 `manualObservationPoint()`（Browser 场景为其观察断点）设置断点，或支持时增加 `-Dgateway.it.manual-observation-seconds=30`。Nacos 测试输出实际控制台地址（映射容器 8080 的根路径，不是 8848/nacos）；Redis 测试输出连接命令及 namespace。只在输出的隔离测试资源中检查键和 TTL；若输出 marker，可删除该具体 marker 提前结束观察。未配置观察参数时不等待，恢复测试或窗口到期后自动清理。报告位于前述 Failsafe 目录，容器日志用于定位启动失败。
+
+GatewayPipelineIT 的 Header 动态更新观察入口为 `-Dit.test=GatewayPipelineIT#shouldApplyHeaderSelectionFromNewSnapshotWithoutRestart -Dgateway.it.manual-observation-seconds=30`（最多 60 秒），按测试打印的 curl 地址请求；预期未选择的 App 输出被撤销、外部伪造 X-Gateway-App 被清除、普通配置 X-Gateway-Version 为 v2，无需重启。可信字段不能映射为自定义名称。
+
+为遵循本项目三份文档上限，集成场景目的、运行命令与观察说明合并在本节，不再新增逐场景 Markdown。

@@ -1,132 +1,134 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.domain.policy.AuthorizationHeaderPolicy;
-import com.cloud.gateway.domain.policy.ChannelCredentialRequirement;
-import com.cloud.gateway.domain.policy.ChannelRequirement;
-import com.cloud.gateway.domain.policy.ClientAppStatus;
+import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
+import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
+import com.cloud.gateway.domain.client.ClientStatus;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
-import com.cloud.gateway.domain.policy.SignaturePayloadContract;
-import com.cloud.gateway.domain.policy.SubjectRequirement;
+import com.cloud.gateway.domain.client.SignatureContract;
+import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import java.util.List;
 import java.util.Map;
 
 @JsonPropertyOrder({
-        "channelAccessPolicies",
-        "channelCredentialPolicies",
-        "clientAppPolicies",
-        "endpointCatalog",
-        "routeAccessPolicies"
+        "clients",
+        "appPolicies",
+        "endpointRegistry",
+        "endpointPolicies",
+        "policies"
 })
 public record CanonicalPolicyContent(
-        List<Endpoint> endpointCatalog,
-        Map<String, ChannelAccess> channelAccessPolicies,
-        Map<String, ChannelCredential> channelCredentialPolicies,
-        Map<String, ClientApp> clientAppPolicies,
-        Map<String, RouteAccess> routeAccessPolicies
+        List<Endpoint> endpointRegistry,
+        Map<String, Client> clientPolicies,
+        Map<String, App> appPolicies,
+        Map<String, EndpointAccess> endpointPolicies,
+        StoredPolicyComposition policies
 ) {
     public CanonicalPolicyContent {
-        endpointCatalog = List.copyOf(endpointCatalog);
-        channelAccessPolicies = Map.copyOf(channelAccessPolicies);
-        channelCredentialPolicies = Map.copyOf(channelCredentialPolicies);
-        clientAppPolicies = Map.copyOf(clientAppPolicies);
-        routeAccessPolicies = Map.copyOf(routeAccessPolicies);
+        endpointRegistry = List.copyOf(endpointRegistry);
+        clientPolicies = Map.copyOf(clientPolicies);
+        appPolicies = Map.copyOf(appPolicies);
+        endpointPolicies = Map.copyOf(endpointPolicies);
     }
 
     @JsonPropertyOrder({
-            "deliveryRouteId",
-            "endpointId",
+            "routeId",
+            "id",
             "matchers",
-            "ownerService"
+            "serviceId",
+            "tags"
     })
     public record Endpoint(
-            String deliveryRouteId,
+            String routeId,
             String endpointId,
             List<String> matchers,
-            String ownerService
+            String serviceId,
+            List<String> tags
     ) {
         public Endpoint {
+            tags = List.copyOf(tags);
             matchers = List.copyOf(matchers);
         }
     }
 
     @JsonPropertyOrder({
-            "allowedBrowserOrigins",
-            "clientAppId",
+            "allowedOrigins",
+            "appId",
             "status",
             "platform"
     })
-    public record ClientApp(
-            String clientAppId,
-            ClientAppStatus status,
+    public record App(
+            String appId,
+            PolicyStatus status,
             String platform,
-            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> allowedBrowserOrigins
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> allowedOrigins
     ) {
-        public ClientApp {
-            allowedBrowserOrigins = List.copyOf(allowedBrowserOrigins);
+        public App {
+            allowedOrigins = List.copyOf(allowedOrigins);
         }
     }
 
     @JsonPropertyOrder({
-            "allowedClientAppIds",
-            "channelCode"
+            "allowedApps",
+            "clientId",
+            "status", "credentials"
     })
-    public record ChannelAccess(List<String> allowedClientAppIds, String channelCode) {
-        public ChannelAccess {
-            allowedClientAppIds = List.copyOf(allowedClientAppIds);
+    public record Client(List<String> allowedAppIds, String clientId, ClientStatus status, ClientCredentials credentials) {
+        public Client {
+            allowedAppIds = List.copyOf(allowedAppIds);
         }
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({
             "activeCredential",
-            "channelCode",
             "graceCredential"})
-    public record ChannelCredential(
+    public record ClientCredentials(
             Credential activeCredential,
-            String channelCode,
             Credential graceCredential
     ) { }
 
     @JsonPropertyOrder({
-            "channelCode",
+            "clientId",
             "credentialId",
             "expiresAt",
             "secretRef",
-            "signaturePayloadContract",
+            "signatureContract",
             "validFrom"
     })
     public record Credential(
-            String channelCode,
+            String clientId,
             String credentialId,
             String expiresAt,
             String secretRef,
-            SignaturePayloadContract signaturePayloadContract,
+            SignatureContract signatureContract,
             String validFrom
     ) { }
 
     @JsonPropertyOrder({
-            "channelCredentialRequirement",
-            "channelRequirement",
-            "credentialForwardingPolicy",
-            "enabled",
-            "endpointId",
+            "clientCredentialRequirement",
+            "clientRequirement",
+            "credentialForwarding",
+            "status",
+            "id",
             "requiredAudiences",
             "requiredScopes",
             "subjectRequirement"
     })
-    public record RouteAccess(
-            ChannelCredentialRequirement channelCredentialRequirement,
-            ChannelRequirement channelRequirement,
-            Forwarding credentialForwardingPolicy,
-            boolean enabled,
+    public record EndpointAccess(
+            ClientVerificationMode clientVerificationMode,
+            ClientVerificationRequirement clientVerificationRequirement,
+            Forwarding credentialForwarding,
+            EndpointStatus status,
             String endpointId,
             List<String> requiredAudiences,
             List<String> requiredScopes,
-            SubjectRequirement subjectRequirement
+            SubjectAuthencationRequirement subjectAuthencationRequirement
     ) {
-        public RouteAccess {
+        public EndpointAccess {
             requiredAudiences = List.copyOf(requiredAudiences);
             requiredScopes = List.copyOf(requiredScopes);
         }
@@ -139,7 +141,7 @@ public record CanonicalPolicyContent(
     })
     public record Forwarding(
             List<String> allowedCookieNames,
-            AuthorizationHeaderPolicy authorizationHeader,
+            AuthorizationHeaderForwardingMode authorizationHeader,
             CookieForwardingMode cookies
     ) {
         public Forwarding {

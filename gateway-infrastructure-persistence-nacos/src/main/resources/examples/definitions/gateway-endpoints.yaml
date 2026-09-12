@@ -1,7 +1,19 @@
 ---
 - endpointId: "USER_AUTH.LOGIN"
-  ownerService: "user-auth"
+  serviceId: "user-auth"
   matchers:
   - httpMethod: "POST"
     pathPattern: "/api/user-auth/login"
-  deliveryRouteId: "user-auth"
+  routeId: "user-auth"
+- endpointId: GATEWAY.ADMIN
+  serviceId: gateway
+  routeId: gateway-admin
+  tags: [admin]
+  matchers:
+  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/app }
+  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/client-access }
+  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/client-client }
+  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/endpoint-access }
+  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/configuration }
+  - { httpMethod: POST, pathPattern: /admin/gateway/snapshot/publish }
+  - { httpMethod: POST, pathPattern: /admin/gateway/snapshot/rollback }

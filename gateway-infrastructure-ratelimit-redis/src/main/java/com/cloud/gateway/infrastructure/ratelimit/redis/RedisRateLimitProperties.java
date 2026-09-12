@@ -1,25 +1,20 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
+import com.cloud.framework.core.naming.Namespaced;
+import jakarta.validation.constraints.Min;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
-@ConfigurationProperties(prefix = "gateway.ratelimit.redis")
-public class RedisRateLimitProperties {
-    private String keyPrefix = "gateway:ratelimit:";
-    private int preallocationBatch = 100;
+@Getter
+@Setter
+@Validated
+@ConfigurationProperties(RedisRateLimitProperties.PREFIX)
+public class RedisRateLimitProperties implements Namespaced {
+    public static final String PREFIX = "gateway.ratelimit.redis";
 
-    public String getKeyPrefix() {
-        return keyPrefix;
-    }
-
-    public void setKeyPrefix(String keyPrefix) {
-        this.keyPrefix = keyPrefix;
-    }
-
-    public int getPreallocationBatch() {
-        return preallocationBatch;
-    }
-
-    public void setPreallocationBatch(int preallocationBatch) {
-        this.preallocationBatch = preallocationBatch;
-    }
+    private String namespace;
+    @Min(1)
+    private int localMaxBuckets = 10000;
 }

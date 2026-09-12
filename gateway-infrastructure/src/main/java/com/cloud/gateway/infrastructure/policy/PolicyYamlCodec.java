@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.util.function.Function;
+
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.util.StringUtils;
 
 abstract class PolicyYamlCodec {
@@ -17,6 +19,8 @@ abstract class PolicyYamlCodec {
 
     protected PolicyYamlCodec(ObjectMapper source) {
         this.objectMapper = source.copyWith(new YAMLFactory())
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS)
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
                 .enable(SerializationFeature.INDENT_OUTPUT)

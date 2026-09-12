@@ -9,7 +9,7 @@ import lombok.Getter;
 public enum ApplicationError implements BaseError {
     APP_POLICY_SNAPSHOT_VERSION_CONFLICT(600, "入口策略快照版本冲突"),
     APP_POLICY_SNAPSHOT_PUBLISH_CONFLICT(601, "入口策略快照发布冲突"),
-    APP_CHANNEL_CREDENTIAL_AUTHENTICATION_FAILED(602, "渠道凭据验证失败"),
+    APP_CLIENT_CREDENTIAL_AUTHENTICATION_FAILED(602, "客户端凭据验证失败"),
     APP_SUBJECT_AUTHENTICATION_FAILED(603, "访问主体验证失败"),
     APP_POLICY_SNAPSHOT_HISTORY_NOT_FOUND(604, "入口策略历史快照不存在"),
     APP_POLICY_SNAPSHOT_NO_CHANGES(605, "入口策略定义没有变化"),

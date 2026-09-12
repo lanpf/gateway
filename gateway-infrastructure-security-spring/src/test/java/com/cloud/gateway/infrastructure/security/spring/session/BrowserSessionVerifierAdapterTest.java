@@ -6,9 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.cloud.framework.core.Result;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
-import com.cloud.gateway.domain.access.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.SubjectAuthenticationUnavailableReason;
-import com.cloud.gateway.domain.access.SubjectType;
+import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationFailReason;
 import com.cloud.userauth.api.authentication.VerifyBrowserSessionApiCommandOutput;
 import com.cloud.userauth.api.constants.UserAuthPathApiConstants;
 import java.io.IOException;
@@ -42,8 +41,8 @@ class BrowserSessionVerifierAdapterTest {
         AuthenticatedSubject value = result.subject();
         assertEquals(SubjectType.BROWSER_SESSION, value.subjectType());
         assertEquals("1001", value.subjectId());
-        assertEquals("session-1", value.loginSessionId());
-        assertEquals(NOW.plusSeconds(1800), value.credentialExpiresAt());
+        assertEquals("session-1", value.sessionId());
+        assertEquals(NOW.plusSeconds(1800), value.authenticationExpiresAt());
         assertNull(value.issuer());
         assertEquals(0, value.audiences().size());
         assertEquals(0, value.scopes().size());
@@ -67,7 +66,7 @@ class BrowserSessionVerifierAdapterTest {
         BrowserSessionVerifierAdapter verifier = new BrowserSessionVerifierAdapter(
                 webClient, Clock.fixed(NOW, ZoneOffset.UTC));
 
-        BrowserSessionVerificationOutcome outcome = verifier.verify("credential")
+        BrowserSessionVerificationOutcome outcome = verifier.verify("client")
                 .toCompletableFuture().join();
 
         assertInstanceOf(BrowserSessionVerificationOutcome.Verified.class, outcome);
@@ -104,9 +103,9 @@ class BrowserSessionVerifierAdapterTest {
 
         BrowserSessionVerificationOutcome.Unavailable result = assertInstanceOf(
                 BrowserSessionVerificationOutcome.Unavailable.class,
-                verifier.verify("credential").toCompletableFuture().join());
+                verifier.verify("client").toCompletableFuture().join());
 
-        assertEquals(SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE,
+        assertEquals(SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE,
                 result.reason());
     }
 
@@ -117,14 +116,14 @@ class BrowserSessionVerifierAdapterTest {
         WebClient unavailableClient = WebClient.builder().exchangeFunction(request -> Mono.error(
                 WebClientResponseException.create(503, "Unavailable", HttpHeaders.EMPTY, null, null))).build();
 
-        BrowserSessionVerificationOutcome invalid = verifier(invalidClient).verify("credential")
+        BrowserSessionVerificationOutcome invalid = verifier(invalidClient).verify("client")
                 .toCompletableFuture().join();
         BrowserSessionVerificationOutcome.Unavailable unavailable = assertInstanceOf(
                 BrowserSessionVerificationOutcome.Unavailable.class,
-                verifier(unavailableClient).verify("credential").toCompletableFuture().join());
+                verifier(unavailableClient).verify("client").toCompletableFuture().join());
 
         assertInstanceOf(BrowserSessionVerificationOutcome.Invalid.class, invalid);
-        assertEquals(SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE,
+        assertEquals(SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE,
                 unavailable.reason());
     }
 

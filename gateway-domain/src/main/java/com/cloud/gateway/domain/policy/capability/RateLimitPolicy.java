@@ -1,30 +1,17 @@
 package com.cloud.gateway.domain.policy.capability;
 
-import java.time.Duration;
+import com.cloud.framework.core.validation.Require;
+import com.cloud.gateway.domain.common.DomainException;
 
-public record RateLimitPolicy(
-        RateLimitDimension dimension,
-        int capacity,
-        int refillPerSecond,
-        RateLimitMode mode,
-        Duration preallocationBatchWindow
-) {
+/** Stable rule identity survives snapshot and quota parameter updates. */
+public record RateLimitPolicy(String ruleId, RateLimitDimension dimension, int capacity,
+                              int refillPerSecond, RateLimitMode mode) {
     public RateLimitPolicy {
-        if (dimension == null) {
-            throw new IllegalArgumentException("dimension must not be null");
+        ruleId = Require.notBlank(ruleId, DomainException::missingField).trim();
+        Require.notNull(dimension, DomainException::missingField);
+        Require.notNull(mode, DomainException::missingField);
+        if (capacity <= 0 || refillPerSecond <= 0 || ruleId.length() > 128) {
+            throw DomainException.invalidField();
         }
-        if (capacity <= 0 || refillPerSecond <= 0) {
-            throw new IllegalArgumentException("capacity and refillPerSecond must be positive");
-        }
-        if (mode == null) {
-            throw new IllegalArgumentException("mode must not be null");
-        }
-        if (mode == RateLimitMode.PREALLOCATED && preallocationBatchWindow == null) {
-            preallocationBatchWindow = Duration.ofSeconds(1);
-        }
-    }
-
-    public Duration preallocationBatchWindow() {
-        return preallocationBatchWindow == null ? Duration.ofSeconds(1) : preallocationBatchWindow;
     }
 }

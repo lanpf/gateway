@@ -1,28 +1,34 @@
 package com.cloud.gateway.domain.policy.capability;
 
 import java.time.Duration;
+import com.cloud.framework.core.validation.Require;
+import com.cloud.gateway.domain.common.DomainException;
 
 public record CircuitBreakerPolicy(
-        String ownerService,
         int failureRateThreshold,
         int slowCallRateThreshold,
         Duration slowCallDuration,
+        int minimumCalls,
+        int slidingWindowSize,
         int halfOpenCalls,
-        Duration waitDuration
+        Duration waitDuration,
+        Fallback fallback
 ) {
+    public enum Fallback { ERROR, STALE_CACHE }
+
     public CircuitBreakerPolicy {
-        if (ownerService == null || ownerService.isBlank()) {
-            throw new IllegalArgumentException("ownerService must not be blank");
-        }
+        Require.notNull(slowCallDuration, DomainException::missingField);
+        Require.notNull(waitDuration, DomainException::missingField);
+        Require.notNull(fallback, DomainException::missingField);
         if (failureRateThreshold < 1 || failureRateThreshold > 100
-                || slowCallRateThreshold < 1 || slowCallRateThreshold > 100) {
-            throw new IllegalArgumentException("rate thresholds must be within [1, 100]");
-        }
-        if (slowCallDuration == null || slowCallDuration.isNegative() || slowCallDuration.isZero()) {
-            throw new IllegalArgumentException("slowCallDuration must be positive");
-        }
-        if (halfOpenCalls < 1 || waitDuration == null || waitDuration.isNegative()) {
-            throw new IllegalArgumentException("halfOpenCalls must be positive and waitDuration non-negative");
+                || slowCallRateThreshold < 1 || slowCallRateThreshold > 100
+                || minimumCalls < 1 || slidingWindowSize < minimumCalls || slidingWindowSize > 100000
+                || halfOpenCalls < 1 || halfOpenCalls > slidingWindowSize
+                || slowCallDuration.compareTo(Duration.ofMillis(1)) < 0
+                || slowCallDuration.compareTo(Duration.ofDays(1)) > 0
+                || waitDuration.compareTo(Duration.ofMillis(1)) < 0
+                || waitDuration.compareTo(Duration.ofDays(1)) > 0) {
+            throw DomainException.invalidField();
         }
     }
 }

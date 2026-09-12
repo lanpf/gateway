@@ -23,7 +23,6 @@ public class GatewaySecurityProperties {
     public static final String PREFIX = "gateway.security";
     public static final String ACCESS_TOKEN_PREFIX = PREFIX + ".access-token";
 
-    @NotBlank private String adminAudience;
     @Valid private final AccessToken accessToken = new AccessToken();
     @Valid private final RequestSignature requestSignature = new RequestSignature();
     @Valid private final BrowserSession browserSession = new BrowserSession();

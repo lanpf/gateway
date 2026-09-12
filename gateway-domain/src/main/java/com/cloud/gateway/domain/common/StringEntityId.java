@@ -9,7 +9,7 @@ public abstract class StringEntityId extends EntityId<String> {
     }
 
     @Override
-    protected String validate(String value) {
+    protected String normalize(String value) {
         return Require.notBlank(value, DomainException::invalidEntityId).trim();
     }
 }

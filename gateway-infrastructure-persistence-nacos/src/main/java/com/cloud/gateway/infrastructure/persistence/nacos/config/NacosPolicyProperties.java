@@ -17,15 +17,15 @@ import org.springframework.validation.annotation.Validated;
 public class NacosPolicyProperties {
     public static final String PREFIX = "gateway.policy.nacos";
     public static final String DEFAULT_GROUP = "GATEWAY";
-    public static final String DEFAULT_DATA_ID = "gateway-ingress-policy.yaml";
+    public static final String DEFAULT_DATA_ID = "gateway-policy.yaml";
 
     @NotBlank private String group = DEFAULT_GROUP;
     @NotBlank private String dataId = DEFAULT_DATA_ID;
     @NotBlank private String endpointDefinitionDataId = "gateway-endpoints.yaml";
-    @NotBlank private String clientAppDefinitionDataId = "gateway-client-app-policies.yaml";
-    @NotBlank private String channelAccessDefinitionDataId = "gateway-channel-access-policies.yaml";
-    @NotBlank private String channelCredentialDefinitionDataId = "gateway-channel-credential-policies.yaml";
-    @NotBlank private String routeAccessDefinitionDataId = "gateway-route-access-policies.yaml";
+    @NotBlank private String appDefinitionDataId = "gateway-app-policies.yaml";
+    @NotBlank private String clientDefinitionDataId = "gateway-client-policies.yaml";
+    @NotBlank private String routeAccessDefinitionDataId = "gateway-endpoint-access-policies.yaml";
+    @NotBlank private String policyConfigurationDefinitionDataId = "gateway-policy-configuration.yaml";
     @NotNull @DurationMin(seconds = 1) private Duration readTimeout = Duration.ofSeconds(5);
     @NotNull @DurationMin(seconds = 1) private Duration recoveryInterval = Duration.ofSeconds(30);
     @NotNull private Path lastKnownGoodLocation = Path.of("data", DEFAULT_DATA_ID);

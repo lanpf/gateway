@@ -4,21 +4,21 @@ import com.alibaba.cloud.nacos.NacosConfigAutoConfiguration;
 import com.alibaba.cloud.nacos.NacosConfigManager;
 import com.alibaba.cloud.nacos.NacosConfigProperties;
 import com.cloud.gateway.application.policy.PolicySnapshotHistory;
-import com.cloud.gateway.application.policy.WritableChannelAccessPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableChannelCredentialPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableClientAppPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableEndpointCatalogDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableRouteAccessPolicyDefinitionRepository;
+import com.cloud.gateway.application.policy.WritableClientPolicyDefinitionRepository;
+import com.cloud.gateway.application.policy.WritableAppPolicyDefinitionRepository;
+import com.cloud.gateway.application.policy.WritableEndpointRegistryDefinitionRepository;
+import com.cloud.gateway.application.policy.WritableEndpointAccessPolicyDefinitionRepository;
+import com.cloud.gateway.application.policy.WritablePolicyCompositionDefinitionRepository;
 import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
 import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodPolicySnapshotStore;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosChannelAccessPolicyDefinitionRepository;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosChannelCredentialPolicyDefinitionRepository;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosClientAppPolicyDefinitionRepository;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosEndpointCatalogDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosClientPolicyDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosAppPolicyDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosEndpointRegistryDefinitionRepository;
 import com.cloud.gateway.infrastructure.persistence.nacos.NacosPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosRouteAccessPolicyDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosPolicyCompositionDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosEndpointAccessPolicyDefinitionRepository;
 import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicyHistorySource;
 import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicyHistorySourceAdapter;
 import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicySnapshotHistory;
@@ -63,36 +63,36 @@ public class NacosPolicyAutoConfiguration {
     }
 
     @Bean
-    WritableEndpointCatalogDefinitionRepository nacosEndpointCatalogDefinitionRepository(
+    WritableEndpointRegistryDefinitionRepository nacosEndpointRegistryDefinitionRepository(
             NacosConfigOperations operations,
             NacosPolicyProperties properties,
             StoredPolicyDefinitionCodec codec
     ) {
-        return new NacosEndpointCatalogDefinitionRepository(operations, properties, codec);
+        return new NacosEndpointRegistryDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritableClientAppPolicyDefinitionRepository nacosClientAppPolicyDefinitionRepository(
+    WritableAppPolicyDefinitionRepository nacosAppPolicyDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosClientAppPolicyDefinitionRepository(operations, properties, codec);
+        return new NacosAppPolicyDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritableChannelAccessPolicyDefinitionRepository nacosChannelAccessPolicyDefinitionRepository(
+    WritableClientPolicyDefinitionRepository nacosClientPolicyDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosChannelAccessPolicyDefinitionRepository(operations, properties, codec);
+        return new NacosClientPolicyDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritableChannelCredentialPolicyDefinitionRepository nacosChannelCredentialPolicyDefinitionRepository(
+    WritableEndpointAccessPolicyDefinitionRepository nacosEndpointAccessPolicyDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosChannelCredentialPolicyDefinitionRepository(operations, properties, codec);
+        return new NacosEndpointAccessPolicyDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritableRouteAccessPolicyDefinitionRepository nacosRouteAccessPolicyDefinitionRepository(
+    WritablePolicyCompositionDefinitionRepository nacosPolicyConfigurationDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosRouteAccessPolicyDefinitionRepository(operations, properties, codec);
+        return new NacosPolicyCompositionDefinitionRepository(operations, properties, codec);
     }
 
     @Bean

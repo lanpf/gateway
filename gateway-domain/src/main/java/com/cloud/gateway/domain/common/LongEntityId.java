@@ -9,7 +9,7 @@ public abstract class LongEntityId extends EntityId<Long> {
     }
 
     @Override
-    protected Long validate(Long value) {
+    protected Long normalize(Long value) {
         return Require.positive(value, DomainException::invalidEntityId);
     }
 }

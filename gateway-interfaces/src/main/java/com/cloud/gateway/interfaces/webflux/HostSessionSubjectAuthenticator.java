@@ -1,8 +1,8 @@
 package com.cloud.gateway.interfaces.webflux;
 
-import com.cloud.gateway.domain.access.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
-import com.cloud.gateway.domain.access.SubjectType;
+import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
+
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;

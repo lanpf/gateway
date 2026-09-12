@@ -28,17 +28,17 @@ class NacosPolicyHistorySourceAdapterTest {
         historyProperties.setAdminAccessToken("test-token");
         NacosPolicyHistorySourceAdapter client = client(builder.build(), historyProperties, new NacosConfigProperties());
         expectRequest(server, BASE_URL
-                + "/v3/admin/cs/history/list?dataId=gateway-ingress-policy.yaml&groupName=GATEWAY"
+                + "/v3/admin/cs/history/list?dataId=gateway-policy.yaml&groupName=GATEWAY"
                 + "&namespaceId=public&pageNo=1&pageSize=100", "test-token")
                 .andRespond(withSuccess("""
                         {"code":0,"message":"success","data":{"pageItems":[{"id":"2"},{"id":"1"}]}}
                         """, MediaType.APPLICATION_JSON));
-        expectHistoryDetail(server, "2", "snapshotVersion: 2", "test-token");
-        expectHistoryDetail(server, "1", "snapshotVersion: 1", "test-token");
+        expectHistoryDetail(server, "2", "version: 2", "test-token");
+        expectHistoryDetail(server, "1", "version: 1", "test-token");
 
-        Optional<String> result = client.findFirst(content -> content.contains("snapshotVersion: 1"));
+        Optional<String> result = client.findFirst(content -> content.contains("version: 1"));
 
-        assertEquals(Optional.of("snapshotVersion: 1"), result);
+        assertEquals(Optional.of("version: 1"), result);
         server.verify();
     }
 
@@ -56,7 +56,7 @@ class NacosPolicyHistorySourceAdapterTest {
                         {"accessToken":"login-token","tokenTtl":300}
                         """, MediaType.APPLICATION_JSON));
         expectRequest(server, BASE_URL
-                + "/v3/admin/cs/history/list?dataId=gateway-ingress-policy.yaml&groupName=GATEWAY"
+                + "/v3/admin/cs/history/list?dataId=gateway-policy.yaml&groupName=GATEWAY"
                 + "&namespaceId=public&pageNo=1&pageSize=100", "login-token")
                 .andRespond(withSuccess("""
                         {"code":0,"message":"success","data":{"pageItems":[]}}
@@ -86,7 +86,7 @@ class NacosPolicyHistorySourceAdapterTest {
             String accessToken
     ) {
         expectRequest(server, BASE_URL
-                + "/v3/admin/cs/history?dataId=gateway-ingress-policy.yaml&groupName=GATEWAY"
+                + "/v3/admin/cs/history?dataId=gateway-policy.yaml&groupName=GATEWAY"
                 + "&namespaceId=public&nid=" + historyId, accessToken)
                 .andRespond(withSuccess("""
                         {"code":0,"message":"success","data":{"id":"%s","content":"%s"}}

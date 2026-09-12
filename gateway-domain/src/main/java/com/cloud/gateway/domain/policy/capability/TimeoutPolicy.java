@@ -1,14 +1,21 @@
 package com.cloud.gateway.domain.policy.capability;
 
 import java.time.Duration;
+import com.cloud.framework.core.validation.Require;
+import com.cloud.gateway.domain.common.DomainException;
 
-public record TimeoutPolicy(String ownerService, Duration connect, Duration read) {
+public record TimeoutPolicy(Duration connect, Duration read, Duration total) {
     public TimeoutPolicy {
-        if (ownerService == null || ownerService.isBlank()) {
-            throw new IllegalArgumentException("ownerService must not be blank");
-        }
-        if (connect == null || connect.isNegative() || read == null || read.isNegative()) {
-            throw new IllegalArgumentException("connect and read timeouts must be non-negative");
+        validate(connect);
+        validate(read);
+        validate(total);
+    }
+
+    private static void validate(Duration value) {
+        Require.notNull(value, DomainException::missingField);
+        if (value.compareTo(Duration.ofMillis(1)) < 0
+                || value.compareTo(Duration.ofMillis(Integer.MAX_VALUE)) > 0) {
+            throw DomainException.invalidField();
         }
     }
 }

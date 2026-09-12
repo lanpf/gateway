@@ -4,7 +4,8 @@ import com.alibaba.nacos.api.exception.NacosException;
 import com.cloud.gateway.application.policy.PolicySnapshotProvider;
 import com.cloud.gateway.application.policy.PolicySnapshotPublisher;
 import com.cloud.gateway.application.policy.VersionedPolicySnapshot;
-import com.cloud.gateway.domain.policy.IngressPolicySnapshot;
+import com.cloud.gateway.domain.access.IngressAccessSnapshot;
+import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import java.nio.charset.StandardCharsets;
@@ -70,7 +71,7 @@ public final class NacosPolicySnapshotStore
     }
 
     @Override
-    public boolean compareAndSet(String expectedSourceRevision, IngressPolicySnapshot snapshot) {
+    public boolean compareAndSet(String expectedSourceRevision, IngressAccessSnapshot snapshot) {
         String content = codec.encodeSnapshot(snapshot);
         try {
             boolean published = operations.publishConfigCas(
@@ -165,7 +166,7 @@ public final class NacosPolicySnapshotStore
     }
 
     private void accept(String content) {
-        IngressPolicySnapshot candidate;
+        IngressAccessSnapshot candidate;
         try {
             candidate = codec.decodeSnapshot(content);
         } catch (RuntimeException exception) {
@@ -181,7 +182,7 @@ public final class NacosPolicySnapshotStore
             if (current.compareAndSet(observed, accepted)) {
                 saveLastKnownGood(content);
                 log.info("Accepted gateway policy snapshot version={} contentHash={} sourceRevision={}",
-                        accepted.snapshot().snapshotVersion(), accepted.snapshot().contentHash(), sourceRevision);
+                        accepted.snapshot().version(), accepted.snapshot().contentHash(), sourceRevision);
                 return;
             }
         }
@@ -198,7 +199,7 @@ public final class NacosPolicySnapshotStore
 
     private VersionedPolicySnapshot acceptedSnapshot(
             VersionedPolicySnapshot observed,
-            IngressPolicySnapshot candidate,
+            IngressAccessSnapshot candidate,
             String sourceRevision
     ) {
         if (observed == null) {
@@ -207,19 +208,21 @@ public final class NacosPolicySnapshotStore
         if (observed.sourceRevision().equals(sourceRevision)) {
             return observed;
         }
-        long currentVersion = observed.snapshot().snapshotVersion();
-        if (candidate.snapshotVersion() < currentVersion) {
-            log.warn("Ignored stale Nacos policy snapshot dataId={} group={} currentVersion={} candidateVersion={}",
-                    properties.getDataId(), properties.getGroup(), currentVersion, candidate.snapshotVersion());
-            return observed;
+        try {
+            return switch (observed.snapshot().admissionOf(candidate)) {
+                case STALE -> {
+                    log.warn("Ignored stale Nacos policy snapshot dataId={} group={} currentVersion={} candidateVersion={}",
+                            properties.getDataId(), properties.getGroup(), observed.snapshot().version(),
+                            candidate.version());
+                    yield observed;
+                }
+                case UNCHANGED -> new VersionedPolicySnapshot(observed.snapshot(), sourceRevision);
+                case CONFLICT -> throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
+                case ADVANCE -> new VersionedPolicySnapshot(candidate, sourceRevision);
+            };
+        } catch (DomainException exception) {
+            throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID, exception);
         }
-        if (candidate.snapshotVersion() == currentVersion) {
-            if (!candidate.contentHash().equals(observed.snapshot().contentHash())) {
-                throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
-            }
-            return new VersionedPolicySnapshot(observed.snapshot(), sourceRevision);
-        }
-        return new VersionedPolicySnapshot(candidate, sourceRevision);
     }
 
     static String sourceRevision(String content) {

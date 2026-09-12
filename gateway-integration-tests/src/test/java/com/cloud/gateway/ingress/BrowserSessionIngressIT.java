@@ -1,32 +1,39 @@
 package com.cloud.gateway.ingress;
 
+import com.cloud.framework.core.RequestHeader;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.config.ConfigService;
-import com.cloud.framework.core.RequestHeader;
 import com.cloud.framework.core.Result;
 import com.cloud.gateway.application.policy.PolicySnapshotHasher;
-import com.cloud.gateway.domain.endpoint.EndpointCatalog;
-import com.cloud.gateway.domain.endpoint.EndpointDefinition;
+import com.cloud.gateway.domain.endpoint.EndpointRegistry;
+import com.cloud.gateway.domain.endpoint.EndpointStatus;
+import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
-import com.cloud.gateway.domain.policy.AuthorizationHeaderPolicy;
-import com.cloud.gateway.domain.policy.ChannelCode;
-import com.cloud.gateway.domain.policy.ChannelCredentialRequirement;
-import com.cloud.gateway.domain.policy.ChannelRequirement;
-import com.cloud.gateway.domain.policy.ClientAppId;
-import com.cloud.gateway.domain.policy.ClientAppStatus;
+import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
+import com.cloud.gateway.domain.client.ClientId;
+import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
+import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
-import com.cloud.gateway.domain.policy.CredentialForwardingPolicy;
-import com.cloud.gateway.domain.policy.IngressChannelAccessPolicy;
-import com.cloud.gateway.domain.policy.IngressClientAppPolicy;
-import com.cloud.gateway.domain.policy.IngressPolicyContent;
-import com.cloud.gateway.domain.policy.IngressPolicySnapshot;
-import com.cloud.gateway.domain.policy.IngressRouteAccessPolicy;
-import com.cloud.gateway.domain.policy.SubjectRequirement;
+import com.cloud.gateway.domain.policy.CredentialForwarding;
+import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientStatus;
+import com.cloud.gateway.domain.policy.bundle.PolicyBinding;
+import com.cloud.gateway.domain.policy.bundle.PolicyBindingId;
+import com.cloud.gateway.domain.policy.bundle.PolicyBundle;
+import com.cloud.gateway.domain.policy.bundle.PolicyBundleId;
+import com.cloud.gateway.domain.policy.bundle.PolicyComposition;
+import com.cloud.gateway.domain.policy.header.HeaderPolicy;
+import com.cloud.gateway.domain.access.IngressAccessContent;
+import com.cloud.gateway.domain.access.IngressAccessSnapshot;
+import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
@@ -34,6 +41,7 @@ import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
 import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
 import com.cloud.userauth.api.authentication.CreateSessionHandoffApiCommandOutput;
+import com.cloud.userauth.api.constants.UserAuthPathApiConstants;
 import com.cloud.userauth.api.authentication.IssueAuthChallengeApiCommandOutput;
 import com.cloud.userauth.api.authentication.MobileOtpLoginApiCommand;
 import com.cloud.userauth.api.authentication.MobileOtpLoginApiCommandOutput;
@@ -84,9 +92,11 @@ import org.testcontainers.utility.DockerImageName;
 class BrowserSessionIngressIT {
     private static final Logger log = LoggerFactory.getLogger(BrowserSessionIngressIT.class);
     private static final String GROUP = "GATEWAY";
+    private static final String ROUTE_ID = "user-auth";
+    private static final String BROWSER_END_PATH = "/api/user-auth/browser-sessions/end";
     private static final String ENDPOINT_ID = "USER_AUTH.BROWSER_SESSION_API";
-    private static final String CLIENT_APP_ID = "mini-program";
-    private static final String CHANNEL_CODE = "DIRECT";
+    private static final String APP_ID = "mini-program";
+    private static final String CLIENT_ID = "DIRECT";
     private static final String ALLOWED_ORIGIN = "https://h5.example.com";
     private static final String MOBILE = "13800001234";
     private static final String FIXED_CODE = "123456";
@@ -120,7 +130,7 @@ class BrowserSessionIngressIT {
         startUserAuth();
         awaitHttp("user-auth", USER_AUTH_PORT);
         startGateway();
-        awaitHttp("gateway", GATEWAY_PORT);
+        awaitGateway();
     }
 
     @AfterEach
@@ -153,9 +163,9 @@ class BrowserSessionIngressIT {
                 .baseUrl("http://127.0.0.1:" + GATEWAY_PORT)
                 .build()
                 .post()
-                .uri("/api/user-auth/browser-sessions/end")
-                .header(RequestHeader.CLIENT_APP_ID, CLIENT_APP_ID)
-                .header(RequestHeader.CHANNEL_CODE, CHANNEL_CODE)
+                .uri(BROWSER_END_PATH)
+                .header(RequestHeader.APP_ID.headerName(), APP_ID)
+                .header(RequestHeader.CLIENT_ID.headerName(), CLIENT_ID)
                 .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .header(HttpHeaders.COOKIE, "BROWSER_SESSION=" + browserSession)
                 .retrieve()
@@ -163,9 +173,9 @@ class BrowserSessionIngressIT {
 
         assertEquals(200, ended.getStatusCode().value());
         String clearCookie = ended.getHeaders().getFirst(HttpHeaders.SET_COOKIE);
-        assertNotNull(clearCookie, "Ending a browser session must clear the cookie");
+        assertNotNull(clearCookie, "Ending a browser session must clear the cookies");
         assertTrue(clearCookie.contains("BROWSER_SESSION=") && clearCookie.contains("Max-Age=0"),
-                () -> "Unexpected clear cookie: " + clearCookie);
+                () -> "Unexpected clear cookies: " + clearCookie);
 
         Result<Map<String, Object>> afterEnd = verifyBrowserSession(userAuth, browserSession);
         assertEquals(false, afterEnd.getData().get("verified"));
@@ -177,11 +187,11 @@ class BrowserSessionIngressIT {
                 .baseUrl("http://127.0.0.1:" + GATEWAY_PORT)
                 .build()
                 .post()
-                .uri("/api/user-auth/browser-sessions/end")
-                .header(RequestHeader.CLIENT_APP_ID, CLIENT_APP_ID)
-                .header(RequestHeader.CHANNEL_CODE, CHANNEL_CODE)
+                .uri(BROWSER_END_PATH)
+                .header(RequestHeader.APP_ID.headerName(), APP_ID)
+                .header(RequestHeader.CLIENT_ID.headerName(), CLIENT_ID)
                 .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
-                .header(HttpHeaders.COOKIE, "BROWSER_SESSION=bogus-credential")
+                .header(HttpHeaders.COOKIE, "BROWSER_SESSION=bogus-client")
                 .retrieve()
                 .onStatus(status -> true, (ignoredRequest, ignoredResponse) -> { })
                 .toBodilessEntity();
@@ -195,11 +205,11 @@ class BrowserSessionIngressIT {
                 .baseUrl("http://127.0.0.1:" + GATEWAY_PORT)
                 .build()
                 .post()
-                .uri("/api/user-auth/browser-sessions/end")
-                .header(RequestHeader.CLIENT_APP_ID, CLIENT_APP_ID)
-                .header(RequestHeader.CHANNEL_CODE, CHANNEL_CODE)
+                .uri(BROWSER_END_PATH)
+                .header(RequestHeader.APP_ID.headerName(), APP_ID)
+                .header(RequestHeader.CLIENT_ID.headerName(), CLIENT_ID)
                 .header(HttpHeaders.ORIGIN, "https://evil.example.com")
-                .header(HttpHeaders.COOKIE, "BROWSER_SESSION=bogus-credential")
+                .header(HttpHeaders.COOKIE, "BROWSER_SESSION=bogus-client")
                 .retrieve()
                 .onStatus(status -> true, (ignoredRequest, ignoredResponse) -> { })
                 .toBodilessEntity();
@@ -219,10 +229,10 @@ class BrowserSessionIngressIT {
                 new MobileOtpLoginApiCommand(
                         challenge.getData().challengeId(),
                         FIXED_CODE,
-                        CLIENT_APP_ID,
+                        APP_ID,
                         "IOS",
                         "1.0.0",
-                        CHANNEL_CODE,
+                        CLIENT_ID,
                         "device-1",
                         "PHONE",
                         "Browser Session ingress IT"),
@@ -235,29 +245,29 @@ class BrowserSessionIngressIT {
                 });
         ResponseEntity<Result<Map<String, Object>>> exchange = userAuth.post()
                 .uri("/api/handoffs/exchange")
-                .header(RequestHeader.CLIENT_APP_ID, CLIENT_APP_ID)
+                .header(RequestHeader.APP_ID.headerName(), APP_ID)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("ticket", handoff.getData().ticket(), "target", "BROWSER_SESSION"))
                 .retrieve()
                 .toEntity(new ParameterizedTypeReference<>() {
                 });
         String setCookie = exchange.getHeaders().getFirst(HttpHeaders.SET_COOKIE);
-        assertNotNull(setCookie, "Exchange must deliver the browser session cookie");
+        assertNotNull(setCookie, "Exchange must deliver the browser session cookies");
         return HttpCookie.parse(setCookie).get(0).getValue();
     }
 
     private Map<String, Object> authenticatedHeaders(MobileOtpLoginApiCommandOutput login) {
         return Map.of(
-                RequestHeader.CLIENT_APP_ID, CLIENT_APP_ID,
-                RequestHeader.SUBJECT_TYPE, "HOST_SESSION",
-                RequestHeader.USER_ID, login.userId().toString(),
-                RequestHeader.SESSION_ID, login.sessionId());
+                RequestHeader.APP_ID.headerName(), APP_ID,
+                RequestHeader.SUBJECT_TYPE.headerName(), "HOST_SESSION",
+                RequestHeader.USER_ID.headerName(), login.userId().toString(),
+                RequestHeader.SESSION_ID.headerName(), login.sessionId());
     }
 
     private Result<Map<String, Object>> verifyBrowserSession(
             RestClient userAuth, String browserSession) {
         return post(userAuth, "/internal/browser-sessions/verify",
-                Map.of("credential", browserSession),
+                Map.of("client", browserSession),
                 new ParameterizedTypeReference<>() {
                 });
     }
@@ -270,8 +280,8 @@ class BrowserSessionIngressIT {
     ) {
         ResponseEntity<Result<T>> response = restClient.post()
                 .uri(uri)
-                .header(RequestHeader.CLIENT_APP_ID, CLIENT_APP_ID)
-                .header(RequestHeader.CHANNEL_CODE, CHANNEL_CODE)
+                .header(RequestHeader.APP_ID.headerName(), APP_ID)
+                .header(RequestHeader.CLIENT_ID.headerName(), CLIENT_ID)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
@@ -308,63 +318,80 @@ class BrowserSessionIngressIT {
         PolicySnapshotHasher hasher = new CanonicalPolicySnapshotHasher(
                 new CanonicalPolicyContentMapper(), objectMapper);
         StoredPolicyDefinitionCodec codec = new StoredPolicyDefinitionCodec(
-                new StoredPolicySnapshotMapper(), objectMapper);
+                new StoredPolicySnapshotMapper(), objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
         NacosPolicyProperties properties = nacosPolicyProperties();
 
-        EndpointCatalog endpointCatalog = new EndpointCatalog(List.of(new EndpointDefinition(
+        EndpointRegistry endpointRegistry = new EndpointRegistry(List.of(new Endpoint(
                 new EndpointId(ENDPOINT_ID),
                 "user-auth",
-                List.of(new EndpointMatcher("POST", "/api/user-auth/browser-sessions/**")),
-                "user-auth")));
-        Map<ClientAppId, IngressClientAppPolicy> clientApps = Map.of(
-                new ClientAppId(CLIENT_APP_ID),
-                new IngressClientAppPolicy(
-                        new ClientAppId(CLIENT_APP_ID),
-                        ClientAppStatus.ENABLED,
+                List.of(new EndpointMatcher("POST", BROWSER_END_PATH)),
+                ROUTE_ID)));
+        Map<AppId, AppPolicy> apps = Map.of(
+                new AppId(APP_ID),
+                new AppPolicy(
+                        new AppId(APP_ID),
                         "WECHAT_MINI_PROGRAM",
-                        Set.of(ALLOWED_ORIGIN)));
-        Map<ChannelCode, IngressChannelAccessPolicy> channelAccess = Map.of(
-                new ChannelCode(CHANNEL_CODE),
-                new IngressChannelAccessPolicy(
-                        new ChannelCode(CHANNEL_CODE),
-                        Set.of(new ClientAppId(CLIENT_APP_ID))));
-        Map<EndpointId, IngressRouteAccessPolicy> routeAccess = Map.of(
+                        Set.of(ALLOWED_ORIGIN),
+                        PolicyStatus.ENABLED));
+        Map<ClientId, ClientPolicy> clientAccess = Map.of(
+                new ClientId(CLIENT_ID),
+                new ClientPolicy(
+                        new ClientId(CLIENT_ID),
+                        Set.of(new AppId(APP_ID)), ClientStatus.ENABLED));
+        Map<EndpointId, EndpointPolicy> endpointAccess = Map.of(
                 new EndpointId(ENDPOINT_ID),
-                new IngressRouteAccessPolicy(
+                new EndpointPolicy(
                         new EndpointId(ENDPOINT_ID),
-                        ChannelCredentialRequirement.IGNORE,
-                        ChannelRequirement.REQUIRED,
-                        SubjectRequirement.BROWSER_SESSION_REQUIRED,
+                        ClientVerificationRequirement.REQUIRED,
+                        ClientVerificationMode.IGNORE,
+                        SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED,
                         Set.of(),
                         Set.of(),
-                        new CredentialForwardingPolicy(
-                                AuthorizationHeaderPolicy.STRIP,
+                        new CredentialForwarding(
+                                AuthorizationHeaderForwardingMode.STRIP,
                                 CookieForwardingMode.ALLOW_LIST,
                                 Set.of("BROWSER_SESSION")),
-                        true));
+                        EndpointStatus.ENABLED));
+
+        PolicyComposition policies = browserSessionPolicies();
 
         publish(properties.getEndpointDefinitionDataId(),
-                codec.encodeEndpointCatalog(endpointCatalog));
-        publish(properties.getClientAppDefinitionDataId(), codec.encodeClientApps(clientApps));
-        publish(properties.getChannelAccessDefinitionDataId(),
-                codec.encodeChannelAccess(channelAccess));
-        publish(properties.getChannelCredentialDefinitionDataId(),
-                codec.encodeChannelCredentials(Map.of()));
-        publish(properties.getRouteAccessDefinitionDataId(), codec.encodeRouteAccess(routeAccess));
+                codec.encodeEndpointRegistry(endpointRegistry));
+        publish(properties.getAppDefinitionDataId(), codec.encodeApps(apps));
+        publish(properties.getClientDefinitionDataId(),
+                codec.encodeClients(clientAccess));
+        publish(properties.getRouteAccessDefinitionDataId(), codec.encodeEndpointAccess(endpointAccess));
 
-        IngressPolicyContent content = new IngressPolicyContent(
-                endpointCatalog, clientApps, channelAccess, Map.of(), routeAccess);
-        IngressPolicySnapshot snapshot = new IngressPolicySnapshot(
+        publish(properties.getPolicyConfigurationDefinitionDataId(), codec.encodePolicyConfiguration(policies));
+
+        IngressAccessContent content = new IngressAccessContent(
+                endpointRegistry, apps, clientAccess, endpointAccess, policies);
+        IngressAccessSnapshot snapshot = new IngressAccessSnapshot(
                 0, content, hasher.hash(content), Instant.parse("2026-01-01T00:00:00Z"));
         publish(properties.getDataId(), snapshotCodec(objectMapper, hasher).encodeSnapshot(snapshot));
 
         await(() -> readableSnapshot(properties));
     }
 
+    private PolicyComposition browserSessionPolicies() {
+        // The downstream contract uses the current identity headers without compatibility aliases.
+        HeaderPolicy headers = new HeaderPolicy(Set.of(
+                RequestHeader.APP_ID, RequestHeader.APP_PLATFORM, RequestHeader.SUBJECT_TYPE,
+                RequestHeader.USER_ID, RequestHeader.SESSION_ID),
+                Map.of(), Set.of(), new CredentialForwarding(
+                        AuthorizationHeaderForwardingMode.STRIP, CookieForwardingMode.ALLOW_LIST, Set.of("BROWSER_SESSION")));
+        // This browser entry does not authenticate a Client client: never manufacture a trusted Client alias.
+        var bundleId = new PolicyBundleId("user-auth-browser");
+        var bundle = new PolicyBundle(bundleId, null, null, null, null, headers);
+        return new PolicyComposition(Map.of(bundleId, bundle), List.of(new PolicyBinding(
+                new PolicyBindingId("user-auth-browser-end"), bundleId, "user-auth", new EndpointId(ENDPOINT_ID),
+                Set.of(), null, null, null)));
+    }
+
     private StoredPolicySnapshotCodec snapshotCodec(
             ObjectMapper objectMapper, PolicySnapshotHasher hasher) {
         return new StoredPolicySnapshotCodec(
-                new StoredPolicySnapshotMapper(), hasher, objectMapper);
+                new StoredPolicySnapshotMapper(), hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
     }
 
     private NacosPolicyProperties nacosPolicyProperties() {
@@ -444,8 +471,11 @@ class BrowserSessionIngressIT {
                 "--gateway.policy.nacos.group=" + GROUP,
                 "--gateway.policy.nacos.last-known-good-location="
                         + temporaryDirectory.resolve("gateway-last-known-good.yaml"),
-                "--gateway.security.admin-audience=gateway-admin",
-                "--debug",
+                "--gateway.security.admin-audience=gateway",
+                "--spring.cloud.gateway.server.webflux.routes[0].endpointId=" + ROUTE_ID,
+                "--spring.cloud.gateway.server.webflux.routes[0].uri=http://127.0.0.1:" + USER_AUTH_PORT,
+                "--spring.cloud.gateway.server.webflux.routes[0].predicates[0]=Path=/api/user-auth/**",
+                "--spring.cloud.gateway.server.webflux.routes[0].filters[0]=SetPath=" + UserAuthPathApiConstants.API_BROWSER_SESSIONS_END,
                 "--gateway.security.access-token.format=SELF_CONTAINED",
                 "--gateway.security.access-token.issuer=http://127.0.0.1:" + USER_AUTH_PORT,
                 "--gateway.security.access-token.jwt.set-uri="
@@ -456,6 +486,29 @@ class BrowserSessionIngressIT {
         builder.redirectOutput(temporaryDirectory.resolve("gateway-ingress-it.log").toFile());
         builder.directory(workspaceRoot().toFile());
         gatewayProcess = builder.start();
+    }
+
+    private static void awaitGateway() {
+        java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build();
+        await(() -> {
+            try {
+                // HttpURLConnection silently drops Origin; use a client that transmits browser evidence.
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(
+                                java.net.URI.create("http://127.0.0.1:" + GATEWAY_PORT + BROWSER_END_PATH))
+                        .timeout(Duration.ofSeconds(2))
+                        .header(RequestHeader.APP_ID.headerName(), APP_ID)
+                        .header(RequestHeader.CLIENT_ID.headerName(), CLIENT_ID)
+                        .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                        .header(HttpHeaders.COOKIE, "BROWSER_SESSION=readiness-invalid")
+                        .POST(java.net.http.HttpRequest.BodyPublishers.noBody()).build();
+                return client.send(request, java.net.http.HttpResponse.BodyHandlers.discarding()).statusCode() == 401;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (IOException unavailable) {
+                return false;
+            }
+        }, () -> "Timed out waiting for the gateway v1 browser-session authentication chain");
     }
 
     private static void awaitHttp(String application, int port) {

@@ -23,11 +23,26 @@ spring:
                 - RewritePath=/admin/user-auth/(?<segment>.*), /admin/$\{segment}
 
 gateway:
-  ingress-policy:
+  headers:
+    forbidden-set-headers: [Host, Content-Length, Transfer-Encoding, Authorization, Cookie, Connection, Keep-Alive, TE, Trailer, Upgrade, Proxy-Authorization, Proxy-Authenticate, Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, Signature, Signature-Input]
+    forbidden-remove-headers: [Host, Content-Length, Transfer-Encoding, Authorization, Cookie, Connection, Keep-Alive, TE, Trailer, Upgrade, Proxy-Authorization, Proxy-Authenticate, Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, Signature, Signature-Input]
+  policy-definition:
     endpoints:
+      - endpoint-id: GATEWAY.ADMIN
+        service-id: gateway
+        route-id: gateway-admin
+        tags: [admin]
+        matchers:
+          - { http-method: PUT, path-pattern: /admin/gateway/policies/app }
+          - { http-method: PUT, path-pattern: /admin/gateway/policies/client-access }
+          - { http-method: PUT, path-pattern: /admin/gateway/policies/client-credential }
+          - { http-method: PUT, path-pattern: /admin/gateway/policies/endpoint-access }
+          - { http-method: PUT, path-pattern: /admin/gateway/policies/configuration }
+          - { http-method: POST, path-pattern: /admin/gateway/snapshot/publish }
+          - { http-method: POST, path-pattern: /admin/gateway/snapshot/rollback }
       - endpoint-id: USER_AUTH.LOGIN_PUBLIC
-        owner-service: user-auth
-        delivery-route-id: user-auth
+        service-id: user-auth
+        route-id: user-auth
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/challenges }
           - { http-method: POST, path-pattern: /api/user-auth/login/mobile-otp }
@@ -37,103 +52,119 @@ gateway:
           - { http-method: POST, path-pattern: /api/user-auth/login/external/complete }
           - { http-method: POST, path-pattern: /api/user-auth/login/external/bound-credential }
       - endpoint-id: USER_AUTH.LOGIN_PARTNER_TRUSTED_MOBILE
-        owner-service: user-auth
-        delivery-route-id: user-auth
+        service-id: user-auth
+        route-id: user-auth
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/login/partner/trusted-mobile }
       - endpoint-id: USER_AUTH.AUTHENTICATED_API
-        owner-service: user-auth
-        delivery-route-id: user-auth
+        service-id: user-auth
+        route-id: user-auth
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/credentials/bind }
           - { http-method: POST, path-pattern: /api/user-auth/logout }
           - { http-method: POST, path-pattern: /api/user-auth/handoffs }
       - endpoint-id: USER_AUTH.HANDOFF_EXCHANGE
-        owner-service: user-auth
-        delivery-route-id: user-auth
+        service-id: user-auth
+        route-id: user-auth
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/handoffs/exchange }
       - endpoint-id: USER_AUTH.BROWSER_SESSION_API
-        owner-service: user-auth
-        delivery-route-id: user-auth
+        service-id: user-auth
+        route-id: user-auth
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/browser-sessions/** }
       - endpoint-id: USER_AUTH.ADMIN
-        owner-service: user-auth
-        delivery-route-id: user-auth
+        service-id: user-auth
+        route-id: user-auth
         matchers:
           - { http-method: POST, path-pattern: /admin/user-auth/** }
           - { http-method: PUT, path-pattern: /admin/user-auth/** }
       - endpoint-id: USER_AUTH.OAUTH2_PROTOCOL
-        owner-service: user-auth
-        delivery-route-id: user-auth
+        service-id: user-auth
+        route-id: user-auth
         matchers:
           - { http-method: GET, path-pattern: /oauth2/** }
           - { http-method: POST, path-pattern: /oauth2/** }
           - { http-method: GET, path-pattern: /.well-known/** }
-    client-apps:
+    apps:
       mini-program:
         status: ENABLED
         platform: WECHAT_MINI_PROGRAM
-        allowed-browser-origins: [https://h5.example.com]
+        allowed-origins: [https://h5.example.com]
       app: { status: ENABLED, platform: APP }
       admin: { status: ENABLED, platform: WEB }
       oauth2-client: { status: ENABLED, platform: SERVER }
-    channel-access:
+    clients:
       DIRECT:
-        allowed-client-app-ids: [mini-program, app]
+        status: ENABLED
+        allowed-app-ids: [mini-program, app]
       MINI_PROGRAM_REVIEW:
-        allowed-client-app-ids: [mini-program]
+        status: ENABLED
+        allowed-app-ids: [mini-program]
       PARTNER_A:
-        allowed-client-app-ids: [mini-program]
-    channel-credentials:
-      PARTNER_A:
-        active-credential:
-          credential-id: partner-a-current
-          valid-from: 2026-01-01T00:00:00Z
-          expires-at: 2030-01-01T00:00:00Z
-          signature-payload-contract: SECRET_TIMESTAMP_BODY_HMAC_SHA256
-          secret-ref: partner-a
+        status: ENABLED
+        allowed-app-ids: [mini-program]
+        credentials:
+          active-credential:
+            credential-id: partner-a-current
+            valid-from: 2026-01-01T00:00:00Z
+            expires-at: 2030-01-01T00:00:00Z
+            signature-contract: LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256
+            secret-ref: partner-a
     routes:
+      "[GATEWAY.ADMIN]":
+        client-credential-requirement: IGNORE
+        client-requirement: FORBIDDEN
+        subject-requirement: HOST_SESSION_REQUIRED
+        required-scopes: [admin]
+        required-audiences: [gateway]
       "[USER_AUTH.LOGIN_PUBLIC]":
-        channel-credential-requirement: IGNORE
-        channel-requirement: REQUIRED
+        client-credential-requirement: IGNORE
+        client-requirement: REQUIRED
         subject-requirement: IGNORE
       "[USER_AUTH.LOGIN_PARTNER_TRUSTED_MOBILE]":
-        channel-credential-requirement: REQUEST_SIGNATURE
-        channel-requirement: REQUIRED
+        client-credential-requirement: REQUEST_SIGNATURE
+        client-requirement: REQUIRED
         subject-requirement: IGNORE
       "[USER_AUTH.AUTHENTICATED_API]":
-        channel-credential-requirement: IGNORE
-        channel-requirement: REQUIRED
+        client-credential-requirement: IGNORE
+        client-requirement: REQUIRED
         subject-requirement: HOST_SESSION_REQUIRED
         required-audiences: [cloud-api]
       "[USER_AUTH.HANDOFF_EXCHANGE]":
-        channel-credential-requirement: IGNORE
-        channel-requirement: REQUIRED
+        client-credential-requirement: IGNORE
+        client-requirement: REQUIRED
         subject-requirement: IGNORE
       "[USER_AUTH.BROWSER_SESSION_API]":
-        channel-credential-requirement: IGNORE
-        channel-requirement: REQUIRED
+        client-credential-requirement: IGNORE
+        client-requirement: REQUIRED
         subject-requirement: BROWSER_SESSION_REQUIRED
-        forwarding:
+        credential-forwarding:
           cookies: ALLOW_LIST
           allowed-cookie-names: [BROWSER_SESSION]
       "[USER_AUTH.ADMIN]":
-        channel-credential-requirement: IGNORE
-        channel-requirement: FORBIDDEN
+        client-credential-requirement: IGNORE
+        client-requirement: FORBIDDEN
         subject-requirement: HOST_SESSION_REQUIRED
         required-scopes: [admin]
         required-audiences: [gateway-admin]
       "[USER_AUTH.OAUTH2_PROTOCOL]":
-        channel-credential-requirement: IGNORE
-        channel-requirement: FORBIDDEN
+        client-credential-requirement: IGNORE
+        client-requirement: FORBIDDEN
         subject-requirement: IGNORE
-        forwarding:
+        credential-forwarding:
           authorization-header: PRESERVE
           cookies: STRIP_ALL
+    policies:
+      bundles:
+        standard:
+          bundle-id: standard
+          timeout: { connect: 1s, read: 3s, total: 5s }
+      bindings:
+        - binding-id: standard-default
+          bundle-id: standard
   security:
-    admin-audience: gateway-admin
+    admin-audience: gateway
     access-token:
       format: SELF_CONTAINED
       issuer: http://localhost:8081

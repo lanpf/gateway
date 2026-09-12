@@ -1,17 +1,18 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
 import com.cloud.gateway.application.policy.PolicySnapshotHasher;
-import com.cloud.gateway.domain.endpoint.EndpointCatalog;
-import com.cloud.gateway.domain.endpoint.EndpointDefinition;
+import com.cloud.gateway.domain.endpoint.EndpointRegistry;
+import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
-import com.cloud.gateway.domain.policy.ChannelCredentialRequirement;
-import com.cloud.gateway.domain.policy.ChannelRequirement;
-import com.cloud.gateway.domain.policy.CredentialForwardingPolicy;
-import com.cloud.gateway.domain.policy.IngressPolicyContent;
-import com.cloud.gateway.domain.policy.IngressPolicySnapshot;
-import com.cloud.gateway.domain.policy.IngressRouteAccessPolicy;
-import com.cloud.gateway.domain.policy.SubjectRequirement;
+import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.policy.CredentialForwarding;
+import com.cloud.gateway.domain.access.IngressAccessContent;
+import com.cloud.gateway.domain.access.IngressAccessSnapshot;
+import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
@@ -33,18 +34,17 @@ final class PolicyTestFixtures {
 
     static StoredPolicySnapshotCodec codec() {
         return new StoredPolicySnapshotCodec(
-                new StoredPolicySnapshotMapper(), hasher(), new ObjectMapper().findAndRegisterModules());
+                new StoredPolicySnapshotMapper(), hasher(), new ObjectMapper().findAndRegisterModules(),
+                com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
     }
 
-    static IngressPolicySnapshot snapshot(long version, boolean enabled) {
+    static IngressAccessSnapshot snapshot(long version, boolean enabled) {
         EndpointId endpointId = new EndpointId("USER_AUTH.LOGIN");
-        EndpointCatalog catalog = new EndpointCatalog(List.of(new EndpointDefinition(endpointId, "user-auth",
+        EndpointRegistry catalog = new EndpointRegistry(List.of(new Endpoint(endpointId, "user-auth",
                 List.of(new EndpointMatcher("POST", "/api/user-auth/login")), "user-auth")));
-        IngressRouteAccessPolicy route = new IngressRouteAccessPolicy(endpointId,
-                ChannelCredentialRequirement.IGNORE, ChannelRequirement.FORBIDDEN, SubjectRequirement.IGNORE,
-                Set.of(), Set.of(), CredentialForwardingPolicy.stripAll(), enabled);
-        IngressPolicyContent content = new IngressPolicyContent(
-                catalog, Map.of(), Map.of(), Map.of(), Map.of(endpointId, route));
-        return new IngressPolicySnapshot(version, content, hasher().hash(content), PUBLISHED_AT.plusSeconds(version));
+        EndpointPolicy route = new EndpointPolicy(endpointId, ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED);
+        IngressAccessContent content = new IngressAccessContent(
+                catalog, Map.of(), Map.of(), Map.of(endpointId, route));
+        return new IngressAccessSnapshot(version, content, hasher().hash(content), PUBLISHED_AT.plusSeconds(version));
     }
 }

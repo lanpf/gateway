@@ -1,23 +1,24 @@
 package com.cloud.gateway.infrastructure.security.spring.config;
 
-import com.cloud.gateway.api.constants.GatewayPathApiConstants;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
-import com.cloud.gateway.application.security.ChannelCredentialAuthenticator;
+import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
 import com.cloud.gateway.application.security.ReplayGuard;
 import com.cloud.gateway.application.security.SecretResolver;
 import com.cloud.gateway.application.policy.PolicySnapshotProvider;
 
-import com.cloud.gateway.infrastructure.security.spring.signature.LegacySecretParamsTimestampMd5UpperSignatureVerifier;
-import com.cloud.gateway.infrastructure.security.spring.signature.LegacySecretTimestampBodySha256SignatureVerifier;
-import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureChannelCredentialAuthenticator;
-import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureVerifier;
-import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureVerifierRegistry;
-import com.cloud.gateway.infrastructure.security.spring.signature.SecretTimestampBodyHmacSha256SignatureVerifier;
+import com.cloud.gateway.domain.security.signature.LegacySecretParamsTimestampMd5UpperSignatureVerifier;
+import com.cloud.gateway.domain.security.signature.LegacySecretTimestampBodySha256SignatureVerifier;
+import com.cloud.gateway.application.security.RequestSignatureAuthenticationCommandService;
+import com.cloud.gateway.domain.security.signature.RequestSignatureVerifier;
+import com.cloud.gateway.domain.security.signature.RequestSignatureVerifierRegistry;
+import com.cloud.gateway.domain.security.signature.SecretTimestampBodyHmacSha256SignatureVerifier;
+import com.cloud.gateway.domain.security.signature.HttpRequestSignatureV1Verifier;
 import com.cloud.gateway.infrastructure.security.spring.session.BrowserSessionVerifierAdapter;
 import java.time.Clock;
-import java.util.Collection;
+import com.cloud.gateway.domain.security.signature.SignatureCryptography;
+import com.cloud.gateway.domain.security.signature.SignatureAuthenticationRules;
+import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureCryptography;
 
-import com.cloud.userauth.api.authentication.OAuth2Scope;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -26,46 +27,17 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cloud.client.loadbalancer.reactive.ReactorLoadBalancerExchangeFilterFunction;
 import org.springframework.context.annotation.Bean;
 import org.springframework.beans.factory.SmartInitializingSingleton;
-import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
-import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.authorization.AuthorizationDecision;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.introspection.ReactiveOpaqueTokenIntrospector;
 import org.springframework.security.oauth2.server.resource.introspection.SpringReactiveOpaqueTokenIntrospector;
-import org.springframework.security.oauth2.server.resource.authentication.AbstractOAuth2TokenAuthenticationToken;
-import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @AutoConfiguration
-@EnableWebFluxSecurity
 @EnableConfigurationProperties(GatewaySecurityProperties.class)
 public class GatewaySecurityAutoConfiguration {
-    private static final String DEFAULT_AUTHORITY_PREFIX = "SCOPE_";
-
-    @Bean
-    SecurityWebFilterChain gatewaySecurityWebFilterChain(ServerHttpSecurity http, GatewaySecurityProperties properties) {
-        http.authorizeExchange(authorize -> authorize
-                        .pathMatchers(GatewayPathApiConstants.ADMIN_BASE_PATH + "/**")
-                        .access((authentication, context) -> authentication
-                                .map(value -> new AuthorizationDecision(hasAdminAccess(value, properties)))
-                                .defaultIfEmpty(new AuthorizationDecision(false)))
-                        .anyExchange()
-                        .permitAll()
-                ).csrf(ServerHttpSecurity.CsrfSpec::disable);
-        if (properties.getAccessToken().getFormat() == GatewaySecurityProperties.Format.REFERENCE) {
-            http.oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> { }));
-        } else {
-            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> { }));
-        }
-        return http.build();
-    }
-
     @Bean
     @ConditionalOnProperty(prefix = GatewaySecurityProperties.ACCESS_TOKEN_PREFIX,
             name = "format",
@@ -89,38 +61,52 @@ public class GatewaySecurityAutoConfiguration {
     }
 
     @Bean
-    SecretResolver channelSecretResolver(GatewaySecurityProperties properties) {
+    SignatureCryptography signatureCryptography() {
+        return new RequestSignatureCryptography();
+    }
+
+    @Bean
+    SecretResolver clientSecretResolver(GatewaySecurityProperties properties) {
         return new PropertySecretResolver(properties);
     }
     @Bean
-    SmartInitializingSingleton channelCredentialSecretValidator(
+    SmartInitializingSingleton clientCredentialSecretValidator(
             PolicySnapshotProvider provider, SecretResolver resolver) {
-        return () -> provider.current().snapshot().content().channelCredentialPolicies().values().forEach(policy -> {
-            resolver.resolve(policy.activeCredential().secretRef());
-            policy.graceCredentialOptional().ifPresent(value -> resolver.resolve(value.secretRef()));
+        return () -> provider.current().snapshot().content().clients().values().forEach(policy -> {
+            if (policy.credentials() == null) {
+                return;
+            }
+            resolver.resolve(policy.credentials().activeCredential().secretRef());
+            policy.credentials().graceCredentialOptional().ifPresent(value -> resolver.resolve(value.secretRef()));
         });
     }
     @Bean
-    ChannelCredentialAuthenticator channelCredentialAuthenticator(
+    ClientCredentialAuthenticator clientCredentialAuthenticator(
             SecretResolver resolver,
             ReplayGuard replayGuard,
             RequestSignatureVerifierRegistry verifierRegistry,
+            SignatureCryptography cryptography,
             GatewaySecurityProperties properties
     ) {
-        return new RequestSignatureChannelCredentialAuthenticator(
-                resolver, replayGuard, verifierRegistry, properties.getRequestSignature().getMaxClockSkew());
+        return new RequestSignatureAuthenticationCommandService(
+                resolver, replayGuard, verifierRegistry, cryptography,
+                new SignatureAuthenticationRules(properties.getRequestSignature().getMaxClockSkew()));
     }
     @Bean
-    RequestSignatureVerifier legacySecretParamsTimestampMd5UpperSignatureVerifier() {
-        return new LegacySecretParamsTimestampMd5UpperSignatureVerifier();
+    RequestSignatureVerifier legacySecretParamsTimestampMd5UpperSignatureVerifier(SignatureCryptography cryptography) {
+        return new LegacySecretParamsTimestampMd5UpperSignatureVerifier(cryptography);
     }
     @Bean
-    RequestSignatureVerifier legacySecretTimestampBodySha256SignatureVerifier() {
-        return new LegacySecretTimestampBodySha256SignatureVerifier();
+    RequestSignatureVerifier legacySecretTimestampBodySha256SignatureVerifier(SignatureCryptography cryptography) {
+        return new LegacySecretTimestampBodySha256SignatureVerifier(cryptography);
     }
     @Bean
-    RequestSignatureVerifier secretTimestampBodyHmacSha256SignatureVerifier() {
-        return new SecretTimestampBodyHmacSha256SignatureVerifier();
+    RequestSignatureVerifier secretTimestampBodyHmacSha256SignatureVerifier(SignatureCryptography cryptography) {
+        return new SecretTimestampBodyHmacSha256SignatureVerifier(cryptography);
+    }
+    @Bean
+    RequestSignatureVerifier httpRequestSignatureV1Verifier(SignatureCryptography cryptography) {
+        return new HttpRequestSignatureV1Verifier(cryptography);
     }
     @Bean
     RequestSignatureVerifierRegistry requestSignatureVerifierRegistry(
@@ -144,18 +130,4 @@ public class GatewaySecurityAutoConfiguration {
                 clock);
     }
 
-    private static boolean hasAdminAccess(Authentication authentication, GatewaySecurityProperties properties) {
-        String adminScope = DEFAULT_AUTHORITY_PREFIX + OAuth2Scope.ADMIN.value();
-        boolean scopeAllowed = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch(adminScope::equals);
-        if (!scopeAllowed || !(authentication instanceof AbstractOAuth2TokenAuthenticationToken<?> token)) {
-            return false;
-        }
-        Object audiences = token.getTokenAttributes().get(JwtClaimNames.AUD);
-        if (audiences instanceof Collection<?> collection) {
-            return collection.stream().map(String::valueOf).anyMatch(properties.getAdminAudience()::equals);
-        }
-        return properties.getAdminAudience().equals(String.valueOf(audiences));
-    }
 }

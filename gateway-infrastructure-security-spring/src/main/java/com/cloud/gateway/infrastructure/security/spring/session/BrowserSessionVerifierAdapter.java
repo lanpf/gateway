@@ -3,9 +3,8 @@ package com.cloud.gateway.infrastructure.security.spring.session;
 import com.cloud.framework.core.Result;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
-import com.cloud.gateway.domain.access.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.SubjectAuthenticationUnavailableReason;
-import com.cloud.gateway.domain.access.SubjectType;
+import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationFailReason;
 import com.cloud.userauth.api.authentication.VerifyBrowserSessionApiCommand;
 import com.cloud.userauth.api.authentication.VerifyBrowserSessionApiCommandOutput;
 import com.cloud.userauth.api.constants.UserAuthPathApiConstants;
@@ -54,7 +53,7 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
                     log.warn("Browser Session verification dependency is unavailable: {}",
                             exception.getClass().getSimpleName());
                     return Mono.just(BrowserSessionVerificationOutcome.unavailable(
-                            SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE));
+                            SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE));
                 })
                 .onErrorResume(RuntimeException.class, exception ->
                         Mono.just(unavailableInvalidResponse(exception.getClass().getSimpleName())))
@@ -101,7 +100,7 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
             log.warn("Browser Session verification dependency returned status={}",
                     exception.getStatusCode().value());
             return BrowserSessionVerificationOutcome.unavailable(
-                    SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE);
+                    SubjectAuthenticationFailReason.);
         }
         return unavailableInvalidResponse("unexpected HTTP status " + exception.getStatusCode().value());
     }
@@ -109,6 +108,6 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
     private static BrowserSessionVerificationOutcome unavailableInvalidResponse(String reason) {
         log.warn("Browser Session verification returned an invalid response: {}", reason);
         return BrowserSessionVerificationOutcome.unavailable(
-                SubjectAuthenticationUnavailableReason.INVALID_RESPONSE);
+                SubjectAuthenticationFailReason.RESPONSE_INVALID);
     }
 }

@@ -1,7 +1,7 @@
 package com.cloud.gateway.infrastructure.policy;
 
 import com.cloud.gateway.application.policy.PolicySnapshotHasher;
-import com.cloud.gateway.domain.policy.IngressPolicyContent;
+import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -23,12 +23,14 @@ public final class CanonicalPolicySnapshotHasher implements PolicySnapshotHasher
     ) {
         this.mapper = mapper;
         this.objectMapper = objectMapper.copy()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS)
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
     }
 
     @Override
-    public String hash(IngressPolicyContent content) {
+    public String hash(IngressAccessContent content) {
         try {
             byte[] canonical = objectMapper.writeValueAsBytes(mapper.toCanonical(content));
             return HexFormat.of().formatHex(MessageDigest.getInstance(HASH_ALGORITHM).digest(canonical));

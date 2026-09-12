@@ -1,15 +1,16 @@
 package com.cloud.gateway.interfaces.rest;
 
-import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_CHANNEL_ACCESS;
-import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_CHANNEL_CREDENTIAL;
-import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_CLIENT_APP;
-import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_ROUTE_ACCESS;
-import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_SNAPSHOT_ROLLBACK;
+import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_APP;
+import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_CLIENT_ACCESS;
+import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_CLIENT_CREDENTIAL;
+import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_ENDPOINT_ACCESS;
+import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICY_CONFIGURATION;
 import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_SNAPSHOT_PUBLISH;
+import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_SNAPSHOT_ROLLBACK;
 
 import com.cloud.framework.core.Result;
-import com.cloud.gateway.api.facade.GatewayPolicyCommandFacade;
-import com.cloud.gateway.api.policy.PolicyPublicationApiCommandOutput;
+import com.cloud.gateway.api.facade.IngressAccessCommandFacade;
+import com.cloud.gateway.api.policy.SnapshotReleaseApiCommandOutput;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -20,43 +21,52 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnBean(GatewayPolicyCommandFacade.class)
+@ConditionalOnBean(IngressAccessCommandFacade.class)
 public class GatewayPolicyAdminController {
-    private final GatewayPolicyCommandFacade facade;
+    private final IngressAccessCommandFacade facade;
+    private final GatewayPolicyAdminRestMapper adminMapper;
+    private final PolicyCompositionRestMapper policyConfigurationMapper;
 
-    @PutMapping(ADMIN_POLICIES_CLIENT_APP)
-    public Result<Void> saveClientAppPolicy(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveClientAppPolicy request) {
-        return facade.saveClientAppPolicy(GatewayPolicyAdminRestMapper.toCommand(request));
+    @PutMapping(ADMIN_POLICY_CONFIGURATION)
+    public Result<Void> savePolicyConfiguration(
+            @Valid @RequestBody GatewayPolicyAdminRequest.SavePolicyComposition request) {
+        return facade.savePolicyConfiguration(policyConfigurationMapper.toCommand(request));
     }
 
-    @PutMapping(ADMIN_POLICIES_CHANNEL_ACCESS)
-    public Result<Void> saveChannelAccessPolicy(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveChannelAccessPolicy request) {
-        return facade.saveChannelAccessPolicy(GatewayPolicyAdminRestMapper.toCommand(request));
+
+    @PutMapping(ADMIN_POLICIES_APP)
+    public Result<Void> saveAppPolicy(
+            @Valid @RequestBody GatewayPolicyAdminRequest.SaveAppPolicy request) {
+        return facade.saveApp(adminMapper.toCommand(request));
     }
 
-    @PutMapping(ADMIN_POLICIES_CHANNEL_CREDENTIAL)
-    public Result<Void> saveChannelCredentialPolicy(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveChannelCredentialPolicy request) {
-        return facade.saveChannelCredentialPolicy(GatewayPolicyAdminRestMapper.toCommand(request));
+    @PutMapping(ADMIN_POLICIES_CLIENT_ACCESS)
+    public Result<Void> saveClientAccessPolicy(
+            @Valid @RequestBody GatewayPolicyAdminRequest.SaveClientAccessPolicy request) {
+        return facade.saveClient(adminMapper.toCommand(request));
     }
 
-    @PutMapping(ADMIN_POLICIES_ROUTE_ACCESS)
-    public Result<Void> saveRouteAccessPolicy(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveRouteAccessPolicy request) {
-        return facade.saveRouteAccessPolicy(GatewayPolicyAdminRestMapper.toCommand(request));
+    @PutMapping(ADMIN_POLICIES_CLIENT_CREDENTIAL)
+    public Result<Void> saveClientCredentialPolicy(
+            @Valid @RequestBody GatewayPolicyAdminRequest.SaveClientCredentialPolicy request) {
+        return facade.saveClientCredentialPolicy(adminMapper.toCommand(request));
+    }
+
+    @PutMapping(ADMIN_POLICIES_ENDPOINT_ACCESS)
+    public Result<Void> saveEndpointAccessPolicy(
+            @Valid @RequestBody GatewayPolicyAdminRequest.SaveEndpointAccessPolicy request) {
+        return facade.saveEndpoint(adminMapper.toCommand(request));
     }
 
     @PostMapping(ADMIN_SNAPSHOT_PUBLISH)
-    public Result<PolicyPublicationApiCommandOutput> publishPolicySnapshot(
+    public Result<SnapshotReleaseApiCommandOutput> publishPolicySnapshot(
             @Valid @RequestBody GatewayPolicyAdminRequest.PublishPolicySnapshot request) {
-        return facade.publishPolicySnapshot(GatewayPolicyAdminRestMapper.toCommand(request));
+        return facade.releaseSnapshot(adminMapper.toCommand(request));
     }
 
     @PostMapping(ADMIN_SNAPSHOT_ROLLBACK)
-    public Result<PolicyPublicationApiCommandOutput> rollbackPolicySnapshot(
+    public Result<SnapshotReleaseApiCommandOutput> rollbackPolicySnapshot(
             @Valid @RequestBody GatewayPolicyAdminRequest.RollbackPolicySnapshot request) {
-        return facade.rollbackPolicySnapshot(GatewayPolicyAdminRestMapper.toCommand(request));
+        return facade.rollbackSnapshot(adminMapper.toCommand(request));
     }
 }

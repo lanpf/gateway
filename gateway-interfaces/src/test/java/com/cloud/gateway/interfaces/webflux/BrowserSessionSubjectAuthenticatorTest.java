@@ -3,11 +3,11 @@ package com.cloud.gateway.interfaces.webflux;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import com.cloud.gateway.domain.access.AuthenticatedSubject;
+import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
-import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
-import com.cloud.gateway.domain.access.SubjectAuthenticationUnavailableReason;
-import com.cloud.gateway.domain.access.SubjectType;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationFailReason;
+
 import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -25,7 +25,7 @@ class BrowserSessionSubjectAuthenticatorTest {
 
         SubjectAuthenticationOutcome.Authenticated authenticated = assertInstanceOf(
                 SubjectAuthenticationOutcome.Authenticated.class,
-                authenticator.authenticate("cookie-value").block());
+                authenticator.authenticate("cookies-value").block());
 
         assertEquals(subject, authenticated.subject());
     }
@@ -35,7 +35,7 @@ class BrowserSessionSubjectAuthenticatorTest {
         BrowserSessionSubjectAuthenticator authenticator = new BrowserSessionSubjectAuthenticator(
                 token -> CompletableFuture.completedFuture(BrowserSessionVerificationOutcome.invalid()));
 
-        SubjectAuthenticationOutcome result = authenticator.authenticate("invalid-cookie").block();
+        SubjectAuthenticationOutcome result = authenticator.authenticate("invalid-cookies").block();
 
         assertInstanceOf(SubjectAuthenticationOutcome.Rejected.class, result);
     }
@@ -44,12 +44,12 @@ class BrowserSessionSubjectAuthenticatorTest {
     void shouldPreserveUnavailableVerificationReason() {
         BrowserSessionSubjectAuthenticator authenticator = new BrowserSessionSubjectAuthenticator(
                 token -> CompletableFuture.completedFuture(BrowserSessionVerificationOutcome.unavailable(
-                        SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE)));
+                        SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE)));
 
-        SubjectAuthenticationOutcome.Unavailable result = assertInstanceOf(
-                SubjectAuthenticationOutcome.Unavailable.class,
-                authenticator.authenticate("cookie-value").block());
+        SubjectAuthenticationOutcome.Failed result = assertInstanceOf(
+                SubjectAuthenticationOutcome.Failed.class,
+                authenticator.authenticate("cookies-value").block());
 
-        assertEquals(SubjectAuthenticationUnavailableReason.DEPENDENCY_UNAVAILABLE, result.reason());
+        assertEquals(SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE, result.reason());
     }
 }

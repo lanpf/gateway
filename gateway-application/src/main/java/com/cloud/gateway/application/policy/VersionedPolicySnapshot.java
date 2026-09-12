@@ -1,5 +1,5 @@
 package com.cloud.gateway.application.policy;
 
-import com.cloud.gateway.domain.policy.IngressPolicySnapshot;
+import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 
-public record VersionedPolicySnapshot(IngressPolicySnapshot snapshot, String sourceRevision) { }
+public record VersionedPolicySnapshot(IngressAccessSnapshot snapshot, String sourceRevision) { }

@@ -3,7 +3,7 @@ package com.cloud.gateway.interfaces.webflux;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import com.cloud.gateway.domain.access.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -33,14 +33,14 @@ class HostSessionSubjectAuthenticatorTest {
                 authenticator.authenticate(authentication).block());
 
         assertEquals("user-1", authenticated.subject().subjectId());
-        assertEquals("session-1", authenticated.subject().loginSessionId());
+        assertEquals("session-1", authenticated.subject().sessionId());
         assertEquals(List.of("cloud-api"), authenticated.subject().audiences().stream().toList());
     }
 
     @Test
     void shouldRejectUnsupportedAuthentication() {
         SubjectAuthenticationOutcome result = authenticator
-                .authenticate(new TestingAuthenticationToken("principal", "credential"))
+                .authenticate(new TestingAuthenticationToken("principal", "client"))
                 .block();
 
         assertInstanceOf(SubjectAuthenticationOutcome.Rejected.class, result);

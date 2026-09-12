@@ -10,6 +10,9 @@ import com.cloud.framework.core.ClientRequest;
 import com.cloud.framework.core.RequestHeader;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+
+import com.cloud.gateway.domain.access.IngressAccessGrantedContext;
+import com.cloud.gateway.domain.app.AppId;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ReactiveAdapterRegistry;
@@ -42,36 +45,44 @@ class GatewayPolicyAdminControllerContractTest {
     }
 
     @Test
-    void shouldOverwriteBodyContextWithProtectedHeadersBeforeValidation() throws Exception {
-        MethodParameter parameter = parameter("saveClientAppPolicy");
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.put("/admin/client-app-policies")
+    void shouldBindVerifiedContextIndependentlyOfConfigurableHeaders() throws Exception {
+        MethodParameter parameter = parameter("saveAppPolicy");
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.put("/admin/app-policies")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(RequestHeader.CLIENT_APP_ID, "trusted-client")
-                .header(RequestHeader.CLIENT_PLATFORM, "APP")
-                .header(RequestHeader.USER_ID, "trusted-user")
-                .header(RequestHeader.SESSION_ID, "trusted-session")
+                .header(RequestHeader.APP_ID.headerName(), "trusted-client")
+                .header(RequestHeader.APP_PLATFORM.headerName(), "APP")
+                .header(RequestHeader.USER_ID.headerName(), "forged-user")
+                .header(RequestHeader.SESSION_ID.headerName(), "forged-session")
                 .body("""
-                        {"expectedSourceRevision":"revision-1","status":"ENABLED","platform":"APP","clientAppId":"spoofed-client",
+                        {"expectedSourceRevision":"revision-1","status":"ENABLED","platform":"APP","appId":"spoofed-client",
                          "userId":"spoofed-user","sessionId":"spoofed-session"}
                         """));
 
-        GatewayPolicyAdminRequest.SaveClientAppPolicy request = assertInstanceOf(
-                GatewayPolicyAdminRequest.SaveClientAppPolicy.class,
+        exchange.getAttributes().put(com.cloud.gateway.interfaces.webflux.GatewayRequestAttributes.TRUSTED_CONTEXT,
+                new IngressAccessGrantedContext(
+                        new IngressAccessGrantedContext.AppContext(
+                                new AppId("trusted-client"), "APP"), null,
+                        new IngressAccessGrantedContext.SubjectContext(
+                                SubjectType.HOST_SESSION, "trusted-user", "trusted-session",
+                                java.util.Set.of("gateway"), java.util.Set.of("admin"))));
+
+        GatewayPolicyAdminRequest.SaveAppPolicy request = assertInstanceOf(
+                GatewayPolicyAdminRequest.SaveAppPolicy.class,
                 resolver.resolveArgument(parameter, bindingContext(), exchange).block());
 
         assertEquals("trusted-client", request.getClientAppId());
-        assertEquals("spoofed-client", request.getTargetClientAppId());
+        assertEquals("spoofed-client", request.getTargetAppId());
         assertEquals("trusted-user", request.getUserId());
         assertEquals("trusted-session", request.getSessionId());
     }
 
     @Test
     void shouldRejectMissingProtectedSessionContext() throws Exception {
-        MethodParameter parameter = parameter("saveClientAppPolicy");
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.put("/admin/client-app-policies")
+        MethodParameter parameter = parameter("saveAppPolicy");
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.put("/admin/app-policies")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header(RequestHeader.CLIENT_APP_ID, "trusted-client")
-                .body("{\"clientAppId\":\"app\",\"status\":\"ENABLED\",\"platform\":\"APP\"}"));
+                .header(RequestHeader.APP_ID.headerName(), "trusted-client")
+                .body("{\"appId\":\"app\",\"status\":\"ENABLED\",\"platform\":\"APP\"}"));
 
         assertThrows(WebExchangeBindException.class,
                 () -> resolver.resolveArgument(parameter, bindingContext(), exchange).block());

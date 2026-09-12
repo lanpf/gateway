@@ -1,9 +1,0 @@
-package com.cloud.gateway.application.policy;
-
-import com.cloud.gateway.domain.policy.ChannelCode;
-import com.cloud.gateway.domain.policy.IngressChannelAccessPolicy;
-import java.util.Map;
-
-public interface ChannelAccessPolicyDefinitionRepository
-        extends PolicyDefinitionRepository<Map<ChannelCode, IngressChannelAccessPolicy>> {
-}

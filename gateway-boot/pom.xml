@@ -15,6 +15,10 @@
     <dependencies>
         <dependency>
             <groupId>com.cloud</groupId>
+            <artifactId>gateway-infrastructure-ratelimit-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.cloud</groupId>
             <artifactId>gateway-interfaces</artifactId>
         </dependency>
         <dependency>

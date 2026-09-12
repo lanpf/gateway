@@ -1,7 +1,7 @@
 package com.cloud.gateway.application.policy;
 
-import com.cloud.gateway.domain.policy.IngressPolicyContent;
+import com.cloud.gateway.domain.access.IngressAccessContent;
 
 public interface PolicySnapshotHasher {
-    String hash(IngressPolicyContent content);
+    String hash(IngressAccessContent content);
 }
