@@ -1,0 +1,17 @@
+package com.cloud.gateway.infrastructure.persistence.nacos;
+
+import com.cloud.gateway.application.policy.WritablePolicyCompositionDefinitionRepository;
+import com.cloud.gateway.domain.policy.bundle.PolicyComposition;
+import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
+import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
+import com.cloud.gateway.infrastructure.persistence.nacos.operations.NacosConfigOperations;
+
+public final class NacosPolicyCompositionDefinitionRepository
+        extends AbstractNacosPolicyDefinitionRepository<PolicyComposition>
+        implements WritablePolicyCompositionDefinitionRepository {
+    public NacosPolicyCompositionDefinitionRepository(NacosConfigOperations operations,
+            NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
+        super(operations, properties, properties.getPolicyConfigurationDefinitionDataId(),
+                codec::decodePolicyConfiguration, codec::encodePolicyConfiguration);
+    }
+}

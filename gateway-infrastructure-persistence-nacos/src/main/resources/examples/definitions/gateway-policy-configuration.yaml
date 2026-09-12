@@ -1,0 +1,9 @@
+---
+bundles:
+  standard:
+    bundleId: standard
+    timeout: { connect: PT1S, read: PT3S, total: PT5S }
+bindings:
+- bindingId: standard-default
+  bundleId: standard
+  tags: []

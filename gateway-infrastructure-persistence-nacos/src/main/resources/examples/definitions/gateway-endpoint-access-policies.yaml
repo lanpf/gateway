@@ -1,0 +1,20 @@
+---
+USER_AUTH.LOGIN:
+  clientCredentialRequirement: "IGNORE"
+  clientRequirement: "FORBIDDEN"
+  subjectRequirement: "IGNORE"
+  requiredScopes: []
+  requiredAudiences: []
+  credentialForwarding:
+    authorizationHeader: "STRIP"
+    cookies: "STRIP_ALL"
+    allowedCookieNames: []
+  status: ENABLED
+GATEWAY.ADMIN:
+  clientCredentialRequirement: IGNORE
+  clientRequirement: FORBIDDEN
+  subjectRequirement: HOST_SESSION_REQUIRED
+  requiredScopes: [admin]
+  requiredAudiences: [gateway]
+  credentialForwarding: { authorizationHeader: STRIP, cookies: STRIP_ALL, allowedCookieNames: [] }
+  status: ENABLED
