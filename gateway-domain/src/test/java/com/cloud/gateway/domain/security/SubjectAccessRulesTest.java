@@ -1,6 +1,6 @@
 package com.cloud.gateway.domain.security;
 
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class SubjectAccessRulesTest {
     @Test
     void shouldChooseOneAuthenticationFamilyForEveryRequirement() {
-        assertEquals(SubjectAuthenticationSelection.HOST, SubjectAuthenticationSelection.from(SubjectAuthencationRequirement.HOST_SESSION_REQUIRED));
-        assertEquals(SubjectAuthenticationSelection.HOST, SubjectAuthenticationSelection.from(SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL));
-        assertEquals(SubjectAuthenticationSelection.BROWSER, SubjectAuthenticationSelection.from(SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED));
-        assertEquals(SubjectAuthenticationSelection.IGNORE, SubjectAuthenticationSelection.from(SubjectAuthencationRequirement.IGNORE));
+        assertEquals(SubjectAuthenticationSelection.HOST, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED));
+        assertEquals(SubjectAuthenticationSelection.HOST, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL));
+        assertEquals(SubjectAuthenticationSelection.BROWSER, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED));
+        assertEquals(SubjectAuthenticationSelection.IGNORE, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.IGNORE));
     }
 
     @Test

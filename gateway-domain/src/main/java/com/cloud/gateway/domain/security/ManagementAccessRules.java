@@ -3,7 +3,7 @@ package com.cloud.gateway.domain.security;
 import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 
 import java.util.Set;
 
@@ -23,7 +23,7 @@ public record ManagementAccessRules(String audience) {
 
     public void validatePolicy(EndpointPolicy policy) {
         Require.notNull(policy, DomainException::missingField);
-        if (policy.subjectAuthencationRequirement() != SubjectAuthencationRequirement.HOST_SESSION_REQUIRED
+        if (policy.subjectAuthencationRequirement() != SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED
                 || !SubjectAccessRules.hasRequiredScopes(policy.requiredScopes(), Set.of(ADMIN_SCOPE))
                 || !SubjectAccessRules.hasRequiredAudiences(policy.requiredAudiences(), Set.of(audience))) {
             throw DomainException.invalidField();

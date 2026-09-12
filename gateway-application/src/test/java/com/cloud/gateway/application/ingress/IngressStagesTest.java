@@ -9,7 +9,7 @@ import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.access.IngressAccessEvaluator;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
@@ -154,7 +154,7 @@ class IngressStagesTest {
 
     private static IngressAccessSnapshot snapshot() {
         EndpointPolicy access = new EndpointPolicy(ENDPOINT.endpointId(), ClientVerificationRequirement.OPTIONAL,
-                ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL, Set.of(), Set.of("api"),
+                ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL, Set.of(), Set.of("api"),
                 CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
         return new IngressAccessSnapshot(1, new IngressAccessContent(new EndpointRegistry(List.of(ENDPOINT)),
                 Map.of(APP, new AppPolicy(APP, "web", Set.of(), PolicyStatus.ENABLED)), Map.of(),

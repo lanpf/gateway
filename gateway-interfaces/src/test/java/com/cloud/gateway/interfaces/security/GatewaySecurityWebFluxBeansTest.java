@@ -8,7 +8,7 @@ import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
@@ -180,16 +180,16 @@ class GatewaySecurityWebFluxBeansTest {
         }
 
         private static IngressAccessSnapshot snapshot() {
-            Map<String, SubjectAuthencationRequirement> requirements = Map.of(
-                    ADMIN_PATH, SubjectAuthencationRequirement.HOST_SESSION_REQUIRED,
-                    "/host", SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL,
-                    "/browser", SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED,
-                    "/ignored", SubjectAuthencationRequirement.IGNORE);
+            Map<String, SubjectAuthenticationRequirement> requirements = Map.of(
+                    ADMIN_PATH, SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED,
+                    "/host", SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL,
+                    "/browser", SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED,
+                    "/ignored", SubjectAuthenticationRequirement.IGNORE);
             Map<EndpointId, EndpointPolicy> policies = new LinkedHashMap<>();
             List<Endpoint> endpoints = requirements.entrySet().stream().map(entry -> {
                 EndpointId id = new EndpointId("ENDPOINT." + entry.getValue().name());
                 boolean admin = entry.getKey().equals(ADMIN_PATH);
-                boolean host = admin || entry.getValue() == SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL;
+                boolean host = admin || entry.getValue() == SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL;
                 policies.put(id, new EndpointPolicy(id, ClientVerificationRequirement.OPTIONAL, ClientVerificationMode.IGNORE,
                         entry.getValue(), admin ? Set.of("admin") : Set.of(), host ? Set.of("gateway") : Set.of(),
                         CredentialForwarding.stripAll(), EndpointStatus.ENABLED));

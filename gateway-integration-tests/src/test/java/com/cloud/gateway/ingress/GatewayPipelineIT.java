@@ -20,7 +20,7 @@ import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.header.*;
 import com.cloud.gateway.infrastructure.governance.config.GovernanceAutoConfiguration;
 import com.cloud.gateway.interfaces.config.GatewayIngressWebFluxBeans;
@@ -197,7 +197,7 @@ class GatewayPipelineIT {
             definitions.add(new Endpoint(id, SERVICE,
                     List.of(new EndpointMatcher("GET", "/public/" + name)), ROUTE, Set.of("public-read")));
             accesses.put(id, new EndpointPolicy(id, ClientVerificationRequirement.OPTIONAL,
-                    ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(),
+                    ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(),
                     CredentialForwarding.stripAll(), EndpointStatus.ENABLED));
         }
         var baseId = new PolicyBundleId("base");

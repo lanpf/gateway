@@ -12,7 +12,7 @@ import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
@@ -111,7 +111,7 @@ class IngressAccessGrantedContextGlobalFilterSubjectAuthenticationTest {
                     });
                 }, null, null);
         EndpointPolicy route = new EndpointPolicy(new EndpointId("BROWSER"), ClientVerificationRequirement.FORBIDDEN,
-                ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED, Set.of(), Set.of(),
+                ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED, Set.of(), Set.of(),
                 CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/browser")
                 .cookie(new HttpCookie("BROWSER_SESSION", "browser-client")));
@@ -135,6 +135,6 @@ class IngressAccessGrantedContextGlobalFilterSubjectAuthenticationTest {
     }
 
     private static EndpointPolicy optionalHostRoute() {
-        return new EndpointPolicy(new EndpointId("OPTIONAL"), ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL, Set.of(), Set.of("cloud-api"), CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
+        return new EndpointPolicy(new EndpointId("OPTIONAL"), ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL, Set.of(), Set.of("cloud-api"), CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
     }
 }

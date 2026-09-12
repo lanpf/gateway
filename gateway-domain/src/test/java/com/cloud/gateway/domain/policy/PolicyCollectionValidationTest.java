@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -68,7 +68,7 @@ class PolicyCollectionValidationTest {
 
     private static EndpointPolicy endpoint(Set<String> scopes, Set<String> audiences) {
         return new EndpointPolicy(new EndpointId("endpoint"), ClientVerificationRequirement.OPTIONAL,
-                ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.HOST_SESSION_REQUIRED,
+                ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED,
                 scopes, audiences, CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
     }
 }

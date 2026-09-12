@@ -1,5 +1,6 @@
 package com.cloud.gateway.domain.access;
 
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.access.client.VerifiedClient;
@@ -34,7 +35,7 @@ class IngressAccessEvaluatorIdentityTest {
             for (ClientVerificationOutcome outcome : List.of(
                     verified(new ClientId("different-client")), ClientVerificationOutcome.absent(),
                     ClientVerificationOutcome.rejected(), ClientVerificationOutcome.failed())) {
-                IngressAccessSnapshot snapshot = snapshot(requirement, null, SubjectAuthencationRequirement.IGNORE,
+                IngressAccessSnapshot snapshot = snapshot(requirement, null, SubjectAuthenticationRequirement.IGNORE,
                         AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED);
                 ClientId requested = requirement == ClientVerificationRequirement.FORBIDDEN ? null : CLIENT;
                 IngressAccessDecision.Allowed allowed = assertInstanceOf(IngressAccessDecision.Allowed.class,
@@ -49,7 +50,7 @@ class IngressAccessEvaluatorIdentityTest {
     @Test
     void shouldRetainVerifiedIdentityOnlyForRequiredSignatureAndMatchingClient() {
         IngressAccessSnapshot snapshot = snapshot(ClientVerificationRequirement.REQUIRED, ClientVerificationMode.REQUEST_SIGNATURE,
-                SubjectAuthencationRequirement.IGNORE, AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED);
+                SubjectAuthenticationRequirement.IGNORE, AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED);
         IngressAccessRequest request = new IngressAccessRequest(ENDPOINT, APP, CLIENT, null, false);
         IngressAccessDecision.Allowed allowed = assertInstanceOf(IngressAccessDecision.Allowed.class,
                 evaluator.evaluate(snapshot, request, verified(CLIENT), SubjectAuthenticationOutcome.absent()));
@@ -63,7 +64,7 @@ class IngressAccessEvaluatorIdentityTest {
     @Test
     void shouldDenyEveryUnsuccessfulRequiredVerification() {
         IngressAccessSnapshot snapshot = snapshot(ClientVerificationRequirement.REQUIRED, ClientVerificationMode.REQUEST_SIGNATURE,
-                SubjectAuthencationRequirement.IGNORE, AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED);
+                SubjectAuthenticationRequirement.IGNORE, AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED);
         List<ClientVerificationOutcome> outcomes = List.of(ClientVerificationOutcome.absent(),
                 ClientVerificationOutcome.rejected(), ClientVerificationOutcome.failed());
         List<IngressAccessDenyReason> reasons = List.of(IngressAccessDenyReason.CLIENT_VERIFICATION_REQUIRED,
@@ -79,18 +80,18 @@ class IngressAccessEvaluatorIdentityTest {
 
     @Test
     void shouldTreatDisabledAggregatesAsNotFound() {
-        assertDenied(snapshot(ClientVerificationRequirement.REQUIRED, null, SubjectAuthencationRequirement.IGNORE,
+        assertDenied(snapshot(ClientVerificationRequirement.REQUIRED, null, SubjectAuthenticationRequirement.IGNORE,
                 AppStatus.DISABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED), IngressAccessDenyReason.APP_NOT_FOUND);
-        assertDenied(snapshot(ClientVerificationRequirement.REQUIRED, null, SubjectAuthencationRequirement.IGNORE,
+        assertDenied(snapshot(ClientVerificationRequirement.REQUIRED, null, SubjectAuthenticationRequirement.IGNORE,
                 AppStatus.ENABLED, ClientStatus.DISABLED, EndpointStatus.ENABLED), IngressAccessDenyReason.CLIENT_NOT_FOUND);
-        assertDenied(snapshot(ClientVerificationRequirement.REQUIRED, null, SubjectAuthencationRequirement.IGNORE,
+        assertDenied(snapshot(ClientVerificationRequirement.REQUIRED, null, SubjectAuthenticationRequirement.IGNORE,
                 AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.DISABLED), IngressAccessDenyReason.ENDPOINT_NOT_FOUND);
     }
 
     @Test
     void shouldRequireAllowedOriginOnlyForUnsafeBrowserRequests() {
         IngressAccessSnapshot snapshot = snapshot(ClientVerificationRequirement.FORBIDDEN, null,
-                SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED, AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED);
+                SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED, AppStatus.ENABLED, ClientStatus.ENABLED, EndpointStatus.ENABLED);
         for (String origin : List.of("https://evil.example", "")) {
             IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
                     evaluator.evaluate(snapshot, new IngressAccessRequest(ENDPOINT, APP, null, origin, true),
@@ -123,7 +124,7 @@ class IngressAccessEvaluatorIdentityTest {
     }
 
     private static IngressAccessSnapshot snapshot(ClientVerificationRequirement requirement, ClientVerificationMode mode,
-                                                  SubjectAuthencationRequirement subject, AppStatus appStatus, ClientStatus clientStatus, EndpointStatus endpointStatus) {
+                                                  SubjectAuthenticationRequirement subject, AppStatus appStatus, ClientStatus clientStatus, EndpointStatus endpointStatus) {
         App app = new App(APP, "WEB", appStatus, new AppPolicy(Set.of("https://app.example")));
         Credential credential = new Credential(new CredentialId("credential"), "secret-ref",
                 SignatureContract.HTTP_REQUEST_SIGNATURE_V1, NOW.minusSeconds(60), NOW.plusSeconds(600));

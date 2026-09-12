@@ -19,10 +19,15 @@ public final class EndpointRegistry extends AggregateRootRegistry<Endpoint, Endp
             endpoint.matchers().forEach(matcher -> {
                 Require.notNull(matcher, DomainException::invalidField);
                 if (indexed.putIfAbsent(matcher, endpoint.endpointId()) != null) {
-                    throw new DomainException(DomainError.ENDPOINT_AMBIGUOUS);
+                    throw ambiguous();
                 }
             });
         });
+    }
+
+    @Override
+    protected DomainException ambiguous() {
+        return new DomainException(DomainError.ENDPOINT_AMBIGUOUS);
     }
 
 }

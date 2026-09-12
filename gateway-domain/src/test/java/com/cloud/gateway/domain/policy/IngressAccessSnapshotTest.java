@@ -14,7 +14,7 @@ import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
@@ -85,6 +85,6 @@ class IngressAccessSnapshotTest {
                 List.of(new EndpointMatcher("POST", "/login")), "service")));
     }
     private static EndpointPolicy route() {
-        return new EndpointPolicy(new EndpointId("LOGIN"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
+        return new EndpointPolicy(new EndpointId("LOGIN"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
     }
 }

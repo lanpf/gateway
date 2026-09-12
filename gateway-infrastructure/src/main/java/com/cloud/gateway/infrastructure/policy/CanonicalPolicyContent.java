@@ -6,7 +6,7 @@ import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.client.ClientStatus;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
 import com.cloud.gateway.domain.client.SignatureContract;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -126,7 +126,7 @@ public record CanonicalPolicyContent(
             String endpointId,
             List<String> requiredAudiences,
             List<String> requiredScopes,
-            SubjectAuthencationRequirement subjectAuthencationRequirement
+            SubjectAuthenticationRequirement subjectAuthencationRequirement
     ) {
         public EndpointAccess {
             requiredAudiences = List.copyOf(requiredAudiences);

@@ -4,7 +4,7 @@ import com.cloud.gateway.application.quota.RequestQuotaExecutor;
 import com.cloud.gateway.application.security.ClientSignatureEvidence;
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -22,7 +22,7 @@ public final class IngressAdmissionCommandService {
             Supplier<CompletionStage<SubjectAuthenticationOutcome>> browser, Set<String> applied) {
         IngressTask<IngressAdmissionOutput> task = new IngressTask<>();
         try {
-            SubjectAuthencationRequirement requirement = command.snapshot().content().endpointPolicies()
+            SubjectAuthenticationRequirement requirement = command.snapshot().content().endpointPolicies()
                     .get(command.endpoint().endpointId()).subjectRequirement();
             CompletionStage<ClientVerificationOutcome> client = task.track(
                     access.authenticateClient(command, evidence));

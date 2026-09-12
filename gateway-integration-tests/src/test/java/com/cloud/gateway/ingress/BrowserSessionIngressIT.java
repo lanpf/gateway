@@ -33,7 +33,7 @@ import com.cloud.gateway.domain.policy.header.HeaderPolicy;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
@@ -344,7 +344,7 @@ class BrowserSessionIngressIT {
                         new EndpointId(ENDPOINT_ID),
                         ClientVerificationRequirement.REQUIRED,
                         ClientVerificationMode.IGNORE,
-                        SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED,
+                        SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED,
                         Set.of(),
                         Set.of(),
                         new CredentialForwarding(

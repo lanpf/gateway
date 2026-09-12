@@ -7,7 +7,7 @@ import java.util.Set;
 
 public record EndpointPolicy(
         ClientVerificationRequirement clientVerificationRequirement,
-        SubjectAuthencationRequirement subjectAuthencationRequirement,
+        SubjectAuthenticationRequirement subjectAuthencationRequirement,
         Set<String> requiredScopes,
         Set<String> requiredAudiences
 ) {

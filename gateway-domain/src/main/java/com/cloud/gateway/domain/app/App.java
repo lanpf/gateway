@@ -31,9 +31,5 @@ public record App(
         }
         return accessPolicy.allowsOrigin(origin);
     }
-
-    public App(AppId appId, String platform, AppPolicy accessPolicy) {
-        this(appId, platform, AppStatus.ENABLED, accessPolicy);
-    }
 }
 

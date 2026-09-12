@@ -10,7 +10,7 @@ import com.cloud.gateway.domain.access.IngressAccessGrantedContext;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.app.AppPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.bundle.EffectivePolicy;
 import com.cloud.gateway.domain.policy.bundle.PolicyResolver;
 import com.cloud.gateway.domain.policy.capability.RateLimitDimension;
@@ -35,7 +35,7 @@ public final class IngressAccessCommandService {
     private final Clock clock;
 
     /** Select only the subject authentication required by the captured endpoint policy. */
-    public CompletionStage<SubjectAuthenticationOutcome> authenticateSubject(SubjectAuthencationRequirement requirement,
+    public CompletionStage<SubjectAuthenticationOutcome> authenticateSubject(SubjectAuthenticationRequirement requirement,
                                                                              Supplier<CompletionStage<SubjectAuthenticationOutcome>> host,
                                                                              Supplier<CompletionStage<SubjectAuthenticationOutcome>> browser) {
         return switch (SubjectAuthenticationSelection.from(requirement)) {

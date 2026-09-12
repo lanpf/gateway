@@ -19,7 +19,7 @@ import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.app.AppId;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.client.ClientPolicy;
 import com.cloud.gateway.domain.client.Credential;
@@ -596,7 +596,7 @@ class PolicyCommandServicesTest {
     }
 
     private static EndpointPolicy route(boolean enabled) {
-        return new EndpointPolicy(new EndpointId("LOGIN"), ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED);
+        return new EndpointPolicy(new EndpointId("LOGIN"), ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED);
     }
 
     private static class TestDefinition<T> {

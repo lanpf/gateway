@@ -10,7 +10,7 @@ import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
@@ -25,25 +25,25 @@ import static org.junit.jupiter.api.Assertions.*;
 class ManagementEndpointContractValidatorTest {
     @Test
     void shouldValidateSameAudienceAndScopeForLocalManagementRoute() {
-        assertDoesNotThrow(() -> validator("gateway-admin", "/custom", SubjectAuthencationRequirement.HOST_SESSION_REQUIRED,
+        assertDoesNotThrow(() -> validator("gateway-admin", "/custom", SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED,
                 Set.of("admin"), Set.of("gateway")).afterSingletonsInstantiated());
-        assertThrows(DomainException.class, () -> validator("gateway-admin", "/custom", SubjectAuthencationRequirement.HOST_SESSION_REQUIRED,
+        assertThrows(DomainException.class, () -> validator("gateway-admin", "/custom", SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED,
                 Set.of("read"), Set.of("gateway")).afterSingletonsInstantiated());
-        assertThrows(DomainException.class, () -> validator("gateway-admin", "/custom", SubjectAuthencationRequirement.HOST_SESSION_REQUIRED,
+        assertThrows(DomainException.class, () -> validator("gateway-admin", "/custom", SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED,
                 Set.of("admin"), Set.of("other")).afterSingletonsInstantiated());
-        assertThrows(DomainException.class, () -> validator("gateway-admin", "/custom", SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL,
+        assertThrows(DomainException.class, () -> validator("gateway-admin", "/custom", SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL,
                 Set.of("admin"), Set.of("gateway")).afterSingletonsInstantiated());
     }
 
     @Test
     void shouldAlsoProtectManagementPathAndNotApplyAdminRulesToOrdinaryRoutes() {
-        assertThrows(DomainException.class, () -> validator("route", "/admin/gateway/snapshot", SubjectAuthencationRequirement.IGNORE,
+        assertThrows(DomainException.class, () -> validator("route", "/admin/gateway/snapshot", SubjectAuthenticationRequirement.IGNORE,
                 Set.of(), Set.of()).afterSingletonsInstantiated());
-        assertDoesNotThrow(() -> validator("route", "/public", SubjectAuthencationRequirement.IGNORE,
+        assertDoesNotThrow(() -> validator("route", "/public", SubjectAuthenticationRequirement.IGNORE,
                 Set.of(), Set.of()).afterSingletonsInstantiated());
     }
 
-    private static ManagementEndpointContractValidator validator(String route, String path, SubjectAuthencationRequirement requirement,
+    private static ManagementEndpointContractValidator validator(String route, String path, SubjectAuthenticationRequirement requirement,
             Set<String> scopes, Set<String> audiences) {
         Endpoint endpoint = new Endpoint(new EndpointId("ADMIN.TEST"), "gateway",
                 List.of(new EndpointMatcher("GET", path)), route);

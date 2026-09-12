@@ -7,7 +7,7 @@ import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
@@ -42,7 +42,7 @@ final class PolicyTestFixtures {
         EndpointId endpointId = new EndpointId("USER_AUTH.LOGIN");
         EndpointRegistry catalog = new EndpointRegistry(List.of(new Endpoint(endpointId, "user-auth",
                 List.of(new EndpointMatcher("POST", "/api/user-auth/login")), "user-auth")));
-        EndpointPolicy route = new EndpointPolicy(endpointId, ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED);
+        EndpointPolicy route = new EndpointPolicy(endpointId, ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED);
         IngressAccessContent content = new IngressAccessContent(
                 catalog, Map.of(), Map.of(), Map.of(endpointId, route));
         return new IngressAccessSnapshot(version, content, hasher().hash(content), PUBLISHED_AT.plusSeconds(version));

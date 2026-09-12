@@ -24,7 +24,7 @@ import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.bundle.*;
 import com.cloud.gateway.domain.policy.capability.*;
 
@@ -236,7 +236,7 @@ class IngressIdentityContextGlobalFilterIngressTest {
                 SignatureContract.HTTP_REQUEST_SIGNATURE_V1, "secret-ref", NOW.minusSeconds(60),
                 NOW.plusSeconds(3600)), null);
         EndpointPolicy endpoint = new EndpointPolicy(ENDPOINT.endpointId(), ClientVerificationRequirement.REQUIRED,
-                ClientVerificationMode.REQUEST_SIGNATURE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(),
+                ClientVerificationMode.REQUEST_SIGNATURE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(),
                 CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
         PolicyBundleId id = new PolicyBundleId("quotas");
         RateLimitRules limits = new RateLimitRules(List.of(

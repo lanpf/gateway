@@ -11,7 +11,7 @@ import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.policy.bundle.*;
 import com.cloud.gateway.domain.policy.capability.*;
@@ -158,7 +158,7 @@ class PolicyCompositionStorageTest {
                 "catalog", List.of(new EndpointMatcher("GET", "/read")), "catalog", tags))),
                 Map.of(new AppId("web"), new AppPolicy(new AppId("web"), "WEB", Set.of(), PolicyStatus.ENABLED)),
                 Map.of(new ClientId("partner"), new ClientPolicy(new ClientId("partner"), Set.of(new AppId("web")), ClientStatus.ENABLED)),
-                Map.of(endpoint, new EndpointPolicy(endpoint, ClientVerificationRequirement.OPTIONAL, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), EndpointStatus.ENABLED)), policies);
+                Map.of(endpoint, new EndpointPolicy(endpoint, ClientVerificationRequirement.OPTIONAL, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), EndpointStatus.ENABLED)), policies);
     }
 
     private static PolicyComposition configuration(boolean reverse) {

@@ -19,7 +19,7 @@ import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
@@ -225,7 +225,7 @@ class IngressAccessSnapshotPropagationIT {
                 endpointId,
                 ClientVerificationRequirement.FORBIDDEN,
                 ClientVerificationMode.IGNORE,
-                SubjectAuthencationRequirement.IGNORE,
+                SubjectAuthenticationRequirement.IGNORE,
                 Set.of(),
                 Set.of(),
                 CredentialForwarding.stripAll(),

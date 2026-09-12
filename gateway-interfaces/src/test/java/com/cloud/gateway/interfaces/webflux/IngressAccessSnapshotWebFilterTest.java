@@ -12,7 +12,7 @@ import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.bundle.*;
 import com.cloud.gateway.domain.policy.capability.*;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
@@ -150,7 +150,7 @@ class IngressAccessSnapshotWebFilterTest {
         var bundle = new PolicyBundle(id, rules, null, null, null, null);
         var binding = new PolicyBinding(new PolicyBindingId("global"), id, null, null, Set.of(), null, null, null);
         var policies = new PolicyComposition(Map.of(id, bundle), List.of(binding));
-        var access = new EndpointPolicy(ENDPOINT.endpointId(), ClientVerificationRequirement.OPTIONAL, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
+        var access = new EndpointPolicy(ENDPOINT.endpointId(), ClientVerificationRequirement.OPTIONAL, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
         return new IngressAccessSnapshot(version, new IngressAccessContent(new EndpointRegistry(List.of(ENDPOINT)),
                 Map.of(), Map.of(), Map.of(ENDPOINT.endpointId(), access), policies), "hash-" + version, Instant.EPOCH);
     }

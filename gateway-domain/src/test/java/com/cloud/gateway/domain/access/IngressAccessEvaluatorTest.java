@@ -11,7 +11,7 @@ import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationFailReason;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
@@ -75,7 +75,7 @@ class IngressAccessEvaluatorTest {
 
     @Test
     void shouldRejectClientForForbiddenRoute() {
-        EndpointPolicy route = new EndpointPolicy(new EndpointId("PUBLIC"), ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), forwarding(), EndpointStatus.ENABLED);
+        EndpointPolicy route = new EndpointPolicy(new EndpointId("PUBLIC"), ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), forwarding(), EndpointStatus.ENABLED);
 
         IngressAccessDecision.Denied denied = assertInstanceOf(IngressAccessDecision.Denied.class,
                 evaluator.evaluate(1, new ClientId("DIRECT"), app(), client(), route,
@@ -211,7 +211,7 @@ class IngressAccessEvaluatorTest {
         return new ClientPolicy(new ClientId("DIRECT"), Set.of(new AppId("mini-program")));
     }
     private static EndpointPolicy route() {
-        return new EndpointPolicy(new EndpointId("AUTHENTICATED"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.HOST_SESSION_REQUIRED, Set.of("read"), Set.of("cloud-api"), forwarding(), EndpointStatus.ENABLED);
+        return new EndpointPolicy(new EndpointId("AUTHENTICATED"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED, Set.of("read"), Set.of("cloud-api"), forwarding(), EndpointStatus.ENABLED);
     }
     private static AuthenticatedSubject subject() {
         return new AuthenticatedSubject(SubjectType.HOST_SESSION, "user-1", "session-1", "issuer",
@@ -221,7 +221,7 @@ class IngressAccessEvaluatorTest {
         return SubjectAuthenticationOutcome.authenticated(subject);
     }
     private static EndpointPolicy browserRoute() {
-        return new EndpointPolicy(new EndpointId("BROWSER"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED, Set.of(), Set.of(), forwarding(), EndpointStatus.ENABLED);
+        return new EndpointPolicy(new EndpointId("BROWSER"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED, Set.of(), Set.of(), forwarding(), EndpointStatus.ENABLED);
     }
     private static AuthenticatedSubject browserSubject() {
         return new AuthenticatedSubject(
@@ -234,10 +234,10 @@ class IngressAccessEvaluatorTest {
                 Instant.parse("2030-01-01T00:00:00Z"));
     }
     private static EndpointPolicy optionalHostRoute() {
-        return new EndpointPolicy(new EndpointId("OPTIONAL"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL, Set.of("read"), Set.of("cloud-api"), forwarding(), EndpointStatus.ENABLED);
+        return new EndpointPolicy(new EndpointId("OPTIONAL"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL, Set.of("read"), Set.of("cloud-api"), forwarding(), EndpointStatus.ENABLED);
     }
     private static EndpointPolicy signedRoute() {
-        return new EndpointPolicy(new EndpointId("SIGNED"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.REQUEST_SIGNATURE, SubjectAuthencationRequirement.IGNORE, Set.of(), Set.of(), forwarding(), EndpointStatus.ENABLED);
+        return new EndpointPolicy(new EndpointId("SIGNED"), ClientVerificationRequirement.REQUIRED, ClientVerificationMode.REQUEST_SIGNATURE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), forwarding(), EndpointStatus.ENABLED);
     }
     private static CredentialForwarding forwarding() {
         return new CredentialForwarding(

@@ -1,6 +1,6 @@
 package com.cloud.gateway.domain.endpoint;
 
-public enum SubjectAuthencationRequirement {
+public enum SubjectAuthenticationRequirement {
     REQUIRED,
     OPTIONAL
 }

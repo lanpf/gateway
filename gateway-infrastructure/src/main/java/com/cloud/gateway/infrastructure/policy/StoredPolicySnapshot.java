@@ -1,6 +1,6 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
@@ -70,7 +70,7 @@ public record StoredPolicySnapshot(
     public record Route(
             ClientVerificationMode clientVerificationMode,
             ClientVerificationRequirement clientVerificationRequirement,
-            SubjectAuthencationRequirement subjectAuthencationRequirement,
+            SubjectAuthenticationRequirement subjectAuthencationRequirement,
             Set<String> requiredScopes,
             Set<String> requiredAudiences,
             Forwarding credentialForwarding,

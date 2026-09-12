@@ -1,6 +1,6 @@
 package com.cloud.gateway.infrastructure.policy.config;
 
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
@@ -128,7 +128,7 @@ public class GatewayPolicyDefinitionProperties {
         @NotNull private ClientVerificationMode clientVerificationMode =
                 ClientVerificationMode.IGNORE;
         @NotNull private ClientVerificationRequirement clientVerificationRequirement = ClientVerificationRequirement.FORBIDDEN;
-        @NotNull private SubjectAuthencationRequirement subjectAuthencationRequirement = SubjectAuthencationRequirement.IGNORE;
+        @NotNull private SubjectAuthenticationRequirement subjectAuthencationRequirement = SubjectAuthenticationRequirement.IGNORE;
         @NotNull private final Set<String> requiredScopes = new LinkedHashSet<>();
         @NotNull private final Set<String> requiredAudiences = new LinkedHashSet<>();
         @NotNull @Valid private final Forwarding credentialForwarding = new Forwarding();

@@ -16,7 +16,7 @@ import com.cloud.gateway.application.policy.SaveAppPolicyCommand;
 import com.cloud.gateway.application.policy.SaveEndpointAccessPolicyCommand;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.endpoint.EndpointId;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
 import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.CredentialId;
@@ -96,7 +96,7 @@ public abstract class GatewayPolicyApiMapStructMapper implements GatewayPolicyAp
         return new EndpointPolicy(new EndpointId(source.endpointId()),
                 ClientVerificationRequirement.valueOf(source.clientRequirement().name()),
                 ClientVerificationMode.valueOf(source.clientCredentialRequirement().name()),
-                SubjectAuthencationRequirement.valueOf(source.subjectRequirement().name()),
+                SubjectAuthenticationRequirement.valueOf(source.subjectRequirement().name()),
                 source.requiredScopes(), source.requiredAudiences(),
                 new CredentialForwarding(AuthorizationHeaderForwardingMode.valueOf(forwarding.authorizationHeader().name()),
                         CookieForwardingMode.valueOf(forwarding.cookies().name()), forwarding.allowedCookieNames()),

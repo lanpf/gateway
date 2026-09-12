@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.interfaces.webflux.GatewayRequestAttributes;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
@@ -35,7 +35,7 @@ import org.springframework.web.server.ServerWebExchange;
 class PolicyAwareBearerTokenConverterTest {
     @Test
     void shouldIgnoreEvenMalformedBearerForIgnoredOrBrowserSubject() {
-        for (SubjectAuthencationRequirement requirement : List.of(SubjectAuthencationRequirement.IGNORE, SubjectAuthencationRequirement.BROWSER_SESSION_REQUIRED)) {
+        for (SubjectAuthenticationRequirement requirement : List.of(SubjectAuthenticationRequirement.IGNORE, SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED)) {
             assertNull(new PolicyAwareBearerTokenConverter()
                     .convert(exchange(requirement, "Bearer invalid token", true)).block());
         }
@@ -43,7 +43,7 @@ class PolicyAwareBearerTokenConverterTest {
 
     @Test
     void shouldAuthenticateHostBearerAndUseOnlyPinnedRequestAttributes() {
-        for (SubjectAuthencationRequirement requirement : List.of(SubjectAuthencationRequirement.HOST_SESSION_REQUIRED, SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL)) {
+        for (SubjectAuthenticationRequirement requirement : List.of(SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED, SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL)) {
             Authentication authentication = new PolicyAwareBearerTokenConverter()
                     .convert(exchange(requirement, "Bearer access-token", true)).block();
             assertEquals("access-token", assertInstanceOf(BearerTokenAuthenticationToken.class, authentication).getToken());
@@ -54,10 +54,10 @@ class PolicyAwareBearerTokenConverterTest {
     void shouldKeepDefaultVerificationWhenSnapshotAttributesAreAbsent() {
         assertThrows(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class,
                 () -> new PolicyAwareBearerTokenConverter()
-                        .convert(exchange(SubjectAuthencationRequirement.IGNORE, "Bearer invalid token", false)).block());
+                        .convert(exchange(SubjectAuthenticationRequirement.IGNORE, "Bearer invalid token", false)).block());
     }
 
-    private static ServerWebExchange exchange(SubjectAuthencationRequirement requirement, String authorization, boolean pinned) {
+    private static ServerWebExchange exchange(SubjectAuthenticationRequirement requirement, String authorization, boolean pinned) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, authorization);
         ServerHttpRequest request = (ServerHttpRequest) Proxy.newProxyInstance(ServerHttpRequest.class.getClassLoader(),
@@ -71,8 +71,8 @@ class PolicyAwareBearerTokenConverterTest {
         if (pinned) {
             Endpoint endpoint = new Endpoint(new EndpointId("TEST.ENDPOINT"), "test-service",
                     List.of(new EndpointMatcher("GET", "/test")), "test-route");
-            boolean host = requirement == SubjectAuthencationRequirement.HOST_SESSION_REQUIRED
-                    || requirement == SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL;
+            boolean host = requirement == SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED
+                    || requirement == SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL;
             EndpointPolicy policy = new EndpointPolicy(endpoint.endpointId(), ClientVerificationRequirement.OPTIONAL, ClientVerificationMode.IGNORE, requirement, Set.of(), host ? Set.of("test") : Set.of(), CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
             IngressAccessSnapshot snapshot = new IngressAccessSnapshot(1, new IngressAccessContent(new EndpointRegistry(List.of(endpoint)),
                     Map.of(), Map.of(), Map.of(endpoint.endpointId(), policy)), "hash", Instant.EPOCH);

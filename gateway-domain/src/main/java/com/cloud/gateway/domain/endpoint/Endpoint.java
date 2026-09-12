@@ -2,8 +2,6 @@ package com.cloud.gateway.domain.endpoint;
 
 import com.cloud.framework.core.validation.Require;
 import com.cloud.framework.domain.AggregateRoot;
-import com.cloud.gateway.domain.app.AppId;
-import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.common.DomainException;
 
 import java.util.List;
@@ -43,9 +41,4 @@ public record Endpoint(
     }
 
     public boolean enabled() { return status == EndpointStatus.ENABLED; }
-
-    public Endpoint(EndpointId endpointId, ServiceId serviceId, RouteId routeId,
-                    List<EndpointMatcher> matchers, EndpointPolicy accessPolicy) {
-        this(endpointId, serviceId, routeId, matchers, Set.of(), EndpointStatus.ENABLED, accessPolicy);
-    }
 }

@@ -21,13 +21,14 @@ public abstract class AggregateRootRegistry<T extends AggregateRoot<ID>, ID exte
             aggregateRoots.forEach(aggregateRoot -> {
                 Require.notNull(aggregateRoot, DomainException::invalidField);
                 if (indexed.putIfAbsent(aggregateRoot.id(), aggregateRoot) != null) {
-                    throw new DomainException(DomainError.ENDPOINT_AMBIGUOUS);
+                    throw ambiguous();
                 }
             });
             definitions = Map.copyOf(indexed);
         }
     }
 
+    protected abstract DomainException ambiguous();
 
     public Optional<T> find(ID id) {
         return Optional.ofNullable(definitions.get(id));

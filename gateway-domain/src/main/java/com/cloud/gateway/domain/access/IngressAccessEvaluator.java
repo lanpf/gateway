@@ -12,7 +12,7 @@ import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.Endpoint;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 
 public final class IngressAccessEvaluator {
     public IngressAccessDecision evaluate(
@@ -63,8 +63,12 @@ public final class IngressAccessEvaluator {
 
     private static IngressAccessDenyReason evaluateClient(IngressAccessSnapshot snapshot, IngressAccessRequest request, ClientVerificationOutcome clientVerification, Endpoint endpoint) {
         if (request.clientId() == null) {
-            return endpoint.accessPolicy().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED
-                    ? IngressAccessDenyReason.CLIENT_REQUIRED : null;
+            if (endpoint.accessPolicy().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
+                return IngressAccessDenyReason.CLIENT_REQUIRED;
+            }
+            if (!(clientVerification instanceof ClientVerificationOutcome.Absent)) {
+                return IngressAccessDenyReason.CLIENT_VERIFICATION_MISMATCH;
+            }
         }
         // if a client is provided, it must be match the client policy and allowed apps
         Client client = snapshot.content().clientRegistry().find(request.clientId()).filter(Client::enabled).orElse(null);
@@ -76,13 +80,14 @@ public final class IngressAccessEvaluator {
         }
 
         if (clientVerification instanceof ClientVerificationOutcome.Absent) {
-            return endpoint.accessPolicy().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED
-                    ? IngressAccessDenyReason.CLIENT_VERIFICATION_REQUIRED : null;
+            if (endpoint.accessPolicy().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
+                return IngressAccessDenyReason.CLIENT_VERIFICATION_REQUIRED;
+            }
         }
         if (clientVerification instanceof ClientVerificationOutcome.Verified verified) {
-            return !verified.client().clientId().equals(request.clientId())
-                    ? IngressAccessDenyReason.CLIENT_VERIFICATION_MISMATCH
-                    : null;
+            if (!verified.client().clientId().equals(request.clientId())) {
+                return IngressAccessDenyReason.CLIENT_VERIFICATION_MISMATCH;
+            }
         }
         if (clientVerification instanceof ClientVerificationOutcome.Rejected) {
             return IngressAccessDenyReason.CLIENT_VERIFICATION_REJECTED;
@@ -95,9 +100,9 @@ public final class IngressAccessEvaluator {
 
 
     private static IngressAccessDenyReason evaluateSubject(SubjectAuthenticationOutcome subjectAuthentication, Endpoint endpoint) {
-        SubjectAuthencationRequirement requirement = endpoint.accessPolicy().subjectAuthencationRequirement();
+        SubjectAuthenticationRequirement requirement = endpoint.accessPolicy().subjectAuthencationRequirement();
         if (subjectAuthentication instanceof SubjectAuthenticationOutcome.Absent) {
-            return requirement == SubjectAuthencationRequirement.REQUIRED
+            return requirement == SubjectAuthenticationRequirement.REQUIRED
                     ? IngressAccessDenyReason.SUBJECT_REQUIRED
                     : null;
         }
@@ -110,7 +115,7 @@ public final class IngressAccessEvaluator {
             }
         }
         if (subjectAuthentication instanceof SubjectAuthenticationOutcome.Rejected rejected) {
-            return rejected.reason() == SubjectAuthenticationRejectReason.EXPIRED && requirement == SubjectAuthencationRequirement.OPTIONAL
+            return rejected.reason() == SubjectAuthenticationRejectReason.EXPIRED && requirement == SubjectAuthenticationRequirement.OPTIONAL
                     ? null
                     : IngressAccessDenyReason.SUBJECT_AUTHENTICATION_REJECTED;
         }

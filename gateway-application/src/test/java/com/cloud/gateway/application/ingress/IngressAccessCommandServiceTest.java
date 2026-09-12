@@ -20,7 +20,7 @@ import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.SubjectAuthencationRequirement;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
@@ -142,7 +142,7 @@ class IngressAccessCommandServiceTest {
         IngressAccessCommandService service = service(unusedAuthenticator());
         AtomicInteger hosts = new AtomicInteger();
         AtomicInteger browsers = new AtomicInteger();
-        for (SubjectAuthencationRequirement requirement : SubjectAuthencationRequirement.values()) {
+        for (SubjectAuthenticationRequirement requirement : SubjectAuthenticationRequirement.values()) {
             service.authenticateSubject(requirement, () -> {
                 hosts.incrementAndGet();
                 return CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent());
@@ -178,7 +178,7 @@ class IngressAccessCommandServiceTest {
                     NOW.plusSeconds(3600)), null));
         }
         EndpointPolicy endpoint = new EndpointPolicy(ENDPOINT.endpointId(), ClientVerificationRequirement.REQUIRED, requirement,
-                SubjectAuthencationRequirement.HOST_SESSION_OPTIONAL, Set.of(), Set.of("api"), CredentialForwarding.stripAll(),
+                SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL, Set.of(), Set.of("api"), CredentialForwarding.stripAll(),
                 EndpointStatus.ENABLED);
         PolicyBundleId id = new PolicyBundleId("verified");
         PolicyComposition policies = new PolicyComposition(
