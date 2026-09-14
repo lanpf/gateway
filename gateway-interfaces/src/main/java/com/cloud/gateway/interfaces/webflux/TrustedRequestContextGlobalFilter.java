@@ -156,13 +156,18 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
                 headers.getFirst(RequestHeader.NONCE.headerName()));
     }
 
-    /** Transport selection based on request evidence: Bearer token → host, cookie → browser (v2). */
+    /** Transport selection by request evidence: Bearer token → host, BROWSER_SESSION cookie → browser. */
     private Supplier<CompletionStage<SubjectAuthenticationOutcome>> subjectAuthentication(
             ServerWebExchange exchange, Authentication authentication,
             reactor.util.context.ContextView reactorContext) {
         return () -> {
             if (!isAuthenticationAbsent(authentication)) {
                 return hostSessionSubjectAuthenticator.authenticate(authentication)
+                        .contextWrite(reactorContext).toFuture();
+            }
+            HttpCookie cookie = exchange.getRequest().getCookies().getFirst(BROWSER_SESSION_COOKIE);
+            if (cookie != null) {
+                return browserSessionSubjectAuthenticator.authenticate(cookie.getValue())
                         .contextWrite(reactorContext).toFuture();
             }
             return CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent());
