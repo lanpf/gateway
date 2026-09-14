@@ -1,7 +1,7 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitPolicy;
+import com.cloud.gateway.domain.policy.capability.RateLimitRule;
 import com.cloud.gateway.domain.policy.capability.RateLimitQuota;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -21,7 +21,7 @@ public final class RateLimitQuotaAdapter implements RateLimitQuota {
     }
 
     @Override
-    public RateLimitDecision tryAcquire(RateLimitPolicy rule, String key) {
+    public RateLimitDecision tryAcquire(RateLimitRule rule, String key) {
         String resolvedKey = keyResolver.bucket(rule, key);
         try {
             RedisTokenBucketLimiter.BucketDecision decision = limiter.tryAcquire(rule, resolvedKey);

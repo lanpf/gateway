@@ -3,6 +3,7 @@ package com.cloud.gateway.application.security;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.access.client.VerifiedClient;
+import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.Credential;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.security.signature.RequestSignatureVerifierRegistry;
@@ -28,12 +29,13 @@ public final class RequestSignatureAuthenticationCommandService implements Clien
 
     @Override
     public CompletionStage<ClientVerificationOutcome> authenticate(
-            Credentials credentials, ClientSignatureEvidence evidence, Instant now) {
+            Credentials credentials, ClientId clientId,
+            ClientSignatureEvidence evidence, Instant now) {
         Optional<Instant> timestamp = rules.acceptedTimestamp(evidence, now);
         if (timestamp.isEmpty()) {
             return completed(ClientVerificationOutcome.rejected());
         }
-        for (Credential candidate : rules.candidates(credentials, evidence, now)) {
+        for (Credential candidate : rules.candidates(clientId, credentials, evidence, now)) {
             String secret;
             try {
                 secret = secrets.resolve(candidate.secretRef());
@@ -44,17 +46,17 @@ public final class RequestSignatureAuthenticationCommandService implements Clien
                 return completed(ClientVerificationOutcome.failed());
             }
             if (verifiers.required(candidate.signatureContract()).verify(secret, evidence)) {
-                String identity = rules.replayIdentity(credentials, evidence);
+                String identity = rules.replayIdentity(clientId, credentials, evidence);
                 String replayKey = cryptography.digest(SignatureCryptography.Digest.SHA_256,
                         identity.getBytes(StandardCharsets.UTF_8));
-                return register(candidate, replayKey, rules.replayExpiresAt(timestamp.get()), now);
+                return register(clientId, candidate, replayKey, rules.replayExpiresAt(timestamp.get()), now);
             }
         }
         return completed(ClientVerificationOutcome.rejected());
     }
 
     private CompletionStage<ClientVerificationOutcome> register(
-            Credential credential, String key, Instant expiresAt, Instant now) {
+            ClientId clientId, Credential credential, String key, Instant expiresAt, Instant now) {
         CompletionStage<Boolean> registration;
         try {
             registration = replay.register(key, expiresAt);
@@ -79,7 +81,7 @@ public final class RequestSignatureAuthenticationCommandService implements Clien
             } else if (registered) {
                 outcome.complete(ClientVerificationOutcome.verified(
                         new VerifiedClient(
-                                credential.credentialId(), credential.clientId(), ClientVerificationMode.REQUEST_SIGNATURE, now)));
+                                clientId, credential.credentialId(), ClientVerificationMode.REQUEST_SIGNATURE, now)));
             } else {
                 outcome.complete(ClientVerificationOutcome.rejected());
             }

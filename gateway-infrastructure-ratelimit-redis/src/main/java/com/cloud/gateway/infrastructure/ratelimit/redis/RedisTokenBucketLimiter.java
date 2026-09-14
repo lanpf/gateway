@@ -1,6 +1,6 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
-import com.cloud.gateway.domain.policy.capability.RateLimitPolicy;
+import com.cloud.gateway.domain.policy.capability.RateLimitRule;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -24,7 +24,7 @@ public final class RedisTokenBucketLimiter {
         this.redisTemplate = Objects.requireNonNull(redisTemplate);
     }
 
-    BucketDecision tryAcquire(RateLimitPolicy rule, String resolvedKey) {
+    BucketDecision tryAcquire(RateLimitRule rule, String resolvedKey) {
         List<?> values = redisTemplate.execute(SCRIPT, List.of(resolvedKey),
                 Integer.toString(rule.capacity()), Integer.toString(rule.refillPerSecond()));
         if (values == null || values.size() != 3

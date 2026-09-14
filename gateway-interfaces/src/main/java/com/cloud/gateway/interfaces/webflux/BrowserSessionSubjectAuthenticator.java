@@ -3,6 +3,7 @@ package com.cloud.gateway.interfaces.webflux;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationRejectReason;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
@@ -24,6 +25,6 @@ public final class BrowserSessionSubjectAuthenticator implements SubjectAuthenti
         if (verification instanceof BrowserSessionVerificationOutcome.Unavailable unavailable) {
             return SubjectAuthenticationOutcome.failed(unavailable.reason());
         }
-        return SubjectAuthenticationOutcome.rejected();
+        return SubjectAuthenticationOutcome.rejected(SubjectAuthenticationRejectReason.INVALID);
     }
 }

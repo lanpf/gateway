@@ -2,7 +2,7 @@ package com.cloud.gateway.interfaces.security;
 
 import com.cloud.gateway.api.constants.GatewayPathApiConstants;
 import com.cloud.gateway.domain.security.ManagementAccessRules;
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
+import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -26,7 +26,7 @@ public class GatewaySecurityWebFluxBeans {
     }
 
     @Bean
-    ManagementEndpointContractValidator managementEndpointContractValidator(PolicySnapshotProvider provider,
+    ManagementEndpointContractValidator managementEndpointContractValidator(com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider,
             ManagementAccessRules rules) {
         return new ManagementEndpointContractValidator(provider, rules);
     }

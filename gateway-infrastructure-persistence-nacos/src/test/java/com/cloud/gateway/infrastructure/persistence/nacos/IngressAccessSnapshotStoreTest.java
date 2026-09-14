@@ -18,9 +18,9 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.concurrent.locks.LockSupport;
 
-import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodAccessSnapshotStore;
+import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodAccessSnapshotStore;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.NacosConfigOperations;
 import org.junit.jupiter.api.AfterEach;
@@ -29,20 +29,20 @@ import org.junit.jupiter.api.io.TempDir;
 
 class IngressAccessSnapshotStoreTest {
     @TempDir Path temporaryDirectory;
-    private final List<NacosPolicySnapshotStore> stores = new CopyOnWriteArrayList<>();
-    private final StoredPolicySnapshotCodec codec = PolicyTestFixtures.codec();
+    private final List<NacosAccessSnapshotStore> stores = new CopyOnWriteArrayList<>();
+    private final StoredAccessSnapshotCodec codec = PolicyTestFixtures.codec();
 
     @AfterEach
     void closeStores() {
-        stores.forEach(NacosPolicySnapshotStore::close);
+        stores.forEach(NacosAccessSnapshotStore::close);
     }
 
     @Test
     void shouldPublishWithCasAndPropagateToEveryStore() {
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations(
                 codec.encodeSnapshot(PolicyTestFixtures.snapshot(1, true)));
-        NacosPolicySnapshotStore first = store(operations, "first.yaml");
-        NacosPolicySnapshotStore second = store(operations, "second.yaml");
+        NacosAccessSnapshotStore first = store(operations, "first.yaml");
+        NacosAccessSnapshotStore second = store(operations, "second.yaml");
         first.initialize();
         second.initialize();
         String expectedRevision = first.current().sourceRevision();
@@ -61,7 +61,7 @@ class IngressAccessSnapshotStoreTest {
     void shouldRejectStaleSourceRevisionWithoutOverwriting() {
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations(
                 codec.encodeSnapshot(PolicyTestFixtures.snapshot(1, true)));
-        NacosPolicySnapshotStore store = store(operations, "cas.yaml");
+        NacosAccessSnapshotStore store = store(operations, "cas.yaml");
         store.initialize();
 
         assertFalse(store.compareAndSet("stale", PolicyTestFixtures.snapshot(2, false)));
@@ -71,12 +71,12 @@ class IngressAccessSnapshotStoreTest {
     @Test
     void shouldStartFromLastKnownGoodWhenNacosIsUnavailable() {
         NacosPolicyProperties properties = properties("fallback.yaml");
-        LastKnownGoodPolicySnapshotStore lastKnownGood = new FileLastKnownGoodPolicySnapshotStore(
+        LastKnownGoodAccessSnapshotStore lastKnownGood = new FileLastKnownGoodAccessSnapshotStore(
                 properties.getLastKnownGoodLocation());
         lastKnownGood.save(codec.encodeSnapshot(PolicyTestFixtures.snapshot(4, true)));
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations(null);
         operations.unavailable = true;
-        NacosPolicySnapshotStore store = new NacosPolicySnapshotStore(
+        NacosAccessSnapshotStore store = new NacosAccessSnapshotStore(
                 operations, properties, codec, lastKnownGood);
         stores.add(store);
 
@@ -89,13 +89,13 @@ class IngressAccessSnapshotStoreTest {
     void shouldUpdateOnlySourceRevisionForRepresentationOnlyChange() {
         String initial = codec.encodeSnapshot(PolicyTestFixtures.snapshot(1, true));
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations(initial);
-        NacosPolicySnapshotStore store = store(operations, "format.yaml");
+        NacosAccessSnapshotStore store = store(operations, "format.yaml");
         store.initialize();
         IngressAccessSnapshot original = store.current().snapshot();
 
         operations.replace(initial + System.lineSeparator() + "# formatting-only" + System.lineSeparator());
 
-        await(() -> !store.current().sourceRevision().equals(NacosPolicySnapshotStore.sourceRevision(initial)));
+        await(() -> !store.current().sourceRevision().equals(NacosAccessSnapshotStore.sourceRevision(initial)));
         assertSame(original, store.current().snapshot());
     }
 
@@ -103,7 +103,7 @@ class IngressAccessSnapshotStoreTest {
     void shouldKeepCurrentSnapshotWhenNotifiedContentMovesBackward() {
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations(
                 codec.encodeSnapshot(PolicyTestFixtures.snapshot(2, false)));
-        NacosPolicySnapshotStore store = store(operations, "backward.yaml");
+        NacosAccessSnapshotStore store = store(operations, "backward.yaml");
         store.initialize();
 
         operations.replace(codec.encodeSnapshot(PolicyTestFixtures.snapshot(1, true)));
@@ -113,7 +113,7 @@ class IngressAccessSnapshotStoreTest {
         operations.replace(currentRepresentation);
 
         await(() -> store.current().sourceRevision()
-                .equals(NacosPolicySnapshotStore.sourceRevision(currentRepresentation)));
+                .equals(NacosAccessSnapshotStore.sourceRevision(currentRepresentation)));
         assertEquals(2, store.current().snapshot().version());
         assertEquals(1, operations.readCount);
     }
@@ -122,7 +122,7 @@ class IngressAccessSnapshotStoreTest {
     void shouldFailFirstStartWithoutRemoteOrLastKnownGoodSnapshot() {
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations(null);
         operations.unavailable = true;
-        NacosPolicySnapshotStore store = store(operations, "missing.yaml");
+        NacosAccessSnapshotStore store = store(operations, "missing.yaml");
 
         assertThrows(InfrastructureException.class, store::initialize);
     }
@@ -131,21 +131,21 @@ class IngressAccessSnapshotStoreTest {
     void shouldKeepAcceptedSnapshotWhenSameVersionHasConflictingContent() {
         String initial = codec.encodeSnapshot(PolicyTestFixtures.snapshot(2, true));
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations(initial);
-        NacosPolicySnapshotStore store = store(operations, "conflict.yaml");
+        NacosAccessSnapshotStore store = store(operations, "conflict.yaml");
         store.initialize();
         IngressAccessSnapshot accepted = store.current().snapshot();
         operations.replace(codec.encodeSnapshot(PolicyTestFixtures.snapshot(2, false)));
         // Notifications use one executor; the marker ensures the conflicting notification was processed.
         String marker = initial + System.lineSeparator() + "# after conflict" + System.lineSeparator();
         operations.replace(marker);
-        await(() -> store.current().sourceRevision().equals(NacosPolicySnapshotStore.sourceRevision(marker)));
+        await(() -> store.current().sourceRevision().equals(NacosAccessSnapshotStore.sourceRevision(marker)));
         assertSame(accepted, store.current().snapshot());
     }
 
-    private NacosPolicySnapshotStore store(FakeNacosConfigOperations operations, String filename) {
+    private NacosAccessSnapshotStore store(FakeNacosConfigOperations operations, String filename) {
         NacosPolicyProperties properties = properties(filename);
-        NacosPolicySnapshotStore store = new NacosPolicySnapshotStore(operations, properties, codec,
-                new FileLastKnownGoodPolicySnapshotStore(properties.getLastKnownGoodLocation()));
+        NacosAccessSnapshotStore store = new NacosAccessSnapshotStore(operations, properties, codec,
+                new FileLastKnownGoodAccessSnapshotStore(properties.getLastKnownGoodLocation()));
         stores.add(store);
         return store;
     }
@@ -200,7 +200,7 @@ class IngressAccessSnapshotStoreTest {
         ) throws NacosException {
             ensureAvailable();
             String observed = content.get();
-            if (observed == null || !NacosPolicySnapshotStore.sourceRevision(observed).equals(expectedMd5)) {
+            if (observed == null || !NacosAccessSnapshotStore.sourceRevision(observed).equals(expectedMd5)) {
                 return false;
             }
             if (!content.compareAndSet(observed, next)) {

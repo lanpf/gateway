@@ -1,9 +1,9 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
 import com.alibaba.nacos.api.exception.NacosException;
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
-import com.cloud.gateway.application.policy.PolicySnapshotPublisher;
-import com.cloud.gateway.application.policy.VersionedPolicySnapshot;
+import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
+import com.cloud.gateway.application.access.publication.AccessSnapshotPublisher;
+import com.cloud.gateway.application.access.publication.VersionedAccessSnapshot;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
@@ -20,8 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodAccessSnapshotStore;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.NacosConfigOperations;
 import lombok.RequiredArgsConstructor;
@@ -30,15 +30,15 @@ import org.springframework.util.StringUtils;
 
 @Slf4j
 @RequiredArgsConstructor
-public final class NacosPolicySnapshotStore
-        implements PolicySnapshotProvider, PolicySnapshotPublisher, AutoCloseable {
+public final class NacosAccessSnapshotStore
+        implements com.cloud.gateway.application.access.publication.AccessSnapshotProvider, com.cloud.gateway.application.access.publication.AccessSnapshotPublisher, AutoCloseable {
     private static final String SOURCE_REVISION_ALGORITHM = "MD5";
 
     private final NacosConfigOperations operations;
     private final NacosPolicyProperties properties;
-    private final StoredPolicySnapshotCodec codec;
-    private final LastKnownGoodPolicySnapshotStore lastKnownGood;
-    private final AtomicReference<VersionedPolicySnapshot> current = new AtomicReference<>();
+    private final StoredAccessSnapshotCodec codec;
+    private final LastKnownGoodAccessSnapshotStore lastKnownGood;
+    private final AtomicReference<com.cloud.gateway.application.access.publication.VersionedAccessSnapshot> current = new AtomicReference<>();
     private final AtomicBoolean listening = new AtomicBoolean();
     private final Consumer<String> changeCallback = this::scheduleRemoteAccept;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -62,8 +62,8 @@ public final class NacosPolicySnapshotStore
     }
 
     @Override
-    public VersionedPolicySnapshot current() {
-        VersionedPolicySnapshot snapshot = current.get();
+    public com.cloud.gateway.application.access.publication.VersionedAccessSnapshot current() {
+        com.cloud.gateway.application.access.publication.VersionedAccessSnapshot snapshot = current.get();
         if (snapshot == null) {
             throw new InfrastructureException(InfrastructureError.INFRA_TECH_POLICY_STORE_UNAVAILABLE);
         }
@@ -174,8 +174,8 @@ public final class NacosPolicySnapshotStore
         }
         String sourceRevision = sourceRevision(content);
         while (true) {
-            VersionedPolicySnapshot observed = current.get();
-            VersionedPolicySnapshot accepted = acceptedSnapshot(observed, candidate, sourceRevision);
+            com.cloud.gateway.application.access.publication.VersionedAccessSnapshot observed = current.get();
+            com.cloud.gateway.application.access.publication.VersionedAccessSnapshot accepted = acceptedSnapshot(observed, candidate, sourceRevision);
             if (accepted == observed) {
                 return;
             }
@@ -197,13 +197,13 @@ public final class NacosPolicySnapshotStore
         }
     }
 
-    private VersionedPolicySnapshot acceptedSnapshot(
-            VersionedPolicySnapshot observed,
+    private com.cloud.gateway.application.access.publication.VersionedAccessSnapshot acceptedSnapshot(
+            com.cloud.gateway.application.access.publication.VersionedAccessSnapshot observed,
             IngressAccessSnapshot candidate,
             String sourceRevision
     ) {
         if (observed == null) {
-            return new VersionedPolicySnapshot(candidate, sourceRevision);
+            return new com.cloud.gateway.application.access.publication.VersionedAccessSnapshot(candidate, sourceRevision);
         }
         if (observed.sourceRevision().equals(sourceRevision)) {
             return observed;
@@ -216,9 +216,9 @@ public final class NacosPolicySnapshotStore
                             candidate.version());
                     yield observed;
                 }
-                case UNCHANGED -> new VersionedPolicySnapshot(observed.snapshot(), sourceRevision);
+                case UNCHANGED -> new com.cloud.gateway.application.access.publication.VersionedAccessSnapshot(observed.snapshot(), sourceRevision);
                 case CONFLICT -> throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
-                case ADVANCE -> new VersionedPolicySnapshot(candidate, sourceRevision);
+                case ADVANCE -> new com.cloud.gateway.application.access.publication.VersionedAccessSnapshot(candidate, sourceRevision);
             };
         } catch (DomainException exception) {
             throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID, exception);

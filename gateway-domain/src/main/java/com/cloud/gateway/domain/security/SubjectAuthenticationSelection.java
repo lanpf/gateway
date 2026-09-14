@@ -7,10 +7,9 @@ public enum SubjectAuthenticationSelection {
     HOST, BROWSER, IGNORE;
 
     public static SubjectAuthenticationSelection from(SubjectAuthenticationRequirement requirement) {
+        // v1 authenticates only the host session family; endpoint requirements no longer carry session type.
         return switch (requirement) {
-            case HOST_SESSION_REQUIRED, HOST_SESSION_OPTIONAL -> HOST;
-            case BROWSER_SESSION_REQUIRED -> BROWSER;
-            case IGNORE -> IGNORE;
+            case REQUIRED, OPTIONAL -> HOST;
         };
     }
 }

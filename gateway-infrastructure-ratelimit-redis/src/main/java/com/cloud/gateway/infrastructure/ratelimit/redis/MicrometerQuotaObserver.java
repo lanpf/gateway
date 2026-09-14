@@ -2,7 +2,7 @@ package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.gateway.application.quota.QuotaObserver;
 import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitPolicy;
+import com.cloud.gateway.domain.policy.capability.RateLimitRule;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ final class MicrometerQuotaObserver implements QuotaObserver {
     private final MeterRegistry registry;
 
     @Override
-    public void record(RateLimitPolicy rule, RateLimitDecision decision) {
+    public void record(RateLimitRule rule, RateLimitDecision decision) {
         Outcome outcome = decision.allowed() ? Outcome.ALLOWED
                 : decision.unavailable() ? Outcome.UNAVAILABLE : Outcome.DENIED;
         registry.counter(DECISIONS, DIMENSION_TAG, rule.dimension().name(),

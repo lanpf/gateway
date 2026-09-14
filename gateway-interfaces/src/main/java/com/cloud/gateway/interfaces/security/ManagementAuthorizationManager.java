@@ -1,5 +1,6 @@
 package com.cloud.gateway.interfaces.security;
 
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.domain.security.ManagementAccessRules;
 import java.util.Collection;
 import java.util.Set;

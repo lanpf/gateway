@@ -14,60 +14,59 @@ import com.cloud.framework.core.Result;
 import com.cloud.framework.lock.LockContext;
 import com.cloud.framework.lock.LockExecutor;
 import com.cloud.gateway.api.enums.AuthorizationHeaderPolicyApiEnum;
-import com.cloud.gateway.api.enums.ClientVerificationModeApiEnum;
-import com.cloud.gateway.api.enums.ClientRequirementApiEnum;
+import com.cloud.gateway.api.enums.ClientVerificationRequirementApiEnum;
 import com.cloud.gateway.api.enums.ClientStatusApiEnum;
 import com.cloud.gateway.api.enums.AppStatusApiEnum;
 import com.cloud.gateway.api.enums.CookieForwardingModeApiEnum;
 import com.cloud.gateway.api.enums.SignatureContractApiEnum;
-import com.cloud.gateway.api.enums.SubjectRequirementApiEnum;
-import com.cloud.gateway.api.facade.IngressAccessCommandFacade;
-import com.cloud.gateway.api.policy.CredentialForwardingApiCommand;
-import com.cloud.gateway.api.policy.SnapshotReleaseApiCommandOutput;
-import com.cloud.gateway.api.policy.ReleaseSnapshotApiCommand;
-import com.cloud.gateway.api.policy.SaveClientApiCommand;
-import com.cloud.gateway.api.policy.SaveAppApiCommand;
-import com.cloud.gateway.api.policy.SaveEndpointApiCommand;
-import com.cloud.gateway.application.policy.ClientAccessPolicyCommandService;
-import com.cloud.gateway.application.policy.ClientCredentialPolicyCommandService;
-import com.cloud.gateway.application.policy.AppPolicyCommandService;
-import com.cloud.gateway.application.policy.PolicyPublishLock;
-import com.cloud.gateway.application.policy.PolicyCompositionCommandService;
-import com.cloud.gateway.application.policy.PolicyRollbackLock;
-import com.cloud.gateway.application.policy.PolicyRollbackState;
-import com.cloud.gateway.application.policy.PolicySnapshotCommandService;
-import com.cloud.gateway.application.policy.PolicyDefinitionAccess;
-import com.cloud.gateway.application.policy.PolicySnapshotPublication;
-import com.cloud.gateway.application.policy.PolicyPublicationCommandService;
-import com.cloud.gateway.application.policy.PolicyRollbackCommandService;
-import com.cloud.gateway.application.policy.PolicySnapshotHasher;
-import com.cloud.gateway.application.policy.PolicySnapshotHistory;
-import com.cloud.gateway.application.policy.EndpointAccessPolicyCommandService;
+import com.cloud.gateway.api.enums.SubjectAuthenticationRequirementApiEnum;
+import com.cloud.gateway.api.facade.IngressAccessAdminCommandFacade;
+import com.cloud.gateway.api.facade.policy.CredentialForwardingApiCommand;
+import com.cloud.gateway.api.facade.SnapshotReleaseApiCommandOutput;
+import com.cloud.gateway.api.facade.ReleaseSnapshotApiCommand;
+import com.cloud.gateway.api.facade.SaveClientApiCommand;
+import com.cloud.gateway.api.facade.SaveAppApiCommand;
+import com.cloud.gateway.api.facade.SaveEndpointApiCommand;
+import com.cloud.gateway.application.access.editing.ClientAccessCommandService;
+import com.cloud.gateway.application.access.editing.ClientCredentialCommandService;
+import com.cloud.gateway.application.access.editing.AppAccessCommandService;
+import com.cloud.gateway.application.access.AccessPublishLock;
+import com.cloud.gateway.application.access.publication.PolicyConfigCommandService;
+import com.cloud.gateway.application.access.publication.AccessRollbackLock;
+import com.cloud.gateway.application.access.publication.AccessRollbackState;
+import com.cloud.gateway.application.access.publication.AccessSnapshotCommandService;
+import com.cloud.gateway.application.access.publication.AccessDefinitions;
+import com.cloud.gateway.application.access.publication.AccessSnapshotPublication;
+import com.cloud.gateway.application.access.publication.AccessPublicationCommandService;
+import com.cloud.gateway.application.access.publication.AccessRollbackCommandService;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHistory;
+import com.cloud.gateway.application.access.editing.EndpointAccessCommandService;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
-import com.cloud.gateway.domain.policy.bundle.PolicyComposition;
+import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
-import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
+import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
+import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodAccessSnapshotStore;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyHistoryProperties;
 import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicyHistorySourceAdapter;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicySnapshotHistory;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosAccessSnapshotHistory;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.DefaultNacosConfigOperations;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.NacosConfigOperations;
-import com.cloud.gateway.interfaces.facade.DefaultIngressAccessCommandFacade;
-import com.cloud.gateway.interfaces.facade.mapper.DefaultPolicyCompositionApiMapper;
+import com.cloud.gateway.interfaces.facade.DefaultIngressAccessAdminCommandFacade;
+import com.cloud.gateway.interfaces.facade.mapper.DefaultPolicyConfigApiMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -135,12 +134,12 @@ class NacosPolicyAdministrationIT {
     @TempDir Path temporaryDirectory;
 
     private ConfigService configService;
-    private NacosPolicySnapshotStore snapshotStore;
-    private PolicySnapshotHistory snapshotHistory;
+    private NacosAccessSnapshotStore snapshotStore;
+    private com.cloud.gateway.application.access.publication.AccessSnapshotHistory snapshotHistory;
     private NacosPolicyProperties policyProperties;
     private StoredPolicyDefinitionCodec definitionCodec;
-    private StoredPolicySnapshotCodec snapshotCodec;
-    private IngressAccessCommandFacade facade;
+    private StoredAccessSnapshotCodec snapshotCodec;
+    private IngressAccessAdminCommandFacade facade;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -148,44 +147,44 @@ class NacosPolicyAdministrationIT {
         configService = NacosFactory.createConfigService(serverAddress);
 
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-        StoredPolicySnapshotMapper snapshotMapper = new StoredPolicySnapshotMapper();
-        PolicySnapshotHasher hasher = new CanonicalPolicySnapshotHasher(
+        StoredAccessSnapshotMapper snapshotMapper = new StoredAccessSnapshotMapper();
+        com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
                 new CanonicalPolicyContentMapper(), objectMapper);
         definitionCodec = new StoredPolicyDefinitionCodec(snapshotMapper, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
-        snapshotCodec = new StoredPolicySnapshotCodec(snapshotMapper, hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+        snapshotCodec = new StoredAccessSnapshotCodec(snapshotMapper, hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
 
         policyProperties = policyProperties();
         seedDefinitionsAndBootstrapSnapshot(hasher);
         await(this::isBootstrapSnapshotReadable);
 
         NacosConfigOperations operations = new DefaultNacosConfigOperations(configService);
-        snapshotStore = new NacosPolicySnapshotStore(
+        snapshotStore = new NacosAccessSnapshotStore(
                 operations,
                 policyProperties,
                 snapshotCodec,
-                new FileLastKnownGoodPolicySnapshotStore(policyProperties.getLastKnownGoodLocation()));
+                new FileLastKnownGoodAccessSnapshotStore(policyProperties.getLastKnownGoodLocation()));
         snapshotStore.initialize();
 
-        NacosEndpointRegistryDefinitionRepository endpointRepository =
-                new NacosEndpointRegistryDefinitionRepository(operations, policyProperties, definitionCodec);
-        NacosAppPolicyDefinitionRepository appRepository =
-                new NacosAppPolicyDefinitionRepository(operations, policyProperties, definitionCodec);
-        NacosClientPolicyDefinitionRepository clientAccessRepository =
-                new NacosClientPolicyDefinitionRepository(operations, policyProperties, definitionCodec);
-        NacosEndpointAccessPolicyDefinitionRepository endpointAccessRepository =
-                new NacosEndpointAccessPolicyDefinitionRepository(operations, policyProperties, definitionCodec);
+        NacosEndpointAccessDefinitionRepository endpointRepository =
+                new NacosEndpointAccessDefinitionRepository(operations, policyProperties, definitionCodec);
+        NacosAppAccessDefinitionRepository appRepository =
+                new NacosAppAccessDefinitionRepository(operations, policyProperties, definitionCodec);
+        NacosClientAccessDefinitionRepository clientAccessRepository =
+                new NacosClientAccessDefinitionRepository(operations, policyProperties, definitionCodec);
+        NacosEndpointAccessDefinitionRepository endpointAccessRepository =
+                new NacosEndpointAccessDefinitionRepository(operations, policyProperties, definitionCodec);
 
-        NacosPolicyCompositionDefinitionRepository policyConfigurationRepository =
-                new NacosPolicyCompositionDefinitionRepository(operations, policyProperties, definitionCodec);
+        NacosPolicyConfigDefinitionRepository policyConfigurationRepository =
+                new NacosPolicyConfigDefinitionRepository(operations, policyProperties, definitionCodec);
 
-        PolicyRollbackState rollbackState = new TestPolicyRollbackState();
+        com.cloud.gateway.application.access.publication.AccessRollbackState rollbackState = new TestAccessRollbackState();
         LockExecutor lockExecutor = new ImmediateLockExecutor();
-        PolicyPublishLock publishLock = new PolicyPublishLock(lockExecutor);
-        PolicyRollbackLock rollbackLock = new PolicyRollbackLock(lockExecutor);
+        AccessPublishLock publishLock = new AccessPublishLock(lockExecutor);
+        com.cloud.gateway.application.access.publication.AccessRollbackLock rollbackLock = new com.cloud.gateway.application.access.publication.AccessRollbackLock(lockExecutor);
         NacosConfigProperties nacosProperties = new NacosConfigProperties();
         nacosProperties.setServerAddr(serverAddress);
         NacosPolicyHistoryProperties historyProperties = new NacosPolicyHistoryProperties();
-        snapshotHistory = new NacosPolicySnapshotHistory(
+        snapshotHistory = new NacosAccessSnapshotHistory(
                 new NacosPolicyHistorySourceAdapter(
                         RestClient.builder().baseUrl("http://" + serverAddress + "/nacos").build(),
                         policyProperties,
@@ -194,27 +193,27 @@ class NacosPolicyAdministrationIT {
                         Clock.systemUTC()),
                 snapshotCodec);
 
-        PolicyDefinitionAccess definitions = new PolicyDefinitionAccess(endpointRepository, appRepository,
+        com.cloud.gateway.application.access.publication.AccessDefinitions definitions = new com.cloud.gateway.application.access.publication.AccessDefinitions(endpointRepository, appRepository,
                 clientAccessRepository, endpointAccessRepository, policyConfigurationRepository);
         com.cloud.gateway.domain.policy.header.HeaderRules headerRules =
                 com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly();
-        PolicySnapshotPublication publication = new PolicySnapshotPublication(snapshotStore,
-                new com.cloud.gateway.application.policy.PolicySnapshotAssembler(hasher, headerRules), Clock.systemUTC());
-        PolicySnapshotCommandService snapshotService = new PolicySnapshotCommandService(
-                new PolicyPublicationCommandService(definitions, snapshotStore, publication, rollbackState,
+        com.cloud.gateway.application.access.publication.AccessSnapshotPublication publication = new com.cloud.gateway.application.access.publication.AccessSnapshotPublication(snapshotStore,
+                new com.cloud.gateway.application.access.com.cloud.gateway.application.access.publication.AccessSnapshotAssembler(hasher, headerRules), Clock.systemUTC());
+        com.cloud.gateway.application.access.publication.AccessSnapshotCommandService snapshotService = new com.cloud.gateway.application.access.publication.AccessSnapshotCommandService(
+                new com.cloud.gateway.application.access.publication.AccessPublicationCommandService(definitions, snapshotStore, publication, rollbackState,
                         publishLock),
-                new PolicyRollbackCommandService(definitions, snapshotStore, publication, snapshotHistory,
+                new com.cloud.gateway.application.access.publication.AccessRollbackCommandService(definitions, snapshotStore, publication, snapshotHistory,
                         rollbackState, hasher, publishLock, rollbackLock));
-        facade = new DefaultIngressAccessCommandFacade(
-                new AppPolicyCommandService(appRepository, rollbackState, publishLock),
-                new ClientAccessPolicyCommandService(clientAccessRepository, rollbackState, publishLock),
-                new ClientCredentialPolicyCommandService(clientAccessRepository, rollbackState, publishLock),
-                new EndpointAccessPolicyCommandService(endpointAccessRepository, rollbackState, publishLock),
+        facade = new DefaultIngressAccessAdminCommandFacade(
+                new com.cloud.gateway.application.access.editing.AppAccessCommandService(appRepository, rollbackState, publishLock),
+                new com.cloud.gateway.application.access.editing.ClientAccessCommandService(clientAccessRepository, rollbackState, publishLock),
+                new com.cloud.gateway.application.access.editing.ClientCredentialCommandService(clientAccessRepository, rollbackState, publishLock),
+                new com.cloud.gateway.application.access.editing.EndpointAccessCommandService(endpointAccessRepository, rollbackState, publishLock),
                 snapshotService,
                 org.mapstruct.factory.Mappers.getMapper(
                         com.cloud.gateway.interfaces.facade.mapper.mapstruct.GatewayPolicyApiMapStructMapper.class),
-                new PolicyCompositionCommandService(policyConfigurationRepository, rollbackState, publishLock, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly()),
-                new DefaultPolicyCompositionApiMapper());
+                new com.cloud.gateway.application.access.publication.PolicyConfigCommandService(policyConfigurationRepository, rollbackState, publishLock, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly()),
+                new DefaultPolicyConfigApiMapper());
 
     }
 
@@ -236,13 +235,13 @@ class NacosPolicyAdministrationIT {
         String initialEndpointAccess = config(policyProperties.getRouteAccessDefinitionDataId());
 
         facade.saveApp(new SaveAppApiCommand(
-                NacosPolicySnapshotStore.sourceRevision(initialApps),
+                NacosAccessSnapshotStore.sourceRevision(initialApps),
                 APP_ID,
                 AppStatusApiEnum.ENABLED,
                 "browser",
                 Set.of("https://browser.example.com")));
         facade.saveClient(new SaveClientApiCommand(
-                NacosPolicySnapshotStore.sourceRevision(initialClientAccess),
+                NacosAccessSnapshotStore.sourceRevision(initialClientAccess),
                 CLIENT_ID,
                 Set.of(APP_ID),
                 ClientStatusApiEnum.ENABLED));
@@ -250,7 +249,7 @@ class NacosPolicyAdministrationIT {
         // Wait for the saved definitions, not by retrying or weakening publication validation.
         await(this::areSavedIdentityDefinitionsReadable);
 
-        String clientRevision = NacosPolicySnapshotStore.sourceRevision(
+        String clientRevision = NacosAccessSnapshotStore.sourceRevision(
                 config(policyProperties.getClientDefinitionDataId()));
         facade.saveClientCredentialPolicy(new com.cloud.gateway.api.policy.SaveClientCredentialPolicyApiCommand(
                 clientRevision, CLIENT_ID,
@@ -280,17 +279,17 @@ class NacosPolicyAdministrationIT {
         assertEquals(1, firstSnapshot.version());
         assertTrue(firstSnapshot.content().appPolicies().containsKey(new AppId(APP_ID)));
         assertTrue(firstSnapshot.content().clients().containsKey(new ClientId(CLIENT_ID)));
-        ClientPolicy publishedClient = firstSnapshot.content().clients().get(new ClientId(CLIENT_ID));
+        ClientAccess publishedClient = firstSnapshot.content().clients().get(new ClientId(CLIENT_ID));
         assertEquals(Set.of(new AppId(APP_ID)), publishedClient.allowedApps());
         assertEquals("admin-it-active", publishedClient.credentials().activeCredential().credentialId().value());
         assertTrue(firstSnapshot.content().endpointPolicies().isEmpty());
 
         facade.saveEndpoint(new SaveEndpointApiCommand(
-                NacosPolicySnapshotStore.sourceRevision(initialEndpointAccess),
+                NacosAccessSnapshotStore.sourceRevision(initialEndpointAccess),
                 ENDPOINT_ID,
                 ClientVerificationModeApiEnum.IGNORE,
-                ClientRequirementApiEnum.FORBIDDEN,
-                SubjectRequirementApiEnum.IGNORE,
+                ClientVerificationRequirementApiEnum.FORBIDDEN,
+                SubjectAuthenticationRequirementApiEnum.IGNORE,
                 Set.of(),
                 Set.of(),
                 new CredentialForwardingApiCommand(
@@ -384,7 +383,7 @@ class NacosPolicyAdministrationIT {
                 .credentials().activeCredential().credentialId().value());
         assertTrue(definitionCodec.decodeEndpointAccess(
                 config(policyProperties.getRouteAccessDefinitionDataId())).containsKey(new EndpointId(ENDPOINT_ID)));
-        assertEquals(PolicyComposition.empty(), definitionCodec.decodePolicyConfiguration(
+        assertEquals(PolicyConfig.empty(), definitionCodec.decodePolicyConfiguration(
                 config(policyProperties.getPolicyConfigurationDefinitionDataId())));
     }
 
@@ -393,13 +392,13 @@ class NacosPolicyAdministrationIT {
         return snapshotCodec.decodeSnapshot(config(policyProperties.getDataId()));
     }
 
-    private void seedDefinitionsAndBootstrapSnapshot(PolicySnapshotHasher hasher) throws Exception {
+    private void seedDefinitionsAndBootstrapSnapshot(com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher) throws Exception {
         EndpointRegistry endpointRegistry = endpointRegistry();
         String endpoints = definitionCodec.encodeEndpointRegistry(endpointRegistry);
         String apps = definitionCodec.encodeApps(Map.of());
         String clientAccess = definitionCodec.encodeClients(Map.of());
         String endpointAccess = definitionCodec.encodeEndpointAccess(Map.of());
-        PolicyComposition policies = PolicyComposition.empty();
+        PolicyConfig policies = PolicyConfig.empty();
         publish(policyProperties.getEndpointDefinitionDataId(), endpoints);
         publish(policyProperties.getAppDefinitionDataId(), apps);
         publish(policyProperties.getClientDefinitionDataId(), clientAccess);
@@ -495,7 +494,7 @@ class NacosPolicyAdministrationIT {
         }
     }
 
-    private static final class TestPolicyRollbackState implements PolicyRollbackState {
+    private static final class TestAccessRollbackState implements com.cloud.gateway.application.access.publication.AccessRollbackState {
         private final AtomicBoolean active = new AtomicBoolean();
 
         @Override

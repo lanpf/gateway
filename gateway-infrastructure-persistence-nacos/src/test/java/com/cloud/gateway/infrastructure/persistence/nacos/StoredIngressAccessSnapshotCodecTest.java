@@ -9,14 +9,14 @@ import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
 import org.junit.jupiter.api.Test;
 
 class StoredIngressAccessSnapshotCodecTest {
-    private final StoredPolicySnapshotCodec codec = PolicyTestFixtures.codec();
+    private final StoredAccessSnapshotCodec codec = PolicyTestFixtures.codec();
 
     @Test
-    void shouldRoundTripCompletePolicySnapshot() {
+    void shouldRoundTripCompleteAccessSnapshot() {
         IngressAccessSnapshot source = PolicyTestFixtures.snapshot(7, true);
 
         IngressAccessSnapshot decoded = codec.decodeSnapshot(codec.encodeSnapshot(source));

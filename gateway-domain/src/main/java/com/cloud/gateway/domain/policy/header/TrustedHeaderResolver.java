@@ -12,13 +12,13 @@ import java.util.Set;
 /** Only verified context can supply a trusted header; raw request values are never read. */
 public final class TrustedHeaderResolver {
     private static final Map<RequestHeader, Function<IngressAccessGrantedContext, String>> READERS = Map.of(
-            RequestHeader.APP_ID, context -> context.appContext().appId().value(),
-            RequestHeader.APP_PLATFORM, context -> context.appContext().platform(),
-            RequestHeader.CLIENT_ID, context -> context.clientContext() == null ? null
-                    : context.clientContext().clientId().value(),
-            RequestHeader.USER_ID, context -> context.subjectContext() == null ? null : context.subjectContext().subjectId(),
-            RequestHeader.SESSION_ID, context -> context.subjectContext() == null ? null : context.subjectContext().sessionId(),
-            RequestHeader.SUBJECT_TYPE, context -> context.subjectContext() == null ? null : context.subjectContext().subjectType().name());
+            RequestHeader.APP_ID, context -> context.app().appId().value(),
+            RequestHeader.APP_PLATFORM, context -> context.app().platform(),
+            RequestHeader.CLIENT_ID, context -> context.client() == null ? null
+                    : context.client().clientId().value(),
+            RequestHeader.USER_ID, context -> context.subject() == null ? null : context.subject().subjectId().value(),
+            RequestHeader.SESSION_ID, context -> context.subject() == null ? null : context.subject().sessionId().value(),
+            RequestHeader.SUBJECT_TYPE, context -> context.subject() == null ? null : context.subject().subjectType().name());
 
     private TrustedHeaderResolver() { }
 

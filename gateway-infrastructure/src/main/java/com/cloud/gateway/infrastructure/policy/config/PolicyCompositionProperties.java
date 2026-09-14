@@ -12,7 +12,7 @@ import lombok.Setter;
 
 /** JavaBean binding containers; conversion and domain validation occur before publication. */
 @Getter
-public final class PolicyCompositionProperties {
+public final class PolicyConfigProperties {
     @Valid private final Map<String, Bundle> bundles = new LinkedHashMap<>();
     @Valid private final List<Binding> bindings = new ArrayList<>();
 

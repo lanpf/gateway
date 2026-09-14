@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,7 +15,7 @@ class StoredPolicyDefinitionCodecTest {
     @Test
     void shouldDecodePackagedDefinitionExamples() throws IOException {
         StoredPolicyDefinitionCodec codec = new StoredPolicyDefinitionCodec(
-                new StoredPolicySnapshotMapper(), new ObjectMapper().findAndRegisterModules(),
+                new StoredAccessSnapshotMapper(), new ObjectMapper().findAndRegisterModules(),
                 com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
 
         IngressAccessContent decoded = new IngressAccessContent(

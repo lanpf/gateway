@@ -8,12 +8,12 @@ import com.cloud.gateway.domain.common.DomainException;
 public record Client(
         ClientId clientId,
         ClientStatus status,
-        ClientPolicy accessPolicy
+        ClientAccess access
 ) implements AggregateRoot<ClientId> {
     public Client {
         Require.notNull(clientId, DomainException::missingField);
         Require.notNull(status, DomainException::missingField);
-        Require.notNull(accessPolicy, DomainException::missingField);
+        Require.notNull(access, DomainException::missingField);
     }
 
     @Override
@@ -26,6 +26,6 @@ public record Client(
     }
 
     public boolean allowsApp(AppId appId) {
-        return enabled() && accessPolicy.allowsApp(appId);
+        return enabled() && access.allowsApp(appId);
     }
 }

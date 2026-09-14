@@ -46,13 +46,13 @@ public final class DownstreamPolicyHandler {
 
     private static CacheRequest requestEvidence(ServerWebExchange original, ServerWebExchange forwarded,
                                                 Endpoint endpoint, IngressAccessGrantedContext context) {
-        return new CacheRequest(endpoint.routeId(), endpoint.endpointId().value(),
-                context.appContext().appId().value(), context.clientContext() == null ? null
-                        : context.clientContext().clientId().value(),
+        return new CacheRequest(endpoint.routeId().value(), endpoint.endpointId().value(),
+                context.app().appId().value(), context.client() == null ? null
+                        : context.client().clientId().value(),
                 original.getRequest().getMethod().name(), original.getRequest().getURI().getRawPath(),
                 original.getRequest().getURI().getRawQuery(), original.getRequest().getHeaders(), true,
                 new DownstreamGovernanceRules().streaming(endpoint.tags()),
-                forwarded.getRequest().getHeaders(), context.subjectContext() != null,
+                forwarded.getRequest().getHeaders(), context.subject() != null,
                 Boolean.TRUE.equals(original.getAttribute(GatewayRequestAttributes.REQUEST_BODY_PRESENT))
                         || original.getRequest().getHeaders().getContentLength() > 0
                         || original.getRequest().getHeaders().containsKey(HttpHeaders.TRANSFER_ENCODING));

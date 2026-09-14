@@ -16,8 +16,8 @@ import com.cloud.framework.lock.LockProvider;
 import com.cloud.framework.starter.lock.redis.springintegration.SpringIntegrationLockProvider;
 import com.cloud.gateway.application.common.ApplicationError;
 import com.cloud.gateway.application.common.ApplicationException;
-import com.cloud.gateway.application.policy.PolicyPublishLock;
-import com.cloud.gateway.application.policy.PolicyRollbackLock;
+import com.cloud.gateway.application.access.AccessPublishLock;
+import com.cloud.gateway.application.access.publication.AccessRollbackLock;
 import com.cloud.gateway.infrastructure.coordination.redis.config.RedisPolicyCoordinationProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -67,9 +67,9 @@ class RedisPolicyCoordinationIT {
     private LettuceConnectionFactory connectionFactory;
     private StringRedisTemplate redisTemplate;
     private RedisLockRegistry lockRegistry;
-    private PolicyPublishLock publishLock;
-    private PolicyRollbackLock rollbackLock;
-    private RedisPolicyRollbackState rollbackState;
+    private AccessPublishLock publishLock;
+    private com.cloud.gateway.application.access.publication.AccessRollbackLock rollbackLock;
+    private RedisAccessRollbackState rollbackState;
     private final List<RedisLockRegistry> createdLockRegistries = new CopyOnWriteArrayList<>();
 
     @BeforeEach
@@ -82,8 +82,8 @@ class RedisPolicyCoordinationIT {
 
         lockRegistry = lockRegistry(NAMESPACE, LEASE_TIME);
         LockExecutor lockExecutor = new DefaultLockExecutor(lockProvider(lockRegistry));
-        publishLock = new PolicyPublishLock(lockExecutor);
-        rollbackLock = new PolicyRollbackLock(lockExecutor);
+        publishLock = new AccessPublishLock(lockExecutor);
+        rollbackLock = new com.cloud.gateway.application.access.publication.AccessRollbackLock(lockExecutor);
         rollbackState = rollbackState(NAMESPACE);
     }
 
@@ -178,7 +178,7 @@ class RedisPolicyCoordinationIT {
 
     @Test
     void shouldPersistRollbackStateAcrossAdapterInstancesWithoutTtl() {
-        RedisPolicyRollbackState secondInstance = rollbackState(NAMESPACE);
+        RedisAccessRollbackState secondInstance = rollbackState(NAMESPACE);
 
         assertFalse(rollbackState.isActive());
         rollbackState.activate();
@@ -200,7 +200,7 @@ class RedisPolicyCoordinationIT {
 
     @Test
     void shouldIsolateRollbackStateByNamespace() {
-        RedisPolicyRollbackState otherNamespaceState = rollbackState(OTHER_NAMESPACE);
+        RedisAccessRollbackState otherNamespaceState = rollbackState(OTHER_NAMESPACE);
 
         rollbackState.activate();
 
@@ -220,13 +220,13 @@ class RedisPolicyCoordinationIT {
         return new SpringIntegrationLockProvider(registry, new DefaultResourceNameResolver());
     }
 
-    private RedisPolicyRollbackState rollbackState(String namespace) {
+    private RedisAccessRollbackState rollbackState(String namespace) {
         RedisPolicyCoordinationProperties properties = new RedisPolicyCoordinationProperties();
         properties.setNamespace(namespace);
         NamespaceResolver namespaceResolver = Namespaced::getNamespace;
-        PolicyRollbackStateKeyResolver keyResolver = new PolicyRollbackStateKeyResolver(
+        AccessRollbackStateKeyResolver keyResolver = new AccessRollbackStateKeyResolver(
                 new NamespacedResourceNameResolver(namespaceResolver, properties));
-        return new RedisPolicyRollbackState(redisTemplate, keyResolver);
+        return new RedisAccessRollbackState(redisTemplate, keyResolver);
     }
 
     private boolean isKeyPresent(String key) {

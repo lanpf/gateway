@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class EndpointPathPatternValidatorTest {
     @Test
     void shouldRejectInvalidPathGrammarBeforeItCanBePublished() {
-        var mapper = new StoredPolicySnapshotMapper();
+        var mapper = new StoredAccessSnapshotMapper();
         for (String path : List.of("relative", "/api/**/tail", "/api/{broken")) {
             assertThrows(InfrastructureException.class, () -> mapper.toStoredEndpoints(registry(path)));
         }
@@ -20,7 +20,7 @@ class EndpointPathPatternValidatorTest {
 
     @Test
     void shouldAcceptTransportTemplatesAndTrailingWildcard() {
-        var mapper = new StoredPolicySnapshotMapper();
+        var mapper = new StoredAccessSnapshotMapper();
         for (String path : List.of("/api/{endpointId}", "/api/**")) {
             assertDoesNotThrow(() -> mapper.toDomainEndpointRegistry(mapper.toStoredEndpoints(registry(path))));
         }

@@ -1,5 +1,6 @@
 package com.cloud.gateway.domain.security;
 
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -7,11 +8,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SubjectAccessRulesTest {
     @Test
-    void shouldChooseOneAuthenticationFamilyForEveryRequirement() {
-        assertEquals(SubjectAuthenticationSelection.HOST, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED));
-        assertEquals(SubjectAuthenticationSelection.HOST, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL));
-        assertEquals(SubjectAuthenticationSelection.BROWSER, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED));
-        assertEquals(SubjectAuthenticationSelection.IGNORE, SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.IGNORE));
+    void shouldRouteEveryRequirementToTheHostAuthenticationFamilyInV1() {
+        assertEquals(SubjectAuthenticationSelection.HOST,
+                SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.REQUIRED));
+        assertEquals(SubjectAuthenticationSelection.HOST,
+                SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.OPTIONAL));
     }
 
     @Test

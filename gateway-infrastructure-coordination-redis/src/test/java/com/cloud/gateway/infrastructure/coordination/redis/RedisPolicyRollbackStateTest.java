@@ -11,17 +11,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-class RedisPolicyRollbackStateTest {
+class RedisAccessRollbackStateTest {
     private static final String KEY = "policy:rollback-state";
-    private static final PolicyRollbackStateKeyResolver KEY_RESOLVER =
-            new PolicyRollbackStateKeyResolver(names -> String.join(":", names));
+    private static final AccessRollbackStateKeyResolver KEY_RESOLVER =
+            new AccessRollbackStateKeyResolver(names -> String.join(":", names));
 
     @Test
     void shouldActivatePersistentStateWithoutExpiry() {
         RecordingRedisTemplate template = new RecordingRedisTemplate();
         template.setIfAbsentResult = true;
 
-        new RedisPolicyRollbackState(template, KEY_RESOLVER).activate();
+        new RedisAccessRollbackState(template, KEY_RESOLVER).activate();
 
         assertEquals(KEY, template.writtenKey);
         assertEquals("1", template.writtenValue);
@@ -32,7 +32,7 @@ class RedisPolicyRollbackStateTest {
         RecordingRedisTemplate template = new RecordingRedisTemplate();
         template.setIfAbsentResult = false;
 
-        assertDoesNotThrow(() -> new RedisPolicyRollbackState(template, KEY_RESOLVER).activate());
+        assertDoesNotThrow(() -> new RedisAccessRollbackState(template, KEY_RESOLVER).activate());
     }
 
     @Test
@@ -42,7 +42,7 @@ class RedisPolicyRollbackStateTest {
         template.hasKeyResult = true;
 
         assertThrows(InfrastructureException.class,
-                () -> new RedisPolicyRollbackState(template, KEY_RESOLVER).clear());
+                () -> new RedisAccessRollbackState(template, KEY_RESOLVER).clear());
     }
 
     private static final class RecordingRedisTemplate extends StringRedisTemplate {

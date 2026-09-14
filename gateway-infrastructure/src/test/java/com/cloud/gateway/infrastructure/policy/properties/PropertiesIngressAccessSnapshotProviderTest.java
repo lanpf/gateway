@@ -1,16 +1,16 @@
 package com.cloud.gateway.infrastructure.policy.properties;
 
-import com.cloud.gateway.application.policy.PolicyDefinitionReader;
-import com.cloud.gateway.application.policy.PolicySnapshotAssembler;
-import com.cloud.gateway.application.policy.VersionedPolicyDefinition;
+import com.cloud.gateway.application.access.definition.AccessDefinitionReader;
+import com.cloud.gateway.application.access.publication.AccessSnapshotAssembler;
+import com.cloud.gateway.application.access.definition.VersionedAccessDefinition;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.policy.bundle.PolicyBundle;
 import com.cloud.gateway.domain.policy.bundle.PolicyBundleId;
-import com.cloud.gateway.domain.policy.bundle.PolicyComposition;
+import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.policy.header.HeaderPolicy;
 import com.cloud.gateway.domain.policy.header.HeaderRules;
@@ -29,10 +29,10 @@ class PropertiesIngressAccessSnapshotProviderTest {
 
     @Test
     void shouldAssembleImmutableInitialSnapshotThroughApplicationOnce() {
-        IngressAccessContent content = content(PolicyComposition.empty());
+        IngressAccessContent content = content(PolicyConfig.empty());
         AtomicInteger loads = new AtomicInteger();
-        PropertiesPolicySnapshotProvider provider = new PropertiesPolicySnapshotProvider(reader(content, loads),
-                new PolicySnapshotAssembler(value -> "content-digest", HeaderRules.registeredOnly()), CLOCK);
+        PropertiesAccessSnapshotProvider provider = new PropertiesAccessSnapshotProvider(reader(content, loads),
+                new com.cloud.gateway.application.access.publication.AccessSnapshotAssembler(value -> "content-digest", HeaderRules.registeredOnly()), CLOCK);
         assertEquals(0, provider.current().snapshot().version());
         assertEquals(CLOCK.instant(), provider.current().snapshot().publishedAt());
         assertEquals("properties:content-digest", provider.current().sourceRevision());
@@ -44,34 +44,34 @@ class PropertiesIngressAccessSnapshotProviderTest {
     void shouldValidateDeploymentHeadersBeforeExposingLocalSnapshot() {
         PolicyBundleId id = new PolicyBundleId("headers");
         HeaderPolicy headers = new HeaderPolicy(Set.of(), Map.of("X-Unregistered", "value"), Set.of(), null);
-        PolicyComposition composition = new PolicyComposition(
+        PolicyConfig composition = new PolicyConfig(
                 Map.of(id, new PolicyBundle(id, null, null, null, null, headers)), List.of());
-        assertThrows(DomainException.class, () -> new PropertiesPolicySnapshotProvider(
+        assertThrows(DomainException.class, () -> new PropertiesAccessSnapshotProvider(
                 reader(content(composition), new AtomicInteger()),
-                new PolicySnapshotAssembler(value -> "digest", HeaderRules.registeredOnly()), CLOCK));
+                new com.cloud.gateway.application.access.publication.AccessSnapshotAssembler(value -> "digest", HeaderRules.registeredOnly()), CLOCK));
     }
 
     @Test
     void shouldValidateCrossDefinitionReferencesBeforeExposingLocalSnapshot() {
         ClientId id = new ClientId("client");
         IngressAccessContent invalid = new IngressAccessContent(new EndpointRegistry(List.of()), Map.of(),
-                Map.of(id, new ClientPolicy(id, Set.of(new AppId("missing")))), Map.of());
-        assertThrows(DomainException.class, () -> new PropertiesPolicySnapshotProvider(reader(invalid, new AtomicInteger()),
-                new PolicySnapshotAssembler(value -> "digest", HeaderRules.registeredOnly()), CLOCK));
+                Map.of(id, new ClientAccess(id, Set.of(new AppId("missing")))), Map.of());
+        assertThrows(DomainException.class, () -> new PropertiesAccessSnapshotProvider(reader(invalid, new AtomicInteger()),
+                new com.cloud.gateway.application.access.publication.AccessSnapshotAssembler(value -> "digest", HeaderRules.registeredOnly()), CLOCK));
     }
 
-    private static IngressAccessContent content(PolicyComposition policies) {
+    private static IngressAccessContent content(PolicyConfig policies) {
         return new IngressAccessContent(new EndpointRegistry(List.of()), Map.of(), Map.of(), Map.of(), policies);
     }
 
-    private static PolicyDefinitionReader reader(IngressAccessContent content, AtomicInteger loads) {
-        return new PolicyDefinitionReader(() -> versioned(content.endpointRegistry(), loads),
+    private static com.cloud.gateway.application.access.definition.AccessDefinitionReader reader(IngressAccessContent content, AtomicInteger loads) {
+        return new com.cloud.gateway.application.access.definition.AccessDefinitionReader(() -> versioned(content.endpointRegistry(), loads),
                 () -> versioned(content.appPolicies(), loads), () -> versioned(content.clients(), loads),
                 () -> versioned(content.endpointPolicies(), loads), () -> versioned(content.policies(), loads));
     }
 
-    private static <T> VersionedPolicyDefinition<T> versioned(T value, AtomicInteger loads) {
+    private static <T> com.cloud.gateway.application.access.definition.VersionedAccessDefinition<T> versioned(T value, AtomicInteger loads) {
         loads.incrementAndGet();
-        return new VersionedPolicyDefinition<>(value, "revision");
+        return new com.cloud.gateway.application.access.definition.VersionedAccessDefinition<>(value, "revision");
     }
 }

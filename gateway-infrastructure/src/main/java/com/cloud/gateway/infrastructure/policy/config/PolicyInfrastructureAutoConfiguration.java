@@ -2,52 +2,49 @@ package com.cloud.gateway.infrastructure.policy.config;
 
 import com.cloud.gateway.domain.policy.header.HeaderRules;
 
-import com.cloud.gateway.application.policy.PolicyCompositionDefinitionRepository;
-import com.cloud.gateway.application.policy.WritablePolicyCompositionDefinitionRepository;
-import com.cloud.gateway.application.policy.PolicyCompositionCommandService;
-import com.cloud.gateway.infrastructure.policy.properties.PropertiesPolicyCompositionDefinitionRepository;
+import com.cloud.gateway.application.access.definition.PolicyConfigDefinitionRepository;
+import com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository;
+import com.cloud.gateway.application.access.publication.PolicyConfigCommandService;
+import com.cloud.gateway.infrastructure.policy.properties.PropertiesPolicyConfigDefinitionRepository;
 
 import com.cloud.framework.lock.LockExecutor;
-import com.cloud.gateway.application.policy.ClientPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.ClientAccessPolicyCommandService;
-import com.cloud.gateway.application.policy.ClientCredentialPolicyCommandService;
-import com.cloud.gateway.application.policy.AppPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.AppPolicyCommandService;
-import com.cloud.gateway.application.policy.EndpointRegistryDefinitionRepository;
-import com.cloud.gateway.application.policy.PolicyPublishLock;
-import com.cloud.gateway.application.policy.PolicyRollbackLock;
-import com.cloud.gateway.application.policy.PolicyRollbackState;
-import com.cloud.gateway.application.policy.PolicySnapshotCommandService;
-import com.cloud.gateway.application.policy.PolicyDefinitionAccess;
-import com.cloud.gateway.application.policy.PolicyDefinitionReader;
-import com.cloud.gateway.application.policy.PolicySnapshotAssembler;
-import com.cloud.gateway.application.policy.PolicySnapshotPublication;
-import com.cloud.gateway.application.policy.PolicyPublicationCommandService;
-import com.cloud.gateway.application.policy.PolicyRollbackCommandService;
-import com.cloud.gateway.application.policy.PolicySnapshotHasher;
-import com.cloud.gateway.application.policy.PolicySnapshotHistory;
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
-import com.cloud.gateway.application.policy.PolicySnapshotPublisher;
-import com.cloud.gateway.application.policy.EndpointAccessPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.EndpointAccessPolicyCommandService;
-import com.cloud.gateway.application.policy.WritableClientPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableAppPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableEndpointRegistryDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableEndpointAccessPolicyDefinitionRepository;
+import com.cloud.gateway.application.access.definition.ClientAccessDefinitionRepository;
+import com.cloud.gateway.application.access.editing.ClientAccessCommandService;
+import com.cloud.gateway.application.access.editing.ClientCredentialCommandService;
+import com.cloud.gateway.application.access.definition.AppAccessDefinitionRepository;
+import com.cloud.gateway.application.access.editing.AppAccessCommandService;
+import com.cloud.gateway.application.access.definition.EndpointAccessDefinitionRepository;
+import com.cloud.gateway.application.access.AccessPublishLock;
+import com.cloud.gateway.application.access.publication.AccessRollbackLock;
+import com.cloud.gateway.application.access.publication.AccessRollbackState;
+import com.cloud.gateway.application.access.publication.AccessSnapshotCommandService;
+import com.cloud.gateway.application.access.publication.AccessDefinitions;
+import com.cloud.gateway.application.access.definition.AccessDefinitionReader;
+import com.cloud.gateway.application.access.publication.AccessSnapshotAssembler;
+import com.cloud.gateway.application.access.publication.AccessSnapshotPublication;
+import com.cloud.gateway.application.access.publication.AccessPublicationCommandService;
+import com.cloud.gateway.application.access.publication.AccessRollbackCommandService;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHistory;
+import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
+import com.cloud.gateway.application.access.publication.AccessSnapshotPublisher;
+import com.cloud.gateway.application.access.editing.EndpointAccessCommandService;
+import com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository;
+import com.cloud.gateway.application.access.definition.WritableAppAccessDefinitionRepository;
+import com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
+import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.ClientPropertiesMapper;
 import com.cloud.gateway.infrastructure.policy.mapstruct.ClientPropertiesMapStructMapper;
-import com.cloud.gateway.infrastructure.policy.mapstruct.PolicyCompositionPropertiesMapStructMapper;
-import com.cloud.gateway.infrastructure.policy.PolicyCompositionPropertiesMapper;
+import com.cloud.gateway.infrastructure.policy.mapstruct.PolicyConfigPropertiesMapStructMapper;
+import com.cloud.gateway.infrastructure.policy.PolicyConfigPropertiesMapper;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
-import com.cloud.gateway.infrastructure.policy.properties.PropertiesClientPolicyDefinitionRepository;
-import com.cloud.gateway.infrastructure.policy.properties.PropertiesAppPolicyDefinitionRepository;
-import com.cloud.gateway.infrastructure.policy.properties.PropertiesEndpointRegistryDefinitionRepository;
-import com.cloud.gateway.infrastructure.policy.properties.PropertiesPolicySnapshotProvider;
-import com.cloud.gateway.infrastructure.policy.properties.PropertiesEndpointAccessPolicyDefinitionRepository;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.properties.PropertiesClientAccessDefinitionRepository;
+import com.cloud.gateway.infrastructure.policy.properties.PropertiesAppAccessDefinitionRepository;
+import com.cloud.gateway.infrastructure.policy.properties.PropertiesEndpointAccessDefinitionRepository;
+import com.cloud.gateway.infrastructure.policy.properties.PropertiesAccessSnapshotProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -73,8 +70,8 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    PolicyCompositionPropertiesMapper policyCompositionPropertiesMapper() {
-        return Mappers.getMapper(PolicyCompositionPropertiesMapStructMapper.class);
+    PolicyConfigPropertiesMapper policyCompositionPropertiesMapper() {
+        return Mappers.getMapper(PolicyConfigPropertiesMapStructMapper.class);
     }
 
     @Bean
@@ -96,34 +93,34 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    PolicySnapshotHasher policySnapshotHasher(
+    com.cloud.gateway.application.access.publication.AccessSnapshotHasher policySnapshotHasher(
             CanonicalPolicyContentMapper mapper,
             ObjectMapper objectMapper
     ) {
-        return new CanonicalPolicySnapshotHasher(mapper, objectMapper);
+        return new CanonicalAccessSnapshotHasher(mapper, objectMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    StoredPolicySnapshotMapper storedPolicySnapshotMapper() {
-        return new StoredPolicySnapshotMapper();
+    StoredAccessSnapshotMapper storedAccessSnapshotMapper() {
+        return new StoredAccessSnapshotMapper();
     }
 
     @Bean
     @ConditionalOnMissingBean
-    StoredPolicySnapshotCodec storedPolicySnapshotCodec(
-            StoredPolicySnapshotMapper mapper,
-            PolicySnapshotHasher hasher,
+    StoredAccessSnapshotCodec storedAccessSnapshotCodec(
+            StoredAccessSnapshotMapper mapper,
+            com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher,
             ObjectMapper objectMapper,
             HeaderRules headerRules
     ) {
-        return new StoredPolicySnapshotCodec(mapper, hasher, objectMapper, headerRules);
+        return new StoredAccessSnapshotCodec(mapper, hasher, objectMapper, headerRules);
     }
 
     @Bean
     @ConditionalOnMissingBean
     StoredPolicyDefinitionCodec storedPolicyDefinitionCodec(
-            StoredPolicySnapshotMapper mapper,
+            StoredAccessSnapshotMapper mapper,
             ObjectMapper objectMapper,
             HeaderRules headerRules
     ) {
@@ -132,170 +129,170 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    EndpointRegistryDefinitionRepository endpointRegistryDefinitionRepository(
+    com.cloud.gateway.application.access.definition.EndpointAccessDefinitionRepository endpointRegistryDefinitionRepository(
             GatewayPolicyDefinitionProperties properties,
-            StoredPolicySnapshotMapper mapper,
+            StoredAccessSnapshotMapper mapper,
             StoredPolicyDefinitionCodec codec
     ) {
-        return new PropertiesEndpointRegistryDefinitionRepository(properties, mapper, codec);
+        return new PropertiesEndpointAccessDefinitionRepository(properties, mapper, codec);
     }
 
     @Bean @ConditionalOnMissingBean
-    AppPolicyDefinitionRepository appPolicyDefinitionRepository(
-            GatewayPolicyDefinitionProperties properties, StoredPolicySnapshotMapper mapper,
+    com.cloud.gateway.application.access.definition.AppAccessDefinitionRepository appAccessDefinitionRepository(
+            GatewayPolicyDefinitionProperties properties, StoredAccessSnapshotMapper mapper,
             StoredPolicyDefinitionCodec codec) {
-        return new PropertiesAppPolicyDefinitionRepository(properties, mapper, codec);
+        return new PropertiesAppAccessDefinitionRepository(properties, mapper, codec);
     }
 
     @Bean @ConditionalOnMissingBean
-    ClientPolicyDefinitionRepository clientPolicyDefinitionRepository(
-            GatewayPolicyDefinitionProperties properties, StoredPolicySnapshotMapper mapper,
+    com.cloud.gateway.application.access.definition.ClientAccessDefinitionRepository clientAccessDefinitionRepository(
+            GatewayPolicyDefinitionProperties properties, StoredAccessSnapshotMapper mapper,
             ClientPropertiesMapper clients, StoredPolicyDefinitionCodec codec) {
-        return new PropertiesClientPolicyDefinitionRepository(properties, mapper, clients, codec);
+        return new PropertiesClientAccessDefinitionRepository(properties, mapper, clients, codec);
     }
 
     @Bean @ConditionalOnMissingBean
-    EndpointAccessPolicyDefinitionRepository endpointAccessPolicyDefinitionRepository(
-            GatewayPolicyDefinitionProperties properties, StoredPolicySnapshotMapper mapper,
+    com.cloud.gateway.application.access.definition.EndpointAccessDefinitionRepository endpointAccessAccessDefinitionRepository(
+            GatewayPolicyDefinitionProperties properties, StoredAccessSnapshotMapper mapper,
             StoredPolicyDefinitionCodec codec) {
-        return new PropertiesEndpointAccessPolicyDefinitionRepository(properties, mapper, codec);
+        return new PropertiesEndpointAccessDefinitionRepository(properties, mapper, codec);
     }
 
     @Bean @ConditionalOnMissingBean
-    PolicyCompositionDefinitionRepository policyConfigurationDefinitionRepository(
-            GatewayPolicyDefinitionProperties properties, StoredPolicySnapshotMapper mapper,
-            PolicyCompositionPropertiesMapper policyConfiguration, StoredPolicyDefinitionCodec codec) {
-        return new PropertiesPolicyCompositionDefinitionRepository(properties, mapper, policyConfiguration, codec);
+    com.cloud.gateway.application.access.definition.PolicyConfigDefinitionRepository policyConfigurationDefinitionRepository(
+            GatewayPolicyDefinitionProperties properties, StoredAccessSnapshotMapper mapper,
+            PolicyConfigPropertiesMapper policyConfiguration, StoredPolicyDefinitionCodec codec) {
+        return new PropertiesPolicyConfigDefinitionRepository(properties, mapper, policyConfiguration, codec);
     }
 
     @Bean @ConditionalOnMissingBean
-    @ConditionalOnBean({WritablePolicyCompositionDefinitionRepository.class, PolicyRollbackState.class, PolicyPublishLock.class})
-    PolicyCompositionCommandService policyConfigurationCommandService(
-            WritablePolicyCompositionDefinitionRepository repository, PolicyRollbackState rollbackState, PolicyPublishLock publishLock,
+    @ConditionalOnBean({com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository.class, com.cloud.gateway.application.access.publication.AccessRollbackState.class, AccessPublishLock.class})
+    com.cloud.gateway.application.access.publication.PolicyConfigCommandService policyConfigurationCommandService(
+            com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository repository, com.cloud.gateway.application.access.publication.AccessRollbackState rollbackState, AccessPublishLock publishLock,
             HeaderRules headerRules) {
-        return new PolicyCompositionCommandService(repository, rollbackState, publishLock, headerRules);
+        return new com.cloud.gateway.application.access.publication.PolicyConfigCommandService(repository, rollbackState, publishLock, headerRules);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    PolicySnapshotProvider policySnapshotProvider(
-            EndpointRegistryDefinitionRepository endpointRegistry,
-            AppPolicyDefinitionRepository apps,
-            ClientPolicyDefinitionRepository clientAccess,
-            EndpointAccessPolicyDefinitionRepository endpointAccess,
-            PolicyCompositionDefinitionRepository policies,
-            PolicySnapshotAssembler assembler,
+    com.cloud.gateway.application.access.publication.AccessSnapshotProvider policySnapshotProvider(
+            com.cloud.gateway.application.access.definition.EndpointAccessDefinitionRepository endpointRegistry,
+            com.cloud.gateway.application.access.definition.AppAccessDefinitionRepository apps,
+            com.cloud.gateway.application.access.definition.ClientAccessDefinitionRepository clientAccess,
+            com.cloud.gateway.application.access.definition.EndpointAccessDefinitionRepository endpointAccess,
+            com.cloud.gateway.application.access.definition.PolicyConfigDefinitionRepository policies,
+            com.cloud.gateway.application.access.publication.AccessSnapshotAssembler assembler,
             Clock clock
     ) {
-        return new PropertiesPolicySnapshotProvider(new PolicyDefinitionReader(endpointRegistry, apps, clientAccess,
+        return new PropertiesAccessSnapshotProvider(new com.cloud.gateway.application.access.definition.AccessDefinitionReader(endpointRegistry, apps, clientAccess,
                 endpointAccess, policies), assembler, clock);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    PolicySnapshotAssembler policySnapshotAssembler(PolicySnapshotHasher hasher, HeaderRules headerRules) {
-        return new PolicySnapshotAssembler(hasher, headerRules);
+    com.cloud.gateway.application.access.publication.AccessSnapshotAssembler policySnapshotAssembler(com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher, HeaderRules headerRules) {
+        return new com.cloud.gateway.application.access.publication.AccessSnapshotAssembler(hasher, headerRules);
     }
 
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(LockExecutor.class)
-    PolicyPublishLock policyPublishLock(LockExecutor lockExecutor) {
-        return new PolicyPublishLock(lockExecutor);
+    AccessPublishLock policyPublishLock(LockExecutor lockExecutor) {
+        return new AccessPublishLock(lockExecutor);
     }
 
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(LockExecutor.class)
-    PolicyRollbackLock policyRollbackLock(LockExecutor lockExecutor) {
-        return new PolicyRollbackLock(lockExecutor);
+    com.cloud.gateway.application.access.publication.AccessRollbackLock policyRollbackLock(LockExecutor lockExecutor) {
+        return new com.cloud.gateway.application.access.publication.AccessRollbackLock(lockExecutor);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({WritableAppPolicyDefinitionRepository.class,
-            PolicyRollbackState.class, PolicyPublishLock.class})
-    AppPolicyCommandService appPolicyCommandService(
-            WritableAppPolicyDefinitionRepository repository,
-            PolicyRollbackState rollbackState,
-            PolicyPublishLock publishLock
+    @ConditionalOnBean({com.cloud.gateway.application.access.definition.WritableAppAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.publication.AccessRollbackState.class, AccessPublishLock.class})
+    com.cloud.gateway.application.access.editing.AppAccessCommandService appPolicyCommandService(
+            com.cloud.gateway.application.access.definition.WritableAppAccessDefinitionRepository repository,
+            com.cloud.gateway.application.access.publication.AccessRollbackState rollbackState,
+            AccessPublishLock publishLock
     ) {
-        return new AppPolicyCommandService(repository, rollbackState, publishLock);
+        return new com.cloud.gateway.application.access.editing.AppAccessCommandService(repository, rollbackState, publishLock);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({WritableClientPolicyDefinitionRepository.class,
-            PolicyRollbackState.class, PolicyPublishLock.class})
-    ClientAccessPolicyCommandService clientAccessPolicyCommandService(
-            WritableClientPolicyDefinitionRepository repository,
-            PolicyRollbackState rollbackState,
-            PolicyPublishLock publishLock
+    @ConditionalOnBean({com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.publication.AccessRollbackState.class, AccessPublishLock.class})
+    com.cloud.gateway.application.access.editing.ClientAccessCommandService clientAccessPolicyCommandService(
+            com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository repository,
+            com.cloud.gateway.application.access.publication.AccessRollbackState rollbackState,
+            AccessPublishLock publishLock
     ) {
-        return new ClientAccessPolicyCommandService(repository, rollbackState, publishLock);
+        return new com.cloud.gateway.application.access.editing.ClientAccessCommandService(repository, rollbackState, publishLock);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({WritableClientPolicyDefinitionRepository.class,
-            PolicyRollbackState.class, PolicyPublishLock.class})
-    ClientCredentialPolicyCommandService clientCredentialPolicyCommandService(
-            WritableClientPolicyDefinitionRepository repository,
-            PolicyRollbackState rollbackState,
-            PolicyPublishLock publishLock
+    @ConditionalOnBean({com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.publication.AccessRollbackState.class, AccessPublishLock.class})
+    com.cloud.gateway.application.access.editing.ClientCredentialCommandService clientCredentialPolicyCommandService(
+            com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository repository,
+            com.cloud.gateway.application.access.publication.AccessRollbackState rollbackState,
+            AccessPublishLock publishLock
     ) {
-        return new ClientCredentialPolicyCommandService(repository, rollbackState, publishLock);
+        return new com.cloud.gateway.application.access.editing.ClientCredentialCommandService(repository, rollbackState, publishLock);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({WritableEndpointAccessPolicyDefinitionRepository.class,
-            PolicyRollbackState.class, PolicyPublishLock.class})
-    EndpointAccessPolicyCommandService endpointAccessPolicyCommandService(
-            WritableEndpointAccessPolicyDefinitionRepository repository,
-            PolicyRollbackState rollbackState,
-            PolicyPublishLock publishLock
+    @ConditionalOnBean({com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.publication.AccessRollbackState.class, AccessPublishLock.class})
+    com.cloud.gateway.application.access.editing.EndpointAccessCommandService endpointAccessPolicyCommandService(
+            com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository repository,
+            com.cloud.gateway.application.access.publication.AccessRollbackState rollbackState,
+            AccessPublishLock publishLock
     ) {
-        return new EndpointAccessPolicyCommandService(repository, rollbackState, publishLock);
+        return new com.cloud.gateway.application.access.editing.EndpointAccessCommandService(repository, rollbackState, publishLock);
     }
 
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean({
-            WritableEndpointRegistryDefinitionRepository.class,
-            WritableAppPolicyDefinitionRepository.class,
-            WritableClientPolicyDefinitionRepository.class,
-            WritableEndpointAccessPolicyDefinitionRepository.class,
-            WritablePolicyCompositionDefinitionRepository.class,
-            PolicySnapshotPublisher.class,
-            PolicySnapshotHistory.class,
-            PolicyRollbackState.class,
-            PolicyPublishLock.class,
-            PolicyRollbackLock.class
+            com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.definition.WritableAppAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository.class,
+            com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository.class,
+            com.cloud.gateway.application.access.publication.AccessSnapshotPublisher.class,
+            com.cloud.gateway.application.access.publication.AccessSnapshotHistory.class,
+            com.cloud.gateway.application.access.publication.AccessRollbackState.class,
+            AccessPublishLock.class,
+            com.cloud.gateway.application.access.publication.AccessRollbackLock.class
     })
-    PolicySnapshotCommandService policySnapshotCommandService(
-            WritableEndpointRegistryDefinitionRepository endpointRegistry,
-            WritableAppPolicyDefinitionRepository apps,
-            WritableClientPolicyDefinitionRepository clientAccess,
-            WritableEndpointAccessPolicyDefinitionRepository endpointAccess,
-            WritablePolicyCompositionDefinitionRepository policies,
-            PolicySnapshotProvider provider,
-            PolicySnapshotPublisher publisher,
-            PolicySnapshotHistory history,
-            PolicyRollbackState rollbackState,
-            PolicySnapshotHasher hasher,
-            PolicyPublishLock publishLock,
-            PolicyRollbackLock rollbackLock,
+    com.cloud.gateway.application.access.publication.AccessSnapshotCommandService policySnapshotCommandService(
+            com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository endpointRegistry,
+            com.cloud.gateway.application.access.definition.WritableAppAccessDefinitionRepository apps,
+            com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository clientAccess,
+            com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository endpointAccess,
+            com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository policies,
+            com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider,
+            com.cloud.gateway.application.access.publication.AccessSnapshotPublisher publisher,
+            com.cloud.gateway.application.access.publication.AccessSnapshotHistory history,
+            com.cloud.gateway.application.access.publication.AccessRollbackState rollbackState,
+            com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher,
+            AccessPublishLock publishLock,
+            com.cloud.gateway.application.access.publication.AccessRollbackLock rollbackLock,
             Clock clock,
-            PolicySnapshotAssembler assembler
+            com.cloud.gateway.application.access.publication.AccessSnapshotAssembler assembler
     ) {
-        PolicyDefinitionAccess definitions = new PolicyDefinitionAccess(
+        com.cloud.gateway.application.access.publication.AccessDefinitions definitions = new com.cloud.gateway.application.access.publication.AccessDefinitions(
                 endpointRegistry, apps, clientAccess, endpointAccess, policies);
-        PolicySnapshotPublication publication = new PolicySnapshotPublication(publisher, assembler, clock);
-        return new PolicySnapshotCommandService(
-                new PolicyPublicationCommandService(definitions, provider, publication, rollbackState,
+        com.cloud.gateway.application.access.publication.AccessSnapshotPublication publication = new com.cloud.gateway.application.access.publication.AccessSnapshotPublication(publisher, assembler, clock);
+        return new com.cloud.gateway.application.access.publication.AccessSnapshotCommandService(
+                new com.cloud.gateway.application.access.publication.AccessPublicationCommandService(definitions, provider, publication, rollbackState,
                         publishLock),
-                new PolicyRollbackCommandService(definitions, provider, publication, history, rollbackState,
+                new com.cloud.gateway.application.access.publication.AccessRollbackCommandService(definitions, provider, publication, history, rollbackState,
                         hasher, publishLock, rollbackLock));
     }
 }

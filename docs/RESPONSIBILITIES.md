@@ -4,7 +4,7 @@
 
 ## 职责边界
 
-gateway 将外部不可信请求转换为受控入口请求：App 登记、Client 接入身份、Subject 验证、端点入口授权、限流、超时、熔断降级、缓存和可信 Header。Client 直接承接原业务渠道身份，不增加渠道映射。
+gateway 将外部不可信请求转换为受控入口请求。请求生命周期分为两个宏观阶段：**阶段一入口准入**（v1 交付）——快照捕获、端点匹配、限流（认证前 IP 槽位与认证后身份槽位）、App/Client/Subject 接入评估、客户端签名验证、Header 安全准备；**阶段二下游治理**（语义已在 DOMAIN.md 定义为权威设计，交付暂缓）——缓存、超时、熔断降级与 Header 转发应用。Client 直接承接原业务渠道身份，不增加渠道映射。
 
 账户、登录会话生命周期、Token 签发/撤销、Role/Permission 归 user-auth；资源归属及最终业务授权归对应业务服务。gateway 不查询这些业务数据、不签发 Token、不把入口放行解释为最终授权。
 
@@ -13,12 +13,12 @@ gateway 将外部不可信请求转换为受控入口请求：App 登记、Clien
 ## 协作契约
 
 - 外部 App/Client 标识使用 gateway v1 协议。App 声明只证明匹配到 ENABLED 配置；可信 ClientId 仅由有效凭据恢复。客户端版本是非可信声明。
-- 有限的共享自定义 Header（CONTEXT/SIGNATURE）由 [framework-core RequestHeader](../../framework/docs/RESPONSIBILITIES.md) 枚举声明。gateway 管理名称扩展和禁止 set/remove 名单，TrustedHeaderResolver 仅按固定名称输出六种可信事实。HeaderPolicy 使用 trustedHeaders 集合，不再支持重命名映射。API、存储和本地配置统一使用枚举选择。
-- IngressAccessGrantedContext 只携带已通过接入校验的 App、可选的已验证 Client 和已认证 Subject 三类上下文，未验签 Client 声明不保留其中；入口获准不替代下游最终业务授权。快照版本从请求所持快照读取。AuthenticatedSubject.authenticationExpiresAt 在 Host 路径来自已认证 Token exp，在 Browser 路径来自收到验证响应时刻加剩余 idle TTL，不是会话绝对期限；该时间不再复制到 SubjectContext，认证阶段有效期校验保持不变。
+- 有限的共享自定义 Header（CONTEXT/SIGNATURE）由 [framework-core RequestHeader](../../framework/docs/RESPONSIBILITIES.md) 枚举声明。gateway 管理名称扩展和禁止 set/remove 名单，TrustedHeaderResolver 仅按固定名称输出六种可信事实。HeaderPolicy 使用 trustedHeaders 集合，不支持重命名映射。API、存储和本地配置统一使用枚举选择。
+- IngressAccessGrantedContext 携带 VerifiedApp（appId、platform）、可选的 VerifiedClient（clientId、credentialId、verificationMode、verifiedAt）与可选的完整 AuthenticatedSubject；v1 决定保留 issuer 与 authenticationExpiresAt，不构造裁剪值对象。未验证的 Client 声明不进入上下文；入口获准不替代下游最终业务授权。快照版本记录在 IngressAccessDecision 上。AuthenticatedSubject.authenticationExpiresAt 在 Host 路径来自已认证 Token exp，在 Browser 路径来自收到验证响应时刻加剩余 idle TTL，不是会话绝对期限。
 - gateway.headers 在启动时生成不可变 HeaderRules；保存、发布、快照编码/加载均校验名称准入及操作限制。HeaderPolicy 随快照动态更新，但部署规则当前变更需重启；不提供独立规则热刷新。此限制避免运行请求混用未经联合校验的规则和策略。
 - 未发布阶段直接破坏式更新，不注册历史 Header 名称、LEGACY 分类或兼容映射，也不专门清除历史名称。未验签 Client 声明不能转为可信 CLIENT_ID。user-auth/framework-starter 读取逻辑迁移仍暂缓，现有下游必须迁移后才能按新契约协作；本次不改动这两个工程。历史签名算法按既定需求保留，与 Header 历史名称无关。
 - Host Session 使用 JWT/JWK 或 Reference Token introspection，统一恢复 subjectId/sessionId；验证 issuer、时间、audience、scope 和必需声明。两种技术路径不泄露到领域上下文。
-- Host 端点的 requiredAudiences/requiredScopes 是可选的附加访问要求，不替代认证阶段校验；管理入口仍要求指定 gateway audience 和 admin scope。
+- 端点的 requiredAudiences/requiredScopes 是可选的附加访问要求（子集 AND 校验），不替代认证阶段校验；管理入口最低要求为 REQUIRED 主体、admin scope 和 gateway audience。
 - Browser Session 使用 user-auth-api 发布的 Facade 路径与载荷，经受管理 serviceId 的内部实例调用。sessionId 保持现有返回身份；user-auth 管理 idle TTL、绝对期限和父会话。gateway 不刷新 Cookie。
 - Browser Session 无效返回 401，不可达 503，非法响应 502；不可降级为匿名、宿主或缓存身份。非安全请求严格验证 App.allowedOrigins。
 - /api/user-auth/** 与 /admin/user-auth/** 路由剥离服务段；/oauth2/** 与 /.well-known/** 原样转发。/internal/** 不登记也不公开路由。
@@ -27,13 +27,19 @@ gateway 将外部不可信请求转换为受控入口请求：App 登记、Clien
 
 ## 交付状态
 
-v1 已实现 App/Client/Subject、EndpointRegistry、PolicyBundle/Binding、固定可信 Header、新签名、EXACT 限流、下游超时、实例本地熔断及受控响应缓存。ClientPolicy 合并接入和内嵌凭据，端点采用 EndpointStatus。PREALLOCATED、动态插件、任意脚本、业务权限判定及全局瞬时撤销不属于本期能力。
+v1 交付聚焦阶段一入口准入：三段式固定管道（准备/接入/准入）、IngressAccessSnapshot 快照与发布、管理面四门面协议（definition/snapshot × command/query）、限流双槽位（EXACT）与 Header 安全准备。Header 转发清除属安全必需，随阶段一交付。阶段二下游治理（缓存、超时策略、熔断、降级）语义已在 DOMAIN.md 第 5 节保留为权威设计，实现与验收随后续版本交付；既有下游治理代码与历史测试结果不再代表当前 v1 验收范围。
 
-2026-09-09 前轮重构完成 PolicyComposition 更名及发布／回退用例拆分，但随后审查确认仍有职责残留。本轮已收敛分阶段入口编排、签名认证、配额执行与降级、缓存／熔断准入、Header 默认继承、端点唯一选择及快照接纳规则；同时修复回退发布前校验、App platform 更新约束、防重放错误分类和集合空值守卫，统一 Header 值校验与 Mapper 契约。不改 framework/user-auth 工程，不部署或修改外部配置，不提交 Git。
+PREALLOCATED、动态插件、任意脚本、业务权限判定、全局瞬时撤销不属于本期能力。
 
 管理端点最低访问要求在启动时对当前快照校验；运行期安全链继续独立执行同一领域最低授权规则。该启动校验不等同于后续每次发布的管理端点配置审查，也不替代运行期纵深保护。
 
 ## 验收边界
+
+### 两阶段模型与管理面协议文档同步（2026-09-13）
+
+本轮全面重写 DOMAIN.md（两阶段生命周期、三段式入口准入、能力库与固定拓扑、阶段二语义保留为权威设计）与本文件职责/交付表述；管理面接口定稿为四个门面（IngressAccessDefinition/Snapshot × Command/Query，content-only 保存与独立状态转换，文件级 sourceRevision CAS 语义）。
+
+验证：`mvn test -pl gateway-domain` 通过 107 项测试（0 失败）；`mvn compile -pl gateway-api` 通过；`git diff --check` 通过。domain 内 policy/security 包的历史编译错误已修复（缺失 import、判重条件反转、HeaderRules 规范化存储、HeaderPolicy 空值校验顺序）。已知欠账：interfaces/application 尚未对齐新管理面协议（controller/default facade 引用旧类型，application 引用已移除的 content.policies/validateAppUpdatesFrom/admissionOf），reactor 整体编译未通过；文档描述目标设计，不代表在途适配已完成。
 
 ### 接入命名与规则文档同步（2026-09-10）
 

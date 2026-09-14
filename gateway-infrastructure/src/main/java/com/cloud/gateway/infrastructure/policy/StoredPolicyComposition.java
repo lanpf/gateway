@@ -6,8 +6,8 @@ import java.time.Duration;
 import java.util.*;
 
 /** Wire representation: identifiers are scalar strings and unordered collections are sorted. */
-public record StoredPolicyComposition(Map<String, Bundle> bundles, List<Binding> bindings) {
-    public StoredPolicyComposition {
+public record StoredPolicyConfig(Map<String, Bundle> bundles, List<Binding> bindings) {
+    public StoredPolicyConfig {
         bundles = bundles == null ? Map.of() : Collections.unmodifiableMap(new TreeMap<>(bundles));
         bindings = bindings == null ? List.of() : bindings.stream()
                 .sorted(Comparator.comparing(Binding::bindingId)).toList();
@@ -36,7 +36,7 @@ public record StoredPolicyComposition(Map<String, Bundle> bundles, List<Binding>
         public Cache { varyHeaders = sorted(varyHeaders); }
     }
     public record Headers(Set<RequestHeader> trustedHeaders, Map<String, String> setHeaders,
-            Set<String> removeHeaders, StoredPolicySnapshot.Forwarding credentialForwarding) {
+            Set<String> removeHeaders, StoredAccessSnapshot.Forwarding credentialForwarding) {
         public Headers {
             trustedHeaders = trustedHeaders == null ? Set.of() : Collections.unmodifiableSet(new TreeSet<>(trustedHeaders));
             setHeaders = setHeaders == null ? Map.of() : Collections.unmodifiableMap(new TreeMap<>(setHeaders));

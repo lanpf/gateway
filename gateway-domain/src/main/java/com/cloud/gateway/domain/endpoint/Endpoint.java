@@ -14,7 +14,7 @@ public record Endpoint(
         List<EndpointMatcher> matchers,
         Set<String> tags,
         EndpointStatus status,
-        EndpointPolicy accessPolicy
+        EndpointAccess access
 ) implements AggregateRoot<EndpointId>
 {
 
@@ -32,7 +32,7 @@ public record Endpoint(
         tags = Set.copyOf(tags);
 
         Require.notNull(status, DomainException::missingField);
-        Require.notNull(accessPolicy, DomainException::missingField);
+        Require.notNull(access, DomainException::missingField);
     }
 
     @Override

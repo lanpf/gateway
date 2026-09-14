@@ -4,5 +4,5 @@ import com.cloud.gateway.infrastructure.policy.config.GatewayPolicyDefinitionPro
 import java.util.Map;
 
 public interface ClientPropertiesMapper {
-    Map<String, StoredPolicySnapshot.Client> toStored(Map<String, GatewayPolicyDefinitionProperties.Client> source);
+    Map<String, StoredAccessSnapshot.Client> toStored(Map<String, GatewayPolicyDefinitionProperties.Client> source);
 }

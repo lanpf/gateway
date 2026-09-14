@@ -4,7 +4,7 @@ import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
 import com.cloud.gateway.application.security.ReplayGuard;
 import com.cloud.gateway.application.security.SecretResolver;
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
+import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
 
 import com.cloud.gateway.domain.security.signature.LegacySecretParamsTimestampMd5UpperSignatureVerifier;
 import com.cloud.gateway.domain.security.signature.LegacySecretTimestampBodySha256SignatureVerifier;
@@ -71,7 +71,7 @@ public class GatewaySecurityAutoConfiguration {
     }
     @Bean
     SmartInitializingSingleton clientCredentialSecretValidator(
-            PolicySnapshotProvider provider, SecretResolver resolver) {
+            com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider, SecretResolver resolver) {
         return () -> provider.current().snapshot().content().clients().values().forEach(policy -> {
             if (policy.credentials() == null) {
                 return;

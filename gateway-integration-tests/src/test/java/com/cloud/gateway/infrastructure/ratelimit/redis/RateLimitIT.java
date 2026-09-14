@@ -78,7 +78,7 @@ class RateLimitIT {
 
     @Test
     void shouldShareExactCapacityAcrossIndependentGatewayInstances() throws Exception {
-        RateLimitPolicy rule = rule("concurrent", 7, 1);
+        RateLimitRule rule = rule("concurrent", 7, 1);
         // Freeze refill using a future server timestamp to isolate atomic consumption from test speed.
         seed(first, rule, 7, 60);
         ExecutorService executor = Executors.newFixedThreadPool(24);
@@ -112,7 +112,7 @@ class RateLimitIT {
 
     @Test
     void shouldPreserveFractionalTokensAndIncludeClockRollbackInRetryAfter() {
-        RateLimitPolicy rule = rule("fractional", 1, 1);
+        RateLimitRule rule = rule("fractional", 1, 1);
         seed(first, rule, 0.5, 60);
         RateLimitDecision initial = first.quota().tryAcquire(rule, VALUE);
         RateLimitDecision repeated = second.quota().tryAcquire(rule, VALUE);
@@ -127,7 +127,7 @@ class RateLimitIT {
 
     @Test
     void shouldRefillFromRedisTimeAndReturnFractionalRetryAfter() {
-        RateLimitPolicy rule = rule("server-time", 100, 1);
+        RateLimitRule rule = rule("server-time", 100, 1);
         seed(first, rule, 0, -10);
         RateLimitDecision acquired = first.quota().tryAcquire(rule, VALUE);
         assertTrue(acquired.allowed());
@@ -144,9 +144,9 @@ class RateLimitIT {
 
     @Test
     void shouldNotMintFreshQuotaWhenSnapshotParametersChange() {
-        RateLimitPolicy original = rule("stable-rule", 2, 1);
+        RateLimitRule original = rule("stable-rule", 2, 1);
         seed(first, original, 0.25, 60);
-        RateLimitPolicy increased = rule("stable-rule", 100, 10);
+        RateLimitRule increased = rule("stable-rule", 100, 10);
         RateLimitDecision denied = second.quota().tryAcquire(increased, VALUE);
         assertFalse(denied.allowed());
         assertFalse(denied.unavailable());
@@ -158,9 +158,9 @@ class RateLimitIT {
 
     @Test
     void shouldSettleOldRateBeforeApplyingNewRateAndCapacity() {
-        RateLimitPolicy oldRule = rule("old-rate", 1000, 1);
+        RateLimitRule oldRule = rule("old-rate", 1000, 1);
         seed(first, oldRule, 0, -10);
-        RateLimitPolicy updated = rule("old-rate", 1000, 100);
+        RateLimitRule updated = rule("old-rate", 1000, 100);
         RateLimitDecision acquired = second.quota().tryAcquire(updated, VALUE);
         assertTrue(acquired.allowed());
         assertTrue(acquired.remaining() >= 9);
@@ -169,8 +169,8 @@ class RateLimitIT {
 
     @Test
     void shouldApplySameDimensionRulesAndSelectLargestRetryAfter() {
-        RateLimitPolicy shortWait = rule("short", 1, 10);
-        RateLimitPolicy longWait = rule("long", 1, 1);
+        RateLimitRule shortWait = rule("short", 1, 10);
+        RateLimitRule longWait = rule("long", 1, 1);
         seed(first, shortWait, 0.5, 60);
         seed(first, longWait, 0.5, 60);
         RateLimitDecision combined = acquire(first, List.of(shortWait, longWait), RedisFailurePolicy.CLOSED);
@@ -185,7 +185,7 @@ class RateLimitIT {
     @Test
     void shouldIsolateApplicationNamespaces() {
         Node other = node(NAMESPACE + "-other");
-        RateLimitPolicy rule = rule("namespace", 1, 1);
+        RateLimitRule rule = rule("namespace", 1, 1);
         seed(first, rule, 0, 60);
         assertFalse(second.quota().tryAcquire(rule, VALUE).allowed());
         assertTrue(other.quota().tryAcquire(rule, VALUE).allowed());
@@ -194,7 +194,7 @@ class RateLimitIT {
 
     @Test
     void shouldFailClosedOrUseBoundedLocalQuotaOnRealRedisError() {
-        RateLimitPolicy rule = rule("wrong-type", 1, 1);
+        RateLimitRule rule = rule("wrong-type", 1, 1);
         first.redis().opsForValue().set(first.keys().bucket(rule, VALUE), "invalid-bucket", Duration.ofMinutes(1));
         assertTrue(acquire(first, List.of(rule), RedisFailurePolicy.CLOSED).unavailable());
         assertTrue(acquire(first, List.of(rule), RedisFailurePolicy.OPEN_WITH_LOCAL).allowed());
@@ -220,18 +220,18 @@ class RateLimitIT {
                 context.getBean(RateLimitKeyResolver.class), context.getBean(QuotaCommandService.class));
     }
 
-    private void seed(Node node, RateLimitPolicy rule, double tokens, int serverTimeOffsetSeconds) {
+    private void seed(Node node, RateLimitRule rule, double tokens, int serverTimeOffsetSeconds) {
         assertEquals(1L, node.redis().execute(SEED, List.of(node.keys().bucket(rule, VALUE)),
                 Double.toString(tokens), Integer.toString(serverTimeOffsetSeconds),
                 Integer.toString(rule.capacity()), Integer.toString(rule.refillPerSecond())));
     }
 
-    private double tokens(Node node, RateLimitPolicy rule) {
+    private double tokens(Node node, RateLimitRule rule) {
         return Double.parseDouble((String) node.redis().opsForHash().get(node.keys().bucket(rule, VALUE), TOKENS));
     }
 
-    private static RateLimitPolicy rule(String id, int capacity, int refill) {
-        return new RateLimitPolicy(id, RateLimitDimension.CLIENT, capacity, refill, RateLimitMode.EXACT);
+    private static RateLimitRule rule(String id, int capacity, int refill) {
+        return new RateLimitRule(id, RateLimitDimension.CLIENT, capacity, refill, RateLimitMode.EXACT);
     }
 
     private void observe(String key) throws InterruptedException {
@@ -244,7 +244,7 @@ class RateLimitIT {
         }
     }
 
-    private static RateLimitDecision acquire(Node node, List<RateLimitPolicy> rules, RedisFailurePolicy failure) {
+    private static RateLimitDecision acquire(Node node, List<RateLimitRule> rules, RedisFailurePolicy failure) {
         return node.service().acquire(new QuotaCommand(List.of(new RateLimitRules(rules, failure)),
                 Map.of(RateLimitDimension.CLIENT, VALUE), false), new java.util.HashSet<>());
     }

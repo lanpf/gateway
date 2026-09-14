@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RequiredArgsConstructor
-public final class FileLastKnownGoodPolicySnapshotStore implements LastKnownGoodPolicySnapshotStore {
+public final class FileLastKnownGoodAccessSnapshotStore implements LastKnownGoodAccessSnapshotStore {
     private final Path location;
 
     @Override

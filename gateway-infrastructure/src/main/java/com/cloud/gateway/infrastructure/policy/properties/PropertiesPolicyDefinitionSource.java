@@ -1,6 +1,6 @@
 package com.cloud.gateway.infrastructure.policy.properties;
 
-import com.cloud.gateway.application.policy.VersionedPolicyDefinition;
+import com.cloud.gateway.application.access.definition.VersionedAccessDefinition;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,9 +17,9 @@ final class PropertiesPolicyDefinitionSource<T> {
         this.encoder = encoder;
     }
 
-    VersionedPolicyDefinition<T> load() {
+    com.cloud.gateway.application.access.definition.VersionedAccessDefinition<T> load() {
         T value = loader.get();
-        return new VersionedPolicyDefinition<>(value, sourceRevision(encoder.apply(value)));
+        return new com.cloud.gateway.application.access.definition.VersionedAccessDefinition<>(value, sourceRevision(encoder.apply(value)));
     }
 
     private static String sourceRevision(String content) {

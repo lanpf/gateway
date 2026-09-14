@@ -1,4 +1,4 @@
-<!-- engineering-standards:begin version=3.0.3 -->
+<!-- engineering-standards:begin version=3.1.1 -->
 ## Shared engineering guidance
 
 Rule markers: [REQUIRED] is release-blocking, [DEFAULT] applies unless a concrete deviation reason is recorded, [ADVISORY] is optional guidance; [BASELINE] rules are preloaded for every change, [TOPIC] rules apply when the affected capability matches.

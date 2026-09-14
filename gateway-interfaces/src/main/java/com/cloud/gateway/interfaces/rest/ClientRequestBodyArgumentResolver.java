@@ -61,17 +61,17 @@ public final class ClientRequestBodyArgumentResolver extends AbstractMessageRead
 
     private static void bindProtectedHeaders(ClientRequest request, ServerWebExchange exchange) {
         IngressAccessGrantedContext context = exchange.getAttribute(GatewayRequestAttributes.TRUSTED_CONTEXT);
-        request.setClientAppId(context == null ? null : context.appContext().appId().value());
-        request.setClientPlatform(context == null ? null : context.appContext().platform());
+        request.setClientAppId(context == null ? null : context.app().appId().value());
+        request.setClientPlatform(context == null ? null : context.app().platform());
         String version = exchange.getRequest().getHeaders().getFirst(RequestHeader.APP_VERSION.headerName());
         request.setClientVersion(RequestHeaderValueAdapter.sanitizedAppVersion(version).orElse(null));
         if (request instanceof ChannelContext channelContext) {
-            channelContext.setChannelCode(context == null || context.clientContext() == null ? null
-                    : context.clientContext().clientId().value());
+            channelContext.setChannelCode(context == null || context.client() == null ? null
+                    : context.client().clientId().value());
         }
         if (request instanceof AuthenticatedSessionContext sessionContext) {
-            sessionContext.setUserId(context == null || context.subjectContext() == null ? null : context.subjectContext().subjectId());
-            sessionContext.setSessionId(context == null || context.subjectContext() == null ? null : context.subjectContext().sessionId());
+            sessionContext.setUserId(context == null || context.subject() == null ? null : context.subject().subjectId().value());
+            sessionContext.setSessionId(context == null || context.subject() == null ? null : context.subject().sessionId().value());
         }
     }
 

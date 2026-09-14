@@ -1,74 +1,102 @@
 package com.cloud.gateway.domain.policy;
 
 import com.cloud.gateway.domain.access.IngressAccessContent;
-import com.cloud.gateway.domain.access.client.ClientVerificationMode;
-import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.EndpointId;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
-import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.app.AppId;
+import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientAccess;
+import com.cloud.gateway.domain.client.ClientRegistry;
+import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.gateway.domain.endpoint.Endpoint;
+import com.cloud.gateway.domain.endpoint.EndpointId;
+import com.cloud.gateway.domain.endpoint.EndpointMatcher;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
+import com.cloud.gateway.domain.endpoint.EndpointRegistry;
+import com.cloud.gateway.domain.endpoint.EndpointStatus;
+import com.cloud.gateway.domain.endpoint.RouteId;
+import com.cloud.gateway.domain.endpoint.ServiceId;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
+import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
+import com.cloud.gateway.domain.policy.CookieForwardingMode;
+import com.cloud.gateway.domain.policy.CredentialForwarding;
+import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-
-import com.cloud.gateway.domain.endpoint.EndpointStatus;
-import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PolicyCollectionValidationTest {
     @Test
     void shouldRejectNullClientAppElementWithDomainExceptionBeforeCopy() {
         assertThrows(DomainException.class,
-                () -> new ClientPolicy(new ClientId("client"), Collections.singleton(null)));
+                () -> new ClientAccess(Collections.singleton(null), null));
     }
 
     @Test
-    void shouldRejectNullScopeAudienceAndCookieElementsWithDomainException() {
-        assertThrows(DomainException.class, () -> endpoint(Collections.singleton(null), Set.of("api")));
-        assertThrows(DomainException.class, () -> endpoint(Set.of(), Collections.singleton(null)));
+    void shouldRejectNullScopeAudienceAndForwardingCookieElementsWithDomainException() {
+        assertThrows(DomainException.class, () -> endpointPolicy(Collections.singleton(null), Set.of("api")));
+        assertThrows(DomainException.class, () -> endpointPolicy(Set.of(), Collections.singleton(null)));
         assertThrows(DomainException.class, () -> new CredentialForwarding(AuthorizationHeaderForwardingMode.STRIP,
                 CookieForwardingMode.ALLOW_LIST, Collections.singleton(null)));
     }
 
     @Test
-    void shouldRejectNullPolicyMapKeysAndValuesWithDomainException() {
-        EndpointRegistry registry = new EndpointRegistry(List.of());
-        AppPolicy app = new AppPolicy(new AppId("app"), "WEB", Set.of(), PolicyStatus.ENABLED);
-        assertThrows(DomainException.class, () -> new IngressAccessContent(registry,
-                Collections.singletonMap(null, app), Map.of(), Map.of()));
-        assertThrows(DomainException.class, () -> new IngressAccessContent(registry,
-                Collections.singletonMap(app.appId(), null), Map.of(), Map.of()));
-        assertThrows(DomainException.class, () -> new IngressAccessContent(registry,
-                Map.of(), Collections.singletonMap(new ClientId("client"), null), Map.of()));
-        assertThrows(DomainException.class, () -> new IngressAccessContent(registry,
-                Map.of(), Map.of(), Collections.singletonMap(new EndpointId("endpoint"), null)));
+    void shouldRejectNullMatcherAndRegistryElementsWithDomainException() {
+        assertThrows(DomainException.class, () -> endpoint(Arrays.asList((EndpointMatcher) null)));
+        assertThrows(DomainException.class, () -> new EndpointRegistry(Collections.singletonList(null)));
+        assertThrows(DomainException.class, () -> new AppRegistry(Collections.singletonList(null)));
+        assertThrows(DomainException.class, () -> new ClientRegistry(Collections.singletonList(null)));
+    }
+
+    @Test
+    void shouldNormalizeMissingScopesAndAudiencesToEmptySets() {
+        EndpointAccess policy = endpointPolicy(null, null);
+
+        assertEquals(Set.of(), policy.requiredScopes());
+        assertEquals(Set.of(), policy.requiredAudiences());
     }
 
     @Test
     void shouldKeepDefensiveCopiesAfterElementValidation() {
         Set<AppId> apps = new HashSet<>();
         apps.add(new AppId("app"));
-        ClientPolicy client = new ClientPolicy(new ClientId("client"), apps);
+        ClientAccess client = new ClientAccess(apps, null);
         apps.clear();
         assertEquals(1, client.allowedApps().size());
-        Map<ClientId, ClientPolicy> clients = new HashMap<>();
-        clients.put(client.clientId(), client);
-        IngressAccessContent content = new IngressAccessContent(new EndpointRegistry(List.of()), Map.of(), clients, Map.of());
-        clients.clear();
-        assertEquals(1, content.clients().size());
-        assertThrows(UnsupportedOperationException.class, () -> content.clients().clear());
+
+        Set<String> tags = new HashSet<>();
+        tags.add("public-read");
+        Endpoint endpoint = new Endpoint(new EndpointId("endpoint"), new ServiceId("service"),
+                new RouteId("route"), List.of(new EndpointMatcher("GET", "/x")), tags, EndpointStatus.ENABLED,
+                endpointPolicy(Set.of(), Set.of()));
+        tags.clear();
+        assertEquals(Set.of("public-read"), endpoint.tags());
+        assertThrows(UnsupportedOperationException.class, () -> endpoint.tags().clear());
     }
 
-    private static EndpointPolicy endpoint(Set<String> scopes, Set<String> audiences) {
-        return new EndpointPolicy(new EndpointId("endpoint"), ClientVerificationRequirement.OPTIONAL,
-                ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.HOST_SESSION_REQUIRED,
-                scopes, audiences, CredentialForwarding.stripAll(), EndpointStatus.ENABLED);
+    @Test
+    void shouldKeepContentRegistriesImmutable() {
+        IngressAccessContent content = new IngressAccessContent(
+                new AppRegistry(List.of()), new ClientRegistry(List.of()),
+                new EndpointRegistry(List.of(endpoint(List.of(new EndpointMatcher("GET", "/x"))))),
+                PolicyConfig.empty());
+
+        assertThrows(UnsupportedOperationException.class, () -> content.appRegistry().asMap().clear());
+    }
+
+    private static EndpointAccess endpointPolicy(Set<String> scopes, Set<String> audiences) {
+        return new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
+                SubjectAuthenticationRequirement.OPTIONAL, scopes, audiences);
+    }
+
+    private static Endpoint endpoint(List<EndpointMatcher> matchers) {
+        return new Endpoint(new EndpointId("endpoint"), new ServiceId("service"), new RouteId("route"),
+                matchers, Set.of(), EndpointStatus.ENABLED, endpointPolicy(Set.of(), Set.of()));
     }
 }

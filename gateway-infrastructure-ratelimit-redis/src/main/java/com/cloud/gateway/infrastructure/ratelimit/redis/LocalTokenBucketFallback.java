@@ -1,7 +1,7 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitPolicy;
+import com.cloud.gateway.domain.policy.capability.RateLimitRule;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,7 +22,7 @@ final class LocalTokenBucketFallback {
         this.ticker = Objects.requireNonNull(ticker);
     }
 
-    synchronized RateLimitDecision tryAcquire(RateLimitPolicy rule, String key, String resolvedKey) {
+    synchronized RateLimitDecision tryAcquire(RateLimitRule rule, String key, String resolvedKey) {
         long now = ticker.getAsLong();
         Bucket bucket = buckets.get(resolvedKey);
         if (bucket == null) {

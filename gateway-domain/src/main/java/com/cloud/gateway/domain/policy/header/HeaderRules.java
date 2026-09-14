@@ -3,7 +3,7 @@ package com.cloud.gateway.domain.policy.header;
 import com.cloud.framework.core.RequestHeader;
 import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.gateway.domain.policy.bundle.PolicyComposition;
+import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
 
 import java.util.HashSet;
 import java.util.Locale;
@@ -22,20 +22,27 @@ public record HeaderRules(
     }
 
     private Set<String> normalize(Set<String> values) {
-        values = values == null ? Set.of() : Set.copyOf(values);
-        Require.noDuplicates(values, value ->
-                Require.that(value,
-                        v -> v.length() <= 128 && v.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]+"),
-                        DomainException::invalidField
-                ).trim().toLowerCase(Locale.ROOT), DomainException::invalidField);
-        return values;
+        if (values == null) {
+            return Set.of();
+        }
+        Set<String> normalized = new HashSet<>();
+        for (String value : values) {
+            String name = Require.that(value,
+                    v -> v.length() <= 128 && v.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]+"),
+                    DomainException::invalidField
+            ).trim().toLowerCase(Locale.ROOT);
+            if (!normalized.add(name)) {
+                throw DomainException.invalidField();
+            }
+        }
+        return Set.copyOf(normalized);
     }
 
     public static HeaderRules registeredOnly() {
         return new HeaderRules(Set.of(), Set.of(), Set.of());
     }
 
-    public void validate(PolicyComposition configuration) {
+    public void validate(PolicyConfig configuration) {
         configuration.bundles().values().forEach(bundle -> {
             if (bundle.headers() != null) {
                 validate(bundle.headers());
@@ -50,10 +57,11 @@ public record HeaderRules(
 
     private void validateOperation(String name, Set<String> forbidden) {
         String normalized = normalizeName(name);
-        boolean admitted = RequestHeader.fromName(name).isPresent()
-                || extraHeaders.contains(normalized)
+        boolean admitted = extraHeaders.contains(normalized)
                 || normalized.startsWith(HeaderPolicy.GATEWAY_PREFIX);
-        if (!admitted || forbidden.contains(normalized)) throw DomainException.invalidField();
+        if (RequestHeader.fromName(name).isPresent() || !admitted || forbidden.contains(normalized)) {
+            throw DomainException.invalidField();
+        }
     }
 
     public static String normalizeName(String name) {

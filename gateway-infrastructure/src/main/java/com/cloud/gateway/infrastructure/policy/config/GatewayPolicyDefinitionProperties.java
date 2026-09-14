@@ -8,7 +8,7 @@ import com.cloud.gateway.domain.policy.CookieForwardingMode;
 import com.cloud.gateway.domain.client.SignatureContract;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.client.ClientStatus;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshot;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshot;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -32,23 +32,23 @@ import org.springframework.validation.annotation.Validated;
 public class GatewayPolicyDefinitionProperties {
     public static final String PREFIX = "gateway.policy-definition";
 
-    @Valid private final PolicyCompositionProperties policies = new PolicyCompositionProperties();
+    @Valid private final PolicyConfigProperties policies = new PolicyConfigProperties();
 
     @NotEmpty @Valid private final List<Endpoint> endpoints = new ArrayList<>();
     @NotEmpty @Valid private final Map<@NotBlank String, App> apps = new LinkedHashMap<>();
     @Valid private final Map<@NotBlank String, Client> clients = new LinkedHashMap<>();
     @NotEmpty @Valid private final Map<@NotBlank String, EndpointAccess> routes = new LinkedHashMap<>();
 
-    public List<StoredPolicySnapshot.Endpoint> toStoredEndpoints() {
+    public List<StoredAccessSnapshot.Endpoint> toStoredEndpoints() {
         return endpoints.stream().map(Endpoint::toStored).toList();
     }
 
-    public Map<String, StoredPolicySnapshot.App> toStoredApps() {
+    public Map<String, StoredAccessSnapshot.App> toStoredApps() {
         return apps.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey, entry -> entry.getValue().toStored()));
     }
 
-    public Map<String, StoredPolicySnapshot.Route> toStoredRoutes() {
+    public Map<String, StoredAccessSnapshot.Route> toStoredRoutes() {
         return routes.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey, entry -> entry.getValue().toStored()));
     }
@@ -62,8 +62,8 @@ public class GatewayPolicyDefinitionProperties {
         @NotBlank private String routeId;
         private final Set<@NotBlank String> tags = new LinkedHashSet<>();
 
-        private StoredPolicySnapshot.Endpoint toStored() {
-            return new StoredPolicySnapshot.Endpoint(endpointId, serviceId,
+        private StoredAccessSnapshot.Endpoint toStored() {
+            return new StoredAccessSnapshot.Endpoint(endpointId, serviceId,
                     matchers.stream().map(Matcher::toStored).toList(), routeId, tags);
         }
     }
@@ -74,8 +74,8 @@ public class GatewayPolicyDefinitionProperties {
         @NotBlank private String httpMethod;
         @NotBlank private String pathPattern;
 
-        private StoredPolicySnapshot.Matcher toStored() {
-            return new StoredPolicySnapshot.Matcher(httpMethod, pathPattern);
+        private StoredAccessSnapshot.Matcher toStored() {
+            return new StoredAccessSnapshot.Matcher(httpMethod, pathPattern);
         }
     }
 
@@ -86,8 +86,8 @@ public class GatewayPolicyDefinitionProperties {
         @NotBlank private String platform;
         @NotNull private final Set<@NotBlank String> allowedOrigins = new LinkedHashSet<>();
 
-        private StoredPolicySnapshot.App toStored() {
-            return new StoredPolicySnapshot.App(status, platform, allowedOrigins);
+        private StoredAccessSnapshot.App toStored() {
+            return new StoredAccessSnapshot.App(status, platform, allowedOrigins);
         }
     }
 
@@ -116,8 +116,8 @@ public class GatewayPolicyDefinitionProperties {
         @NotNull private SignatureContract signatureContract;
         @NotBlank private String secretRef;
 
-        private StoredPolicySnapshot.Credential toStored() {
-            return new StoredPolicySnapshot.Credential(
+        private StoredAccessSnapshot.Credential toStored() {
+            return new StoredAccessSnapshot.Credential(
                     credentialId, validFrom, expiresAt, signatureContract, secretRef);
         }
     }
@@ -134,8 +134,8 @@ public class GatewayPolicyDefinitionProperties {
         @NotNull @Valid private final Forwarding credentialForwarding = new Forwarding();
         @NotNull private EndpointStatus status = EndpointStatus.ENABLED;
 
-        private StoredPolicySnapshot.Route toStored() {
-            return new StoredPolicySnapshot.Route(clientVerificationMode, clientVerificationRequirement,
+        private StoredAccessSnapshot.Route toStored() {
+            return new StoredAccessSnapshot.Route(clientVerificationMode, clientVerificationRequirement,
                     subjectAuthencationRequirement, requiredScopes, requiredAudiences, credentialForwarding.toStored(), status);
         }
     }
@@ -147,8 +147,8 @@ public class GatewayPolicyDefinitionProperties {
         @NotNull private CookieForwardingMode cookies = CookieForwardingMode.STRIP_ALL;
         @NotNull private final Set<String> allowedCookieNames = new LinkedHashSet<>();
 
-        private StoredPolicySnapshot.Forwarding toStored() {
-            return new StoredPolicySnapshot.Forwarding(authorizationHeader, cookies, allowedCookieNames);
+        private StoredAccessSnapshot.Forwarding toStored() {
+            return new StoredAccessSnapshot.Forwarding(authorizationHeader, cookies, allowedCookieNames);
         }
     }
 }

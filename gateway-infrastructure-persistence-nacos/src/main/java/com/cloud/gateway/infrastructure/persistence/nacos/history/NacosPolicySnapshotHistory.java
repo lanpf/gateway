@@ -1,18 +1,18 @@
 package com.cloud.gateway.infrastructure.persistence.nacos.history;
 
-import com.cloud.gateway.application.policy.PolicySnapshotHistory;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHistory;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
 
 import java.util.Optional;
 
-public final class NacosPolicySnapshotHistory implements PolicySnapshotHistory {
+public final class NacosAccessSnapshotHistory implements com.cloud.gateway.application.access.publication.AccessSnapshotHistory {
     private final NacosPolicyHistorySource source;
-    private final StoredPolicySnapshotCodec codec;
+    private final StoredAccessSnapshotCodec codec;
 
-    public NacosPolicySnapshotHistory(
+    public NacosAccessSnapshotHistory(
             NacosPolicyHistorySource source,
-            StoredPolicySnapshotCodec codec
+            StoredAccessSnapshotCodec codec
     ) {
         this.source = source;
         this.codec = codec;

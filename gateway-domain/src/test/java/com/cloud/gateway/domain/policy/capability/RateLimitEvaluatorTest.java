@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class RateLimitEvaluatorTest {
     @Test
     void shouldPermitLocalFallbackOnlyForUnavailableOpenQuota() {
-        RateLimitPolicy rule = rule("ip", RateLimitDimension.IP, 1);
+        RateLimitRule rule = rule("ip", RateLimitDimension.IP, 1);
         ApplicableQuota open = new ApplicableQuota(rule, "ip", RedisFailurePolicy.OPEN_WITH_LOCAL);
         ApplicableQuota closed = new ApplicableQuota(rule, "ip", RedisFailurePolicy.CLOSED);
         assertTrue(open.shouldFallback(RateLimitDecision.unavailable(rule.dimension(), "ip")));
@@ -24,15 +24,15 @@ class RateLimitEvaluatorTest {
     void shouldSelectEveryApplicableRuleAndDeduplicateAcrossGroupsWithoutMutatingApplied() {
         RateLimitRules group = new RateLimitRules(List.of(rule("ip", RateLimitDimension.IP, 1),
                 rule("client", RateLimitDimension.CLIENT, 2)), RedisFailurePolicy.OPEN_WITH_LOCAL);
-        java.util.Set<String> applied = new java.util.HashSet<>();
+        java.util.Set<RateLimitRuleId> applied = new java.util.HashSet<>();
         List<ApplicableQuota> selected = RateLimitEvaluator.applicable(List.of(group, group),
                 Map.of(RateLimitDimension.IP, "192.0.2.1", RateLimitDimension.CLIENT, " raw-client "), false, applied);
-        assertEquals(List.of("ip", "client"), selected.stream().map(value -> value.rule().ruleId()).toList());
+        assertEquals(List.of("ip", "client"), selected.stream().map(value -> value.rule().ruleId().value()).toList());
         assertEquals(" raw-client ", selected.get(1).key());
         assertEquals(RedisFailurePolicy.OPEN_WITH_LOCAL, selected.get(1).failurePolicy());
         assertTrue(applied.isEmpty());
         assertThrows(UnsupportedOperationException.class, selected::clear);
-        applied.add("ip");
+        applied.add(new RateLimitRuleId("ip"));
         assertTrue(RateLimitEvaluator.applicable(List.of(group),
                 Map.of(RateLimitDimension.IP, "192.0.2.1", RateLimitDimension.CLIENT, "client"), true, applied).isEmpty());
     }
@@ -72,15 +72,15 @@ class RateLimitEvaluatorTest {
     @Test
     void shouldRejectInvalidPoliciesAndDuplicateStableRuleIds() {
         assertThrows(DomainException.class,
-                () -> new RateLimitPolicy(" ", RateLimitDimension.IP, 1, 1, RateLimitMode.EXACT));
+                () -> new RateLimitRule(" ", RateLimitDimension.IP, 1, 1, RateLimitMode.EXACT));
         assertThrows(DomainException.class,
-                () -> new RateLimitPolicy("x", null, 1, 1, RateLimitMode.EXACT));
+                () -> new RateLimitRule("x", null, 1, 1, RateLimitMode.EXACT));
         assertThrows(DomainException.class,
-                () -> new RateLimitPolicy("x", RateLimitDimension.IP, 0, 1, RateLimitMode.EXACT));
+                () -> new RateLimitRule("x", RateLimitDimension.IP, 0, 1, RateLimitMode.EXACT));
         assertThrows(DomainException.class,
-                () -> new RateLimitPolicy("x", RateLimitDimension.IP, 1, 0, RateLimitMode.EXACT));
+                () -> new RateLimitRule("x", RateLimitDimension.IP, 1, 0, RateLimitMode.EXACT));
         assertThrows(DomainException.class,
-                () -> new RateLimitPolicy("x", RateLimitDimension.IP, 1, 1, null));
+                () -> new RateLimitRule("x", RateLimitDimension.IP, 1, 1, null));
         assertThrows(DomainException.class, () -> new RateLimitRules(List.of(
                 rule("same", RateLimitDimension.APP, 1), rule("same", RateLimitDimension.IP, 2)), null));
         assertThrows(IllegalArgumentException.class, () -> RateLimitMode.valueOf("PREALLOCATED"));
@@ -89,7 +89,7 @@ class RateLimitEvaluatorTest {
 
     @Test
     void shouldDefensivelyCopyRules() {
-        ArrayList<RateLimitPolicy> source = new ArrayList<>();
+        ArrayList<RateLimitRule> source = new ArrayList<>();
         source.add(rule("one", RateLimitDimension.IP, 1));
         RateLimitRules rules = new RateLimitRules(source, null);
         source.clear();
@@ -97,7 +97,7 @@ class RateLimitEvaluatorTest {
         assertThrows(UnsupportedOperationException.class, () -> rules.rules().clear());
     }
 
-    private static RateLimitPolicy rule(String id, RateLimitDimension dimension, int capacity) {
-        return new RateLimitPolicy(id, dimension, capacity, 1, RateLimitMode.EXACT);
+    private static RateLimitRule rule(String id, RateLimitDimension dimension, int capacity) {
+        return new RateLimitRule(id, dimension, capacity, 1, RateLimitMode.EXACT);
     }
 }

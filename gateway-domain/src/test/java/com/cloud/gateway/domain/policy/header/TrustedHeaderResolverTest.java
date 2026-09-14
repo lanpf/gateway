@@ -1,11 +1,19 @@
 package com.cloud.gateway.domain.policy.header;
 
 import com.cloud.framework.core.RequestHeader;
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.domain.access.IngressAccessGrantedContext;
+import com.cloud.gateway.domain.access.app.VerifiedApp;
+import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.access.client.VerifiedClient;
+import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.access.subject.SessionId;
+import com.cloud.gateway.domain.access.subject.SubjectId;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.client.ClientId;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -53,8 +61,8 @@ class TrustedHeaderResolverTest {
         assertEquals(Optional.of("verified-client"),
                 TrustedHeaderResolver.resolve(RequestHeader.CLIENT_ID, authenticatedContext()));
         var context = new IngressAccessGrantedContext(app(),
-                new IngressAccessGrantedContext.ClientContext(new ClientId("verified-client"),
-                        new CredentialId("client-1")), null);
+                new VerifiedClient(new ClientId("verified-client"), new CredentialId("client-1"),
+                        ClientVerificationMode.REQUEST_SIGNATURE, Instant.now()), null);
         assertEquals(Optional.of("verified-client"), TrustedHeaderResolver.resolve(RequestHeader.CLIENT_ID, context));
     }
 
@@ -87,13 +95,13 @@ class TrustedHeaderResolverTest {
 
     private static IngressAccessGrantedContext authenticatedContext() {
         return new IngressAccessGrantedContext(app(),
-                new IngressAccessGrantedContext.ClientContext(new ClientId("verified-client"),
-                        new CredentialId("client-1")),
-                new IngressAccessGrantedContext.SubjectContext(SubjectType.HOST_SESSION, "user-1", "session-1",
-                        Set.of("gateway"), Set.of("admin")));
+                new VerifiedClient(new ClientId("verified-client"), new CredentialId("client-1"),
+                        ClientVerificationMode.REQUEST_SIGNATURE, Instant.now()),
+                new AuthenticatedSubject(SubjectType.HOST_SESSION, new SubjectId("user-1"), new SessionId("session-1"),
+                        "issuer", Set.of("gateway"), Set.of("admin"), Instant.parse("2030-01-01T00:00:00Z")));
     }
 
-    private static IngressAccessGrantedContext.AppContext app() {
-        return new IngressAccessGrantedContext.AppContext(new AppId("web-app"), "WEB");
+    private static VerifiedApp app() {
+        return new VerifiedApp(new AppId("web-app"), "WEB");
     }
 }

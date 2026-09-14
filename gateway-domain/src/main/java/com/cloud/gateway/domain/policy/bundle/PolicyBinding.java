@@ -1,5 +1,6 @@
 package com.cloud.gateway.domain.policy.bundle;
 
+import com.cloud.framework.core.SubjectType;
 import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.endpoint.Endpoint;
@@ -8,12 +9,14 @@ import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.ClientId;
 
 import java.util.Set;
+
+import com.cloud.gateway.domain.endpoint.ServiceId;
 import org.apache.commons.lang3.StringUtils;
 
 public record PolicyBinding(
         PolicyBindingId bindingId,
         PolicyBundleId bundleId,
-        String serviceId,
+        ServiceId serviceId,
         EndpointId endpointId,
         Set<String> tags,
         AppId appId,
@@ -24,8 +27,7 @@ public record PolicyBinding(
         Require.notNull(bindingId, DomainException::missingField);
         Require.notNull(bundleId, DomainException::missingField);
         tags = tags == null ? Set.of() : tags;
-        if (serviceId != null && StringUtils.isBlank(serviceId)
-                || tags.stream().anyMatch(StringUtils::isBlank)) {
+        if (tags.stream().anyMatch(StringUtils::isBlank)) {
             throw DomainException.invalidField();
         }
         tags = Set.copyOf(tags);

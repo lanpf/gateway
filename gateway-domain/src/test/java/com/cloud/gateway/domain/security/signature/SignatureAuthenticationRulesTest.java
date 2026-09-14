@@ -17,23 +17,24 @@ class SignatureAuthenticationRulesTest {
     private static final Instant NOW = Instant.parse("2026-08-24T00:00:00Z");
     private static final Duration SKEW = Duration.ofMinutes(5);
     private static final String NONCE = "abcdefghijklmnopqrstuv";
+    private static final ClientId CLIENT = new ClientId("client-a");
     private final SignatureAuthenticationRules rules = new SignatureAuthenticationRules(SKEW);
 
     @Test
     void shouldSelectOnlyExactValidVersionOneCredential() {
         Credentials credentials = credentials(SignatureContract.HTTP_REQUEST_SIGNATURE_V1);
-        assertEquals(List.of(credentials.activeCredential()), rules.candidates(credentials, evidence("active", NOW), NOW));
-        assertEquals(List.of(credentials.graceCredential()), rules.candidates(credentials, evidence("grace", NOW), NOW));
-        assertTrue(rules.candidates(credentials, evidence("unknown", NOW), NOW).isEmpty());
-        assertTrue(rules.candidates(credentials, evidence("active", NOW), NOW.plusSeconds(1000)).isEmpty());
+        assertEquals(List.of(credentials.activeCredential()), rules.candidates(CLIENT, credentials, evidence("active", NOW), NOW));
+        assertEquals(List.of(credentials.graceCredential()), rules.candidates(CLIENT, credentials, evidence("grace", NOW), NOW));
+        assertTrue(rules.candidates(CLIENT, credentials, evidence("unknown", NOW), NOW).isEmpty());
+        assertTrue(rules.candidates(CLIENT, credentials, evidence("active", NOW), NOW.plusSeconds(1000)).isEmpty());
     }
 
     @Test
     void shouldKeepLegacyCandidateOrderAndRejectExpiredCandidates() {
         Credentials credentials = credentials(SignatureContract.LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256);
         assertEquals(List.of(credentials.activeCredential(), credentials.graceCredential()),
-                rules.candidates(credentials, evidence("ignored", NOW), NOW));
-        assertTrue(rules.candidates(credentials, evidence("ignored", NOW), NOW.plusSeconds(1000)).isEmpty());
+                rules.candidates(CLIENT, credentials, evidence("ignored", NOW), NOW));
+        assertTrue(rules.candidates(CLIENT, credentials, evidence("ignored", NOW), NOW.plusSeconds(1000)).isEmpty());
     }
 
     @Test
@@ -47,9 +48,9 @@ class SignatureAuthenticationRulesTest {
     @Test
     void shouldShareReplayIdentityAcrossCredentialRotation() {
         Credentials credentials = credentials(SignatureContract.HTTP_REQUEST_SIGNATURE_V1);
-        assertEquals("HTTP_REQUEST_SIGNATURE_V1:8:client-a:" + NONCE, rules.replayIdentity(credentials, evidence("active", NOW)));
-        assertEquals(rules.replayIdentity(credentials, evidence("active", NOW)),
-                rules.replayIdentity(credentials, evidence("grace", NOW.plusSeconds(1))));
+        assertEquals("HTTP_REQUEST_SIGNATURE_V1:8:client-a:" + NONCE, rules.replayIdentity(CLIENT, credentials, evidence("active", NOW)));
+        assertEquals(rules.replayIdentity(CLIENT, credentials, evidence("active", NOW)),
+                rules.replayIdentity(CLIENT, credentials, evidence("grace", NOW.plusSeconds(1))));
     }
 
     @Test
@@ -67,7 +68,7 @@ class SignatureAuthenticationRulesTest {
     }
 
     private static Credential credential(String id, SignatureContract contract) {
-        return new Credential(new CredentialId(id), new ClientId("client-a"), contract, id,
+        return new Credential(new CredentialId(id), id, contract,
                 NOW.minusSeconds(600), NOW.plusSeconds(600));
     }
 

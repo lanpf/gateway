@@ -5,6 +5,7 @@ import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.application.quota.RequestQuotaExecutor;
 import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
 import com.cloud.gateway.domain.policy.capability.RateLimitDimension;
+import com.cloud.gateway.domain.policy.capability.RateLimitRuleId;
 import com.cloud.gateway.domain.policy.capability.RateLimitRules;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +25,7 @@ public final class RequestQuotaGuard implements RequestQuotaExecutor {
 
     @Override
     public CompletionStage<RateLimitDecision> acquire(List<RateLimitRules> groups,
-            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<String> applied) {
+            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<RateLimitRuleId> applied) {
         QuotaCommand command = new QuotaCommand(groups, dimensions, ipOnly);
         return Mono.fromCallable(() -> quotas.acquire(command, applied))
                 .subscribeOn(Schedulers.boundedElastic()).toFuture();
@@ -50,7 +51,7 @@ public final class RequestQuotaGuard implements RequestQuotaExecutor {
     }
 
     public Mono<Boolean> allow(ServerWebExchange exchange, List<RateLimitRules> groups,
-            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<String> applied) {
+            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<RateLimitRuleId> applied) {
         return Mono.fromCompletionStage(() -> acquire(groups, dimensions, ipOnly, applied))
                 .flatMap(decision -> respond(exchange, decision));
     }

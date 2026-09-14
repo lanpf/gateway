@@ -2,6 +2,10 @@ package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.framework.core.RequestHeader;
 import com.cloud.gateway.application.ingress.IngressAccessCommand;
+import com.cloud.gateway.domain.access.RequestEvidence;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
+import com.cloud.gateway.domain.endpoint.EndpointMatch;
+import com.cloud.gateway.domain.policy.capability.RateLimitRuleId;
 import com.cloud.gateway.application.ingress.IngressAccessCommandService;
 import com.cloud.gateway.application.ingress.IngressAccessOutput;
 import com.cloud.gateway.application.ingress.IngressAdmissionCommandService;
@@ -11,13 +15,16 @@ import com.cloud.gateway.domain.access.IngressAccessDenyReason;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.ClientId;
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -70,13 +77,14 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
                 || (local && !path.startsWith(LOCAL_ROUTE_PREFIX))) {
             return reject(exchange, HttpStatus.NOT_FOUND);
         }
-        EndpointPolicy route = snapshot.content().endpointPolicies().get(captured.endpointId());
-        if (route == null) {
-            return reject(exchange, HttpStatus.FORBIDDEN);
-        }
+        EndpointAccess route = captured.access();
 
-        Mono<CachedRequest> cachedRequest = route.clientVerificationMode() == ClientVerificationMode.REQUEST_SIGNATURE
-                || exchange.getRequest().getMethod() == HttpMethod.GET
+        boolean signatureEvidenceSubmitted = StringUtils.hasText(
+                exchange.getRequest().getHeaders().getFirst(RequestHeader.TIMESTAMP.headerName()))
+                && StringUtils.hasText(exchange.getRequest().getHeaders().getFirst(RequestHeader.SIGNATURE.headerName()));
+        Mono<CachedRequest> cachedRequest = exchange.getRequest().getMethod() == HttpMethod.GET
+                || route.clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED
+                || signatureEvidenceSubmitted
                 ? cacheBody(exchange) : Mono.just(new CachedRequest(exchange, new byte[0]));
         IngressAccessSnapshot requestSnapshot = snapshot;
         return cachedRequest.flatMap(cached -> ReactiveSecurityContextHolder.getContext()
@@ -90,7 +98,7 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
             CachedRequest cached,
             GatewayFilterChain chain,
             IngressAccessSnapshot snapshot,
-            EndpointPolicy route,
+            EndpointAccess route,
             Authentication authentication
     ) {
         ServerWebExchange exchange = cached.exchange();
@@ -101,27 +109,19 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
         AppId appId = StringUtils.hasText(appIdHeaderValue) ? new AppId(appIdHeaderValue) : null;
         ClientId clientId = StringUtils.hasText(clientIdHeaderValue) ? new ClientId(clientIdHeaderValue) : null;
         Endpoint endpoint = exchange.getRequiredAttribute(GatewayRequestAttributes.ENDPOINT);
-        IngressAccessCommand command = new IngressAccessCommand(snapshot, endpoint, appId, clientId,
-                headers.getFirst(HttpHeaders.ORIGIN), isUnsafe(exchange.getRequest().getMethod()),
-                PolicySnapshotWebFilter.remoteIp(exchange));
+        RequestEvidence evidence = exchange.getRequiredAttribute(GatewayRequestAttributes.EVIDENCE);
+        IngressAccessCommand command = new IngressAccessCommand(snapshot,
+                EndpointMatch.of(List.of(endpoint)), evidence);
 
-        Set<String> applied = exchange.getRequiredAttribute(GatewayRequestAttributes.APPLIED_IP_RULES);
+        Set<RateLimitRuleId> applied = exchange.getRequiredAttribute(GatewayRequestAttributes.APPLIED_IP_RULES);
         IngressAdmissionCommandService admission = new IngressAdmissionCommandService(ingress, quotas);
         return Mono.deferContextual(reactorContext -> Mono.fromCompletionStage(() -> admission.admit(command,
                 signatureEvidence(exchange, cached.payload(), clientId),
-                () -> isAuthenticationAbsent(authentication)
-                        ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
-                        : hostSessionSubjectAuthenticator.authenticate(authentication).contextWrite(reactorContext).toFuture(),
-                () -> {
-                    HttpCookie cookie = exchange.getRequest().getCookies().getFirst(BROWSER_SESSION_COOKIE);
-                    return cookie == null
-                            ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
-                            : browserSessionSubjectAuthenticator.authenticate(cookie.getValue()).contextWrite(reactorContext).toFuture();
-                }, applied)))
+                subjectAuthentication(exchange, authentication, reactorContext), applied)))
                 .flatMap(admitted -> {
                     IngressAccessOutput output = admitted.access();
                     if (output instanceof IngressAccessOutput.Denied denied) {
-                        return reject(exchange, status(denied.decision().reason()));
+                        return reject(exchange, status(denied.decision().denyReason()));
                     }
                     IngressAccessOutput.Allowed allowed = (IngressAccessOutput.Allowed) output;
                     exchange.getAttributes().put(GatewayRequestAttributes.TRUSTED_CONTEXT, allowed.context());
@@ -156,30 +156,21 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
                 headers.getFirst(RequestHeader.NONCE.headerName()));
     }
 
-    Mono<SubjectAuthenticationOutcome> authenticateSubject(
-            ServerWebExchange exchange, EndpointPolicy route, Authentication authentication) {
-        return Mono.deferContextual(context -> Mono.fromCompletionStage(() -> ingress.authenticateSubject(route.subjectAuthencationRequirement(),
-                () -> isAuthenticationAbsent(authentication)
-                        ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
-                        : hostSessionSubjectAuthenticator.authenticate(authentication).contextWrite(context).toFuture(),
-                () -> {
-                    HttpCookie cookie = exchange.getRequest().getCookies().getFirst(BROWSER_SESSION_COOKIE);
-                    return cookie == null
-                            ? CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent())
-                            : browserSessionSubjectAuthenticator.authenticate(cookie.getValue()).contextWrite(context).toFuture();
-                })));
+    /** Transport selection based on request evidence: Bearer token → host, cookie → browser (v2). */
+    private Supplier<CompletionStage<SubjectAuthenticationOutcome>> subjectAuthentication(
+            ServerWebExchange exchange, Authentication authentication,
+            reactor.util.context.ContextView reactorContext) {
+        return () -> {
+            if (!isAuthenticationAbsent(authentication)) {
+                return hostSessionSubjectAuthenticator.authenticate(authentication)
+                        .contextWrite(reactorContext).toFuture();
+            }
+            return CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent());
+        };
     }
 
     private static boolean isAuthenticationAbsent(Authentication authentication) {
         return authentication == null || authentication instanceof AnonymousAuthenticationToken;
-    }
-
-    private static boolean isUnsafe(HttpMethod method) {
-        return method == null
-                || !(method == HttpMethod.GET
-                || method == HttpMethod.HEAD
-                || method == HttpMethod.OPTIONS
-                || method == HttpMethod.TRACE);
     }
 
     static HttpStatus status(IngressAccessDenyReason reason) {
@@ -187,7 +178,7 @@ public final class TrustedRequestContextGlobalFilter implements GlobalFilter, Or
             case APP_NOT_FOUND, CLIENT_REQUIRED -> HttpStatus.BAD_REQUEST;
             case ENDPOINT_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case CLIENT_VERIFICATION_REQUIRED, CLIENT_VERIFICATION_MISMATCH,
-                 SUBJECT_REQUIRED, SUBJECT_AUTHENTICATION_REJECTED, SUBJECT_TYPE_MISMATCH -> HttpStatus.UNAUTHORIZED;
+                 SUBJECT_REQUIRED, SUBJECT_AUTHENTICATION_REJECTED -> HttpStatus.UNAUTHORIZED;
             case CLIENT_VERIFICATION_FAILED,
                  SUBJECT_AUTHENTICATION_UPSTREAM_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case SUBJECT_AUTHENTICATION_RESPONSE_INVALID -> HttpStatus.BAD_GATEWAY;

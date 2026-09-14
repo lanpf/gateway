@@ -22,7 +22,7 @@ class RateLimitQuotaAdapterTest {
     private final RateLimitKeyResolver keys = new RateLimitKeyResolver(new DefaultResourceNameResolver());
     private final RateLimitQuotaAdapter adapter = new RateLimitQuotaAdapter(
             new RedisTokenBucketLimiter(redis), keys);
-    private final RateLimitPolicy rule = new RateLimitPolicy("stable", RateLimitDimension.CLIENT, 1, 1, RateLimitMode.EXACT);
+    private final RateLimitRule rule = new RateLimitRule("stable", RateLimitDimension.CLIENT, 1, 1, RateLimitMode.EXACT);
 
     @Test
     void shouldReturnExactFractionalRetryAfterFromScript() {
@@ -37,7 +37,7 @@ class RateLimitQuotaAdapterTest {
 
     @Test
     void shouldKeepPhysicalKeyAcrossQuotaConfigurationUpdates() {
-        RateLimitPolicy revised = new RateLimitPolicy("stable", RateLimitDimension.CLIENT, 100, 30, RateLimitMode.EXACT);
+        RateLimitRule revised = new RateLimitRule("stable", RateLimitDimension.CLIENT, 100, 30, RateLimitMode.EXACT);
         when(redis.execute(any(RedisScript.class), anyList(), any(Object[].class)))
                 .thenReturn(List.of(1L, 0L, 0L));
         adapter.tryAcquire(rule, "partner");

@@ -1,8 +1,8 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
 import com.alibaba.nacos.api.exception.NacosException;
-import com.cloud.gateway.application.policy.VersionedPolicyDefinition;
-import com.cloud.gateway.application.policy.WritablePolicyDefinitionRepository;
+import com.cloud.gateway.application.access.definition.VersionedAccessDefinition;
+import com.cloud.gateway.application.access.definition.WritableAccessDefinitionRepository;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
@@ -10,14 +10,14 @@ import com.cloud.gateway.infrastructure.persistence.nacos.operations.NacosConfig
 import java.util.function.Function;
 import org.springframework.util.StringUtils;
 
-abstract class AbstractNacosPolicyDefinitionRepository<T> implements WritablePolicyDefinitionRepository<T> {
+abstract class AbstractNacosAccessDefinitionRepository<T> implements com.cloud.gateway.application.access.definition.WritableAccessDefinitionRepository<T> {
     private final NacosConfigOperations operations;
     private final NacosPolicyProperties properties;
     private final String dataId;
     private final Function<String, T> decoder;
     private final Function<T, String> encoder;
 
-    AbstractNacosPolicyDefinitionRepository(NacosConfigOperations operations, NacosPolicyProperties properties,
+    AbstractNacosAccessDefinitionRepository(NacosConfigOperations operations, NacosPolicyProperties properties,
             String dataId, Function<String, T> decoder, Function<T, String> encoder) {
         this.operations = operations;
         this.properties = properties;
@@ -27,15 +27,15 @@ abstract class AbstractNacosPolicyDefinitionRepository<T> implements WritablePol
     }
 
     @Override
-    public final VersionedPolicyDefinition<T> load() {
+    public final com.cloud.gateway.application.access.definition.VersionedAccessDefinition<T> load() {
         try {
             String content = operations.getConfig(dataId, properties.getGroup(), properties.getReadTimeout().toMillis());
             if (!StringUtils.hasText(content)) {
                 throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
             }
             try {
-                return new VersionedPolicyDefinition<>(decoder.apply(content),
-                        NacosPolicySnapshotStore.sourceRevision(content));
+                return new com.cloud.gateway.application.access.definition.VersionedAccessDefinition<>(decoder.apply(content),
+                        NacosAccessSnapshotStore.sourceRevision(content));
             } catch (RuntimeException exception) {
                 throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID, exception);
             }

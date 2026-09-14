@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.config.ConfigService;
 import com.cloud.framework.core.Result;
-import com.cloud.gateway.application.policy.PolicySnapshotHasher;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.Endpoint;
@@ -22,24 +22,24 @@ import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
-import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.domain.client.ClientStatus;
 import com.cloud.gateway.domain.policy.bundle.PolicyBinding;
 import com.cloud.gateway.domain.policy.bundle.PolicyBindingId;
 import com.cloud.gateway.domain.policy.bundle.PolicyBundle;
 import com.cloud.gateway.domain.policy.bundle.PolicyBundleId;
-import com.cloud.gateway.domain.policy.bundle.PolicyComposition;
+import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
 import com.cloud.gateway.domain.policy.header.HeaderPolicy;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
+import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.cloud.userauth.api.authentication.CreateSessionHandoffApiCommandOutput;
 import com.cloud.userauth.api.constants.UserAuthPathApiConstants;
 import com.cloud.userauth.api.authentication.IssueAuthChallengeApiCommandOutput;
@@ -315,10 +315,10 @@ class BrowserSessionIngressIT {
 
     private void seedSnapshot() throws Exception {
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-        PolicySnapshotHasher hasher = new CanonicalPolicySnapshotHasher(
+        com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
                 new CanonicalPolicyContentMapper(), objectMapper);
         StoredPolicyDefinitionCodec codec = new StoredPolicyDefinitionCodec(
-                new StoredPolicySnapshotMapper(), objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                new StoredAccessSnapshotMapper(), objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
         NacosPolicyProperties properties = nacosPolicyProperties();
 
         EndpointRegistry endpointRegistry = new EndpointRegistry(List.of(new Endpoint(
@@ -326,21 +326,21 @@ class BrowserSessionIngressIT {
                 "user-auth",
                 List.of(new EndpointMatcher("POST", BROWSER_END_PATH)),
                 ROUTE_ID)));
-        Map<AppId, AppPolicy> apps = Map.of(
+        Map<AppId, AppAccess> apps = Map.of(
                 new AppId(APP_ID),
-                new AppPolicy(
+                new AppAccess(
                         new AppId(APP_ID),
                         "WECHAT_MINI_PROGRAM",
                         Set.of(ALLOWED_ORIGIN),
                         PolicyStatus.ENABLED));
-        Map<ClientId, ClientPolicy> clientAccess = Map.of(
+        Map<ClientId, ClientAccess> clientAccess = Map.of(
                 new ClientId(CLIENT_ID),
-                new ClientPolicy(
+                new ClientAccess(
                         new ClientId(CLIENT_ID),
                         Set.of(new AppId(APP_ID)), ClientStatus.ENABLED));
-        Map<EndpointId, EndpointPolicy> endpointAccess = Map.of(
+        Map<EndpointId, EndpointAccess> endpointAccess = Map.of(
                 new EndpointId(ENDPOINT_ID),
-                new EndpointPolicy(
+                new EndpointAccess(
                         new EndpointId(ENDPOINT_ID),
                         ClientVerificationRequirement.REQUIRED,
                         ClientVerificationMode.IGNORE,
@@ -353,7 +353,7 @@ class BrowserSessionIngressIT {
                                 Set.of("BROWSER_SESSION")),
                         EndpointStatus.ENABLED));
 
-        PolicyComposition policies = browserSessionPolicies();
+        PolicyConfig policies = browserSessionPolicies();
 
         publish(properties.getEndpointDefinitionDataId(),
                 codec.encodeEndpointRegistry(endpointRegistry));
@@ -373,7 +373,7 @@ class BrowserSessionIngressIT {
         await(() -> readableSnapshot(properties));
     }
 
-    private PolicyComposition browserSessionPolicies() {
+    private PolicyConfig browserSessionPolicies() {
         // The downstream contract uses the current identity headers without compatibility aliases.
         HeaderPolicy headers = new HeaderPolicy(Set.of(
                 RequestHeader.APP_ID, RequestHeader.APP_PLATFORM, RequestHeader.SUBJECT_TYPE,
@@ -383,15 +383,15 @@ class BrowserSessionIngressIT {
         // This browser entry does not authenticate a Client client: never manufacture a trusted Client alias.
         var bundleId = new PolicyBundleId("user-auth-browser");
         var bundle = new PolicyBundle(bundleId, null, null, null, null, headers);
-        return new PolicyComposition(Map.of(bundleId, bundle), List.of(new PolicyBinding(
+        return new PolicyConfig(Map.of(bundleId, bundle), List.of(new PolicyBinding(
                 new PolicyBindingId("user-auth-browser-end"), bundleId, "user-auth", new EndpointId(ENDPOINT_ID),
                 Set.of(), null, null, null)));
     }
 
-    private StoredPolicySnapshotCodec snapshotCodec(
-            ObjectMapper objectMapper, PolicySnapshotHasher hasher) {
-        return new StoredPolicySnapshotCodec(
-                new StoredPolicySnapshotMapper(), hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+    private StoredAccessSnapshotCodec snapshotCodec(
+            ObjectMapper objectMapper, com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher) {
+        return new StoredAccessSnapshotCodec(
+                new StoredAccessSnapshotMapper(), hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
     }
 
     private NacosPolicyProperties nacosPolicyProperties() {

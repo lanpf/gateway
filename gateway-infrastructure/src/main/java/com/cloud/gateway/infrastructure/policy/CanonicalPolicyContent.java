@@ -25,7 +25,7 @@ public record CanonicalPolicyContent(
         Map<String, Client> clientPolicies,
         Map<String, App> appPolicies,
         Map<String, EndpointAccess> endpointPolicies,
-        StoredPolicyComposition policies
+        StoredPolicyConfig policies
 ) {
     public CanonicalPolicyContent {
         endpointRegistry = List.copyOf(endpointRegistry);

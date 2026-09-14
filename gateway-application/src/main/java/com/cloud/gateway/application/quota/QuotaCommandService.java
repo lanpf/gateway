@@ -2,6 +2,7 @@ package com.cloud.gateway.application.quota;
 
 import com.cloud.gateway.domain.policy.capability.ApplicableQuota;
 import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
+import com.cloud.gateway.domain.policy.capability.RateLimitRuleId;
 import com.cloud.gateway.domain.policy.capability.RateLimitEvaluator;
 import com.cloud.gateway.domain.policy.capability.RateLimitQuota;
 import java.util.ArrayList;
@@ -18,7 +19,7 @@ public final class QuotaCommandService {
     private final QuotaObserver observer;
 
     /** applied is a mutable request-owned record shared serially across ingress phases. */
-    public RateLimitDecision acquire(QuotaCommand command, Set<String> applied) {
+    public RateLimitDecision acquire(QuotaCommand command, Set<RateLimitRuleId> applied) {
         List<ApplicableQuota> applicable = RateLimitEvaluator.applicable(
                 command.groups(), command.dimensions(), command.ipOnly(), applied);
         List<RateLimitDecision> decisions = new ArrayList<>();

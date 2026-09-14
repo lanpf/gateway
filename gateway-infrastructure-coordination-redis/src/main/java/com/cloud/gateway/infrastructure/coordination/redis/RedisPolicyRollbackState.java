@@ -1,16 +1,16 @@
 package com.cloud.gateway.infrastructure.coordination.redis;
 
-import com.cloud.gateway.application.policy.PolicyRollbackState;
+import com.cloud.gateway.application.access.publication.AccessRollbackState;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @RequiredArgsConstructor
-public final class RedisPolicyRollbackState implements PolicyRollbackState {
+public final class RedisAccessRollbackState implements com.cloud.gateway.application.access.publication.AccessRollbackState {
     private static final String VALUE = "1";
     private final StringRedisTemplate redisTemplate;
-    private final PolicyRollbackStateKeyResolver keyResolver;
+    private final AccessRollbackStateKeyResolver keyResolver;
 
     @Override
     public boolean isActive() {

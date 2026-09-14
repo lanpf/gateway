@@ -8,14 +8,14 @@ import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
-import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
-import com.cloud.gateway.domain.policy.bundle.PolicyComposition;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
+import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
 import com.cloud.gateway.domain.client.Credential;
-import com.cloud.gateway.infrastructure.policy.mapstruct.PolicyCompositionStorageMapStructMapper;
+import com.cloud.gateway.infrastructure.policy.mapstruct.PolicyConfigStorageMapStructMapper;
 
 import java.util.Comparator;
 import java.util.List;
@@ -23,21 +23,21 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-public class StoredPolicySnapshotMapper {
-    private final PolicyCompositionStorageMapper policies = org.mapstruct.factory.Mappers.getMapper(
-            PolicyCompositionStorageMapStructMapper.class);
+public class StoredAccessSnapshotMapper {
+    private final PolicyConfigStorageMapper policies = org.mapstruct.factory.Mappers.getMapper(
+            PolicyConfigStorageMapStructMapper.class);
 
-    public StoredPolicyComposition toStoredPolicies(PolicyComposition source) {
+    public StoredPolicyConfig toStoredPolicies(PolicyConfig source) {
         return policies.toStored(source);
     }
 
-    public PolicyComposition toDomainPolicies(StoredPolicyComposition source) {
+    public PolicyConfig toDomainPolicies(StoredPolicyConfig source) {
         return policies.toDomain(source);
     }
 
-    public StoredPolicySnapshot toStore(IngressAccessSnapshot source) {
+    public StoredAccessSnapshot toStore(IngressAccessSnapshot source) {
         IngressAccessContent content = source.content();
-        return new StoredPolicySnapshot(
+        return new StoredAccessSnapshot(
                 source.version(),
                 toStoredEndpoints(content.endpointRegistry()),
                 toStoredApps(content.appPolicies()),
@@ -48,18 +48,18 @@ public class StoredPolicySnapshotMapper {
                 source.publishedAt());
     }
 
-    public IngressAccessSnapshot toDomain(StoredPolicySnapshot source) {
+    public IngressAccessSnapshot toDomain(StoredAccessSnapshot source) {
         return new IngressAccessSnapshot(source.snapshotVersion(), toDomainContent(source),
                 source.contentHash(), source.publishedAt());
     }
 
-    public IngressAccessContent toDomainContent(StoredPolicySnapshot source) {
+    public IngressAccessContent toDomainContent(StoredAccessSnapshot source) {
         return new IngressAccessContent(toDomainEndpointRegistry(source.endpoints()),
                 toDomainApps(source.apps()), toDomainClients(source.clients()),
                 toDomainEndpointAccess(source.routes()), toDomainPolicies(source.policies()));
     }
 
-    public List<StoredPolicySnapshot.Endpoint> toStoredEndpoints(EndpointRegistry source) {
+    public List<StoredAccessSnapshot.Endpoint> toStoredEndpoints(EndpointRegistry source) {
         EndpointPathPatternValidator.validate(source);
         return source.definitions().stream()
                 .sorted(Comparator.comparing(value -> value.endpointId().value()))
@@ -67,12 +67,12 @@ public class StoredPolicySnapshotMapper {
                 .toList();
     }
 
-    public Map<String, StoredPolicySnapshot.App> toStoredApps(
-            Map<AppId, AppPolicy> source
+    public Map<String, StoredAccessSnapshot.App> toStoredApps(
+            Map<AppId, AppAccess> source
     ) {
         return source.entrySet().stream().collect(Collectors.toMap(
                 entry -> entry.getKey().value(),
-                entry -> new StoredPolicySnapshot.App(
+                entry -> new StoredAccessSnapshot.App(
                         entry.getValue().status(),
                         entry.getValue().platform(),
                         entry.getValue().allowedOrigins()),
@@ -80,26 +80,26 @@ public class StoredPolicySnapshotMapper {
                 TreeMap::new));
     }
 
-    public Map<String, StoredPolicySnapshot.Client> toStoredClients(
-            Map<ClientId, ClientPolicy> source
+    public Map<String, StoredAccessSnapshot.Client> toStoredClients(
+            Map<ClientId, ClientAccess> source
     ) {
         return source.entrySet().stream().collect(Collectors.toMap(
                 entry -> entry.getKey().value(),
-                entry -> new StoredPolicySnapshot.Client(entry.getValue().allowedApps().stream()
+                entry -> new StoredAccessSnapshot.Client(entry.getValue().allowedApps().stream()
                         .map(AppId::value).collect(Collectors.toUnmodifiableSet()), entry.getValue().status(),
                         credentialsDocument(entry.getValue().credentials())),
                 (left, right) -> left,
                 TreeMap::new));
     }
 
-    private StoredPolicySnapshot.ClientCredentials credentialsDocument(Credentials source) {
-        return source == null ? null : new StoredPolicySnapshot.ClientCredentials(
+    private StoredAccessSnapshot.ClientCredentials credentialsDocument(Credentials source) {
+        return source == null ? null : new StoredAccessSnapshot.ClientCredentials(
                 credentialDocument(source.activeCredential()),
                 source.graceCredential() == null ? null : credentialDocument(source.graceCredential()));
     }
 
-    public Map<String, StoredPolicySnapshot.Route> toStoredEndpointAccess(
-            Map<EndpointId, EndpointPolicy> source
+    public Map<String, StoredAccessSnapshot.Route> toStoredEndpointAccess(
+            Map<EndpointId, EndpointAccess> source
     ) {
         return source.entrySet().stream().collect(Collectors.toMap(
                 entry -> entry.getKey().value(),
@@ -108,42 +108,42 @@ public class StoredPolicySnapshotMapper {
                 TreeMap::new));
     }
 
-    public EndpointRegistry toDomainEndpointRegistry(List<StoredPolicySnapshot.Endpoint> source) {
+    public EndpointRegistry toDomainEndpointRegistry(List<StoredAccessSnapshot.Endpoint> source) {
         EndpointRegistry registry = new EndpointRegistry(source.stream().map(this::endpointDomain).toList());
         EndpointPathPatternValidator.validate(registry);
         return registry;
     }
 
-    public Map<AppId, AppPolicy> toDomainApps(
-            Map<String, StoredPolicySnapshot.App> source
+    public Map<AppId, AppAccess> toDomainApps(
+            Map<String, StoredAccessSnapshot.App> source
     ) {
         return source.entrySet().stream()
                 .collect(Collectors.toMap(
                         entry -> new AppId(entry.getKey()),
-                        entry -> new AppPolicy(new AppId(entry.getKey()),
+                        entry -> new AppAccess(new AppId(entry.getKey()),
                                 entry.getValue().platform(),
                                 entry.getValue().allowedOrigins(),
                                 entry.getValue().status())));
     }
 
-    public Map<ClientId, ClientPolicy> toDomainClients(
-            Map<String, StoredPolicySnapshot.Client> source
+    public Map<ClientId, ClientAccess> toDomainClients(
+            Map<String, StoredAccessSnapshot.Client> source
     ) {
         return source.entrySet().stream()
                 .collect(Collectors.toMap(
                         entry -> new ClientId(entry.getKey()),
-                        entry -> new ClientPolicy(new ClientId(entry.getKey()), entry.getValue().allowedAppIds().stream()
+                        entry -> new ClientAccess(new ClientId(entry.getKey()), entry.getValue().allowedAppIds().stream()
                                         .map(AppId::new).collect(Collectors.toUnmodifiableSet()), credentialsDomain(entry.getKey(), entry.getValue().credentials()), entry.getValue().status())));
     }
 
-    private Credentials credentialsDomain(String clientId, StoredPolicySnapshot.ClientCredentials source) {
+    private Credentials credentialsDomain(String clientId, StoredAccessSnapshot.ClientCredentials source) {
         return source == null ? null : new Credentials(
                 credentialDomain(clientId, source.activeCredential()),
                 source.graceCredential() == null ? null : credentialDomain(clientId, source.graceCredential()));
     }
 
-    public Map<EndpointId, EndpointPolicy> toDomainEndpointAccess(
-            Map<String, StoredPolicySnapshot.Route> source
+    public Map<EndpointId, EndpointAccess> toDomainEndpointAccess(
+            Map<String, StoredAccessSnapshot.Route> source
     ) {
         return source.entrySet().stream()
                 .collect(Collectors.toMap(
@@ -151,42 +151,42 @@ public class StoredPolicySnapshotMapper {
                         entry -> endpointAccessDomain(entry.getKey(), entry.getValue())));
     }
 
-    private StoredPolicySnapshot.Endpoint endpointDocument(Endpoint source) {
-        return new StoredPolicySnapshot.Endpoint(source.endpointId().value(), source.serviceId(),
-                source.matchers().stream().map(matcher -> new StoredPolicySnapshot.Matcher(
+    private StoredAccessSnapshot.Endpoint endpointDocument(Endpoint source) {
+        return new StoredAccessSnapshot.Endpoint(source.endpointId().value(), source.serviceId(),
+                source.matchers().stream().map(matcher -> new StoredAccessSnapshot.Matcher(
                         matcher.httpMethod(), matcher.pathPattern())).toList(), source.routeId(), source.tags());
     }
 
-    private Endpoint endpointDomain(StoredPolicySnapshot.Endpoint source) {
+    private Endpoint endpointDomain(StoredAccessSnapshot.Endpoint source) {
         return new Endpoint(new EndpointId(source.endpointId()), source.serviceId(),
                 source.matchers().stream().map(matcher -> new EndpointMatcher(
                         matcher.httpMethod(), matcher.pathPattern())).toList(), source.routeId(), source.tags());
     }
 
-    private StoredPolicySnapshot.Credential credentialDocument(Credential source) {
-        return new StoredPolicySnapshot.Credential(source.credentialId().value(), source.validFrom(),
+    private StoredAccessSnapshot.Credential credentialDocument(Credential source) {
+        return new StoredAccessSnapshot.Credential(source.credentialId().value(), source.validFrom(),
                 source.expiresAt(), source.signatureContract(), source.secretRef());
     }
 
     private Credential credentialDomain(
-            String clientId, StoredPolicySnapshot.Credential source) {
+            String clientId, StoredAccessSnapshot.Credential source) {
         return new Credential(new CredentialId(source.credentialId()), new ClientId(clientId),
                 source.signatureContract(), source.secretRef(),
                 source.validFrom(), source.expiresAt());
     }
 
-    private StoredPolicySnapshot.Route endpointAccessDocument(EndpointPolicy source) {
+    private StoredAccessSnapshot.Route endpointAccessDocument(EndpointAccess source) {
         CredentialForwarding forwarding = source.credentialForwarding();
-        return new StoredPolicySnapshot.Route(source.clientVerificationMode(),
-                source.clientVerificationRequirement(), source.subjectAuthencationRequirement(), source.requiredScopes(),
-                source.requiredAudiences(), new StoredPolicySnapshot.Forwarding(
+        return new StoredAccessSnapshot.Route(source.clientVerificationMode(),
+                source.clientVerificationRequirement(), source.subjectAuthenticationRequirement(), source.requiredScopes(),
+                source.requiredAudiences(), new StoredAccessSnapshot.Forwarding(
                         forwarding.authorizationHeader(), forwarding.cookies(), forwarding.allowedCookieNames()),
                 source.status());
     }
 
-    private EndpointPolicy endpointAccessDomain(String endpointId, StoredPolicySnapshot.Route source) {
-        StoredPolicySnapshot.Forwarding forwarding = source.credentialForwarding();
-        return new EndpointPolicy(new EndpointId(endpointId), source.clientVerificationRequirement(), source.clientVerificationMode(), source.subjectAuthencationRequirement(), source.requiredScopes(), source.requiredAudiences(), new CredentialForwarding(forwarding.authorizationHeader(),
+    private EndpointAccess endpointAccessDomain(String endpointId, StoredAccessSnapshot.Route source) {
+        StoredAccessSnapshot.Forwarding forwarding = source.credentialForwarding();
+        return new EndpointAccess(new EndpointId(endpointId), source.clientVerificationRequirement(), source.clientVerificationMode(), source.subjectAuthencationRequirement(), source.requiredScopes(), source.requiredAudiences(), new CredentialForwarding(forwarding.authorizationHeader(),
                         forwarding.cookies(), forwarding.allowedCookieNames()), source.status());
     }
 }

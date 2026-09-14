@@ -2,29 +2,29 @@ package com.cloud.gateway.application.ingress;
 
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
 import com.cloud.gateway.application.security.ClientSignatureEvidence;
-import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.access.IngressAccessDecision;
+import com.cloud.gateway.domain.access.IngressAccessDenyReason;
 import com.cloud.gateway.domain.access.IngressAccessEvaluator;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.access.IngressAccessGrantedContext;
-import com.cloud.gateway.domain.access.client.ClientVerificationMode;
-import com.cloud.gateway.domain.app.AppPolicy;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
-import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
+import com.cloud.gateway.domain.access.IngressAccessRequest;
+import com.cloud.gateway.domain.access.RequestEvidence;
+import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.client.Client;
+import com.cloud.gateway.domain.client.Credentials;
+import com.cloud.gateway.domain.endpoint.Endpoint;
+import com.cloud.gateway.domain.endpoint.EndpointMatch;
 import com.cloud.gateway.domain.policy.bundle.EffectivePolicy;
 import com.cloud.gateway.domain.policy.bundle.PolicyResolver;
 import com.cloud.gateway.domain.policy.capability.RateLimitDimension;
-import com.cloud.gateway.domain.client.ClientPolicy;
-import com.cloud.gateway.domain.security.SubjectAuthenticationSelection;
 import java.time.Clock;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 
-/** HTTP-neutral ingress use case. Adapters retain asynchronous subscription and cancellation. */
+/** HTTP-neutral access stage: composes verification and authentication outcomes into a decision. */
 @RequiredArgsConstructor
 public final class IngressAccessCommandService {
     private static final String SUBJECT_DIMENSION_SEPARATOR = ":";
@@ -34,35 +34,23 @@ public final class IngressAccessCommandService {
     private final PolicyResolver policies;
     private final Clock clock;
 
-    /** Select only the subject authentication required by the captured endpoint policy. */
-    public CompletionStage<SubjectAuthenticationOutcome> authenticateSubject(SubjectAuthenticationRequirement requirement,
-                                                                             Supplier<CompletionStage<SubjectAuthenticationOutcome>> host,
-                                                                             Supplier<CompletionStage<SubjectAuthenticationOutcome>> browser) {
-        return switch (SubjectAuthenticationSelection.from(requirement)) {
-            case IGNORE -> CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent());
-            case HOST -> host.get();
-            case BROWSER -> browser.get();
-        };
-    }
-
-    /** Invoke at subscription time; null evidence means missing signature fields. */
+    /** Verification runs only for a declared client with configured credentials and submitted evidence. */
     public CompletionStage<ClientVerificationOutcome> authenticateClient(
             IngressAccessCommand command, ClientSignatureEvidence evidence) {
-        EndpointPolicy endpointPolicy = command.snapshot().content().endpointPolicies()
-                .get(command.endpoint().endpointId());
-        if (endpointPolicy.clientVerificationMode() != ClientVerificationMode.REQUEST_SIGNATURE
-                || command.clientId() == null) {
+        if (command.evidence().declaredClientId() == null) {
             return CompletableFuture.completedFuture(ClientVerificationOutcome.absent());
         }
-        ClientPolicy client = command.snapshot().content().clients().get(command.clientId());
-        if (client == null || client.credentials() == null) {
-            return CompletableFuture.completedFuture(ClientVerificationOutcome.rejected());
-        }
-        if (evidence == null) {
-            return CompletableFuture.completedFuture(ClientVerificationOutcome.absent());
+        Client client = command.snapshot().content().clientRegistry()
+                .find(command.evidence().declaredClientId()).orElse(null);
+        Credentials credentials = client == null ? null : client.access().credentials();
+        if (credentials == null || evidence == null) {
+            return CompletableFuture.completedFuture(
+                    credentials == null && evidence != null
+                            ? ClientVerificationOutcome.rejected()
+                            : ClientVerificationOutcome.absent());
         }
         try {
-            return clientAuthenticator.authenticate(client.credentials(), evidence, clock.instant());
+            return clientAuthenticator.authenticate(credentials, command.evidence().declaredClientId(), evidence, clock.instant());
         } catch (IllegalArgumentException exception) {
             return CompletableFuture.completedFuture(ClientVerificationOutcome.rejected());
         }
@@ -71,36 +59,48 @@ public final class IngressAccessCommandService {
     public IngressAccessOutput evaluate(IngressAccessCommand command,
             ClientVerificationOutcome clientVerification,
             SubjectAuthenticationOutcome subjectAuthentication) {
-        AppPolicy appPolicy = command.appId() == null ? null
-                : command.snapshot().content().appPolicies().get(command.appId());
-        ClientPolicy clientPolicy = command.clientId() == null ? null
-                : command.snapshot().content().clients().get(command.clientId());
-        EndpointPolicy endpointPolicy = command.snapshot().content().endpointPolicies()
-                .get(command.endpoint().endpointId());
-        IngressAccessDecision decision = evaluator.evaluate(command.snapshot().version(), command.clientId(),
-                appPolicy, clientPolicy, endpointPolicy,
-                command.origin(), command.unsafe(),
-                clientVerification, subjectAuthentication);
-        if (decision instanceof IngressAccessDecision.Denied denied) {
-            return new IngressAccessOutput.Denied(denied);
+        if (!(command.endpointMatch() instanceof EndpointMatch.Unique unique)) {
+            return denied(command, IngressAccessDenyReason.ENDPOINT_NOT_FOUND);
         }
-        IngressAccessGrantedContext context = ((IngressAccessDecision.Allowed) decision).context();
-        EffectivePolicy effective = policies.resolve(command.snapshot().content().policies(), command.endpoint(),
-                context.appContext().appId(),
-                context.clientContext() == null ? null : context.clientContext().clientId(),
-                context.subjectContext() == null ? null : context.subjectContext().subjectType(), endpointPolicy);
+        if (command.evidence().declaredAppId() == null) {
+            return denied(command, IngressAccessDenyReason.APP_NOT_FOUND);
+        }
+        IngressAccessRequest request = new IngressAccessRequest(unique.endpoint().getId(),
+                command.evidence().declaredAppId(), command.evidence().declaredClientId(),
+                command.evidence().origin(), command.evidence().unsafe());
+        IngressAccessDecision decision = evaluator.evaluate(
+                command.snapshot(), request, clientVerification, subjectAuthentication);
+        if (decision instanceof IngressAccessDecision.Denied d) {
+            return new IngressAccessOutput.Denied(d);
+        }
+        IngressAccessDecision.Allowed allowed = (IngressAccessDecision.Allowed) decision;
+        IngressAccessGrantedContext context = allowed.grantedContext();
+        EffectivePolicy effective = policies.resolve(command.snapshot().content().policies(), unique.endpoint(),
+                context.app().appId(),
+                context.client() == null ? null : context.client().clientId(),
+                context.subject() == null ? null : context.subject().subjectType());
+        return new IngressAccessOutput.Allowed(context, effective, effective.headers(),
+                quotaDimensions(command, unique.endpoint(), context));
+    }
+
+    private Map<RateLimitDimension, String> quotaDimensions(IngressAccessCommand command, Endpoint endpoint,
+            IngressAccessGrantedContext context) {
         Map<RateLimitDimension, String> dimensions = new EnumMap<>(RateLimitDimension.class);
-        dimensions.put(RateLimitDimension.IP, command.remoteIp());
-        dimensions.put(RateLimitDimension.APP, context.appContext().appId().value());
-        dimensions.put(RateLimitDimension.ENDPOINT, command.endpoint().endpointId().value());
-        if (context.clientContext() != null) {
-            dimensions.put(RateLimitDimension.CLIENT, context.clientContext().clientId().value());
+        dimensions.put(RateLimitDimension.IP, command.evidence().remoteIp());
+        dimensions.put(RateLimitDimension.APP, context.app().appId().value());
+        dimensions.put(RateLimitDimension.ENDPOINT, endpoint.getId().value());
+        if (context.client() != null) {
+            dimensions.put(RateLimitDimension.CLIENT, context.client().clientId().value());
         }
-        if (context.subjectContext() != null) {
-            dimensions.put(RateLimitDimension.SUBJECT,
-                    context.subjectContext().subjectType().name() + SUBJECT_DIMENSION_SEPARATOR
-                            + context.subjectContext().subjectId());
+        if (context.subject() != null) {
+            dimensions.put(RateLimitDimension.SUBJECT, context.subject().subjectType().name()
+                    + SUBJECT_DIMENSION_SEPARATOR + context.subject().subjectId().value());
         }
-        return new IngressAccessOutput.Allowed(context, effective, effective.headers(), dimensions);
+        return dimensions;
+    }
+
+    private IngressAccessOutput denied(IngressAccessCommand command, IngressAccessDenyReason reason) {
+        return new IngressAccessOutput.Denied((IngressAccessDecision.Denied) IngressAccessDecision.denied(
+                reason, command.snapshot().version()));
     }
 }

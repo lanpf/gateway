@@ -4,12 +4,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
 import com.cloud.gateway.application.security.ClientSignatureEvidence;
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.domain.access.*;
+import com.cloud.gateway.domain.app.App;
 import com.cloud.gateway.domain.app.AppId;
+import com.cloud.gateway.domain.app.AppAccess;
+import com.cloud.gateway.domain.app.AppRegistry;
+import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.client.Credential;
+import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientAccess;
+import com.cloud.gateway.domain.client.ClientStatus;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.client.CredentialId;
@@ -18,14 +25,17 @@ import com.cloud.gateway.domain.access.client.VerifiedClient;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
+import com.cloud.gateway.domain.endpoint.EndpointMatch;
+import com.cloud.gateway.domain.client.ClientRegistry;
+import com.cloud.gateway.domain.policy.bundle.*;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.domain.policy.CredentialForwarding;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationRejectReason;
 import com.cloud.gateway.domain.policy.bundle.*;
 import com.cloud.gateway.domain.policy.capability.RateLimitDimension;
 import com.cloud.gateway.domain.policy.header.HeaderPolicy;
@@ -45,20 +55,24 @@ class IngressAccessCommandServiceTest {
     private static final ClientId CLIENT = new ClientId("client");
     private static final CredentialId CREDENTIAL = new CredentialId("client");
     private static final Endpoint ENDPOINT = new Endpoint(new EndpointId("TEST.GET"),
-            "service", List.of(new EndpointMatcher("GET", "/test")), "route");
+            new com.cloud.gateway.domain.endpoint.ServiceId("service"),
+            new com.cloud.gateway.domain.endpoint.RouteId("route"),
+            List.of(new EndpointMatcher("GET", "/test")), Set.of(), EndpointStatus.ENABLED,
+            new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
+                    SubjectAuthenticationRequirement.OPTIONAL, Set.of(), Set.of()));
     private static final HeaderPolicy CLIENT_HEADERS = new HeaderPolicy(Set.of(),
-            Map.of("X-Gateway-Test", "verified"), Set.of(), CredentialForwarding.stripAll());
+            Map.of("X-Gateway-Test", "verified"), Set.of(), com.cloud.gateway.domain.policy.CredentialForwarding.stripAll());
 
     @Test
     void shouldNotPromoteDeclaredClientToContextBindingOrQuotaDimension() {
-        IngressAccessCommand command = command(ClientVerificationMode.IGNORE, true, APP);
+        IngressAccessCommand command = command(true, APP);
         IngressAccessOutput.Allowed allowed = assertInstanceOf(IngressAccessOutput.Allowed.class,
                 service(unusedAuthenticator()).evaluate(command, ClientVerificationOutcome.absent(),
                         SubjectAuthenticationOutcome.absent()));
-        assertNull(allowed.context().clientContext());
+        assertNull(allowed.context().client());
         assertFalse(allowed.dimensions().containsKey(RateLimitDimension.CLIENT));
-        assertEquals(allowed.headers(), allowed.policy().headers());
-        assertEquals(HeaderPolicy.defaults(CredentialForwarding.stripAll()), allowed.headers());
+        assertEquals(HeaderPolicy.defaults(com.cloud.gateway.domain.policy.CredentialForwarding.stripAll()),
+                allowed.headers());
         assertEquals(Map.of(RateLimitDimension.IP, "192.0.2.1", RateLimitDimension.APP, "app",
                 RateLimitDimension.ENDPOINT, "TEST.GET"), allowed.dimensions());
         assertThrows(UnsupportedOperationException.class,
@@ -67,12 +81,14 @@ class IngressAccessCommandServiceTest {
 
     @Test
     void shouldResolveVerifiedClientBindingAndSubjectDimensionAfterAuthorization() {
-        IngressAccessCommand command = command(ClientVerificationMode.REQUEST_SIGNATURE, true, APP);
+        IngressAccessCommand command = command(true, APP);
         SubjectAuthenticationOutcome subject = SubjectAuthenticationOutcome.authenticated(new AuthenticatedSubject(
-                SubjectType.HOST_SESSION, "user", "session", "issuer", Set.of("api"), Set.of(), NOW.plusSeconds(60)));
+                SubjectType.HOST_SESSION, new com.cloud.gateway.domain.access.subject.SubjectId("user"),
+                new com.cloud.gateway.domain.access.subject.SessionId("session"), "issuer", Set.of("api"), Set.of(),
+                NOW.plusSeconds(60)));
         IngressAccessOutput.Allowed allowed = assertInstanceOf(IngressAccessOutput.Allowed.class,
                 service(unusedAuthenticator()).evaluate(command, verified(), subject));
-        assertEquals(CLIENT, allowed.context().clientContext().clientId());
+        assertEquals(CLIENT, allowed.context().client().clientId());
         assertEquals(CLIENT_HEADERS, allowed.headers());
         assertEquals("client", allowed.dimensions().get(RateLimitDimension.CLIENT));
         assertEquals("HOST_SESSION:user", allowed.dimensions().get(RateLimitDimension.SUBJECT));
@@ -81,22 +97,32 @@ class IngressAccessCommandServiceTest {
     @Test
     void shouldReturnDomainDenialWithCapturedVersionWithoutExecutablePolicy() {
         IngressAccessOutput.Denied denied = assertInstanceOf(IngressAccessOutput.Denied.class,
-                service(unusedAuthenticator()).evaluate(command(ClientVerificationMode.IGNORE, true, null),
+                service(unusedAuthenticator()).evaluate(command(true, null),
                         ClientVerificationOutcome.absent(), SubjectAuthenticationOutcome.absent()));
-        assertEquals(IngressAccessDenyReason.APP_NOT_FOUND, denied.decision().reason());
-        assertEquals(7, denied.decision().snapshotVersion());
+        assertEquals(IngressAccessDenyReason.APP_NOT_FOUND, denied.decision().denyReason());
+        assertEquals(7, denied.decision().snapshotVersion().value());
+    }
+
+    @Test
+    void shouldDenyAmbiguousCandidatesWithoutJoiningAuthentication() {
+        IngressAccessOutput.Denied denied = assertInstanceOf(IngressAccessOutput.Denied.class,
+                service(unusedAuthenticator()).evaluate(ambiguousCommand(),
+                        ClientVerificationOutcome.absent(), SubjectAuthenticationOutcome.absent()));
+        assertEquals(IngressAccessDenyReason.ENDPOINT_NOT_FOUND, denied.decision().denyReason());
     }
 
     @Test
     void shouldUseCapturedCredentialsOriginalEvidenceAndInjectedTime() {
-        IngressAccessCommand command = command(ClientVerificationMode.REQUEST_SIGNATURE, true, APP);
+        IngressAccessCommand command = command(true, APP);
         ClientSignatureEvidence evidence = new ClientSignatureEvidence(new byte[]{1, 2}, "123", "signature",
                 "GET", "/a%2Fb", "x=1&x=2", "app", "client", "client", "nonce");
         AtomicInteger calls = new AtomicInteger();
-        ClientCredentialAuthenticator authenticator = (credentials, original, now) -> {
+        ClientCredentialAuthenticator authenticator = (credentials, clientId, original, now) -> {
             calls.incrementAndGet();
-            assertSame(command.snapshot().content().clients().get(CLIENT).credentials(), credentials);
+            assertSame(command.snapshot().content().clientRegistry().find(CLIENT).orElseThrow()
+                    .access().credentials(), credentials);
             assertSame(evidence, original);
+            assertEquals(CLIENT, clientId);
             assertEquals(NOW, now);
             return CompletableFuture.completedFuture(verified());
         };
@@ -106,53 +132,35 @@ class IngressAccessCommandServiceTest {
     }
 
     @Test
-    void shouldPreserveMissingCredentialPrecedenceOverMissingEvidence() {
+    void shouldNotAttemptVerificationWithoutCredentialsOrEvidence() {
         IngressAccessCommandService service = service(unusedAuthenticator());
+        assertInstanceOf(ClientVerificationOutcome.Absent.class, service.authenticateClient(
+                command(false, APP), null).toCompletableFuture().join());
+        assertInstanceOf(ClientVerificationOutcome.Absent.class, service.authenticateClient(
+                command(true, APP), null).toCompletableFuture().join());
         assertInstanceOf(ClientVerificationOutcome.Rejected.class, service.authenticateClient(
-                command(ClientVerificationMode.REQUEST_SIGNATURE, false, APP), null).toCompletableFuture().join());
-        assertInstanceOf(ClientVerificationOutcome.Absent.class, service.authenticateClient(
-                command(ClientVerificationMode.REQUEST_SIGNATURE, true, APP), null).toCompletableFuture().join());
-        assertInstanceOf(ClientVerificationOutcome.Absent.class, service.authenticateClient(
-                command(ClientVerificationMode.IGNORE, true, APP), null).toCompletableFuture().join());
+                command(false, APP), signedEvidence()).toCompletableFuture().join());
     }
 
     @Test
     void shouldPreserveUnavailableAuthenticationAsDenialRatherThanAnonymousAccess() {
-        IngressAccessCommand command = command(ClientVerificationMode.REQUEST_SIGNATURE, true, APP);
+        IngressAccessCommand command = command(true, APP);
         IngressAccessOutput.Denied denied = assertInstanceOf(IngressAccessOutput.Denied.class,
                 service(unusedAuthenticator()).evaluate(command, ClientVerificationOutcome.failed(),
                         SubjectAuthenticationOutcome.absent()));
-        assertEquals(IngressAccessDenyReason.CLIENT_VERIFICATION_FAILED, denied.decision().reason());
+        assertEquals(IngressAccessDenyReason.CLIENT_VERIFICATION_FAILED, denied.decision().denyReason());
     }
 
     @Test
     void shouldTranslateSynchronousInvalidEvidenceButPropagateUnexpectedFailures() {
-        IngressAccessCommand command = command(ClientVerificationMode.REQUEST_SIGNATURE, true, APP);
+        IngressAccessCommand command = command(true, APP);
         ClientSignatureEvidence evidence = new ClientSignatureEvidence(null, "123", "signature");
         assertInstanceOf(ClientVerificationOutcome.Rejected.class,
-                service((credentials, original, now) -> { throw new IllegalArgumentException("invalid"); })
+                service((credentials, clientId, original, now) -> { throw new IllegalArgumentException("invalid"); })
                         .authenticateClient(command, evidence).toCompletableFuture().join());
         assertThrows(IllegalStateException.class,
-                () -> service((credentials, original, now) -> { throw new IllegalStateException("unexpected"); })
+                () -> service((credentials, clientId, original, now) -> { throw new IllegalStateException("unexpected"); })
                         .authenticateClient(command, evidence));
-    }
-
-    @Test
-    void shouldInvokeOnlyRequiredSubjectAuthentication() {
-        IngressAccessCommandService service = service(unusedAuthenticator());
-        AtomicInteger hosts = new AtomicInteger();
-        AtomicInteger browsers = new AtomicInteger();
-        for (SubjectAuthenticationRequirement requirement : SubjectAuthenticationRequirement.values()) {
-            service.authenticateSubject(requirement, () -> {
-                hosts.incrementAndGet();
-                return CompletableFuture.completedFuture(SubjectAuthenticationOutcome.absent());
-            }, () -> {
-                browsers.incrementAndGet();
-                return CompletableFuture.completedFuture(SubjectAuthenticationOutcome.rejected());
-            }).toCompletableFuture().join();
-        }
-        assertEquals(2, hosts.get());
-        assertEquals(1, browsers.get());
     }
 
     private static IngressAccessCommandService service(ClientCredentialAuthenticator authenticator) {
@@ -161,33 +169,54 @@ class IngressAccessCommandServiceTest {
     }
 
     private static ClientCredentialAuthenticator unusedAuthenticator() {
-        return (credentials, evidence, now) -> { throw new AssertionError("authentication must not run"); };
+        return (credentials, clientId, evidence, now) -> { throw new AssertionError("authentication must not run"); };
+    }
+
+    private static ClientSignatureEvidence signedEvidence() {
+        return new ClientSignatureEvidence(new byte[]{1}, "123", "signature");
     }
 
     private static ClientVerificationOutcome verified() {
         return ClientVerificationOutcome.verified(new VerifiedClient(
-                ClientVerificationMode.REQUEST_SIGNATURE, CREDENTIAL, CLIENT, NOW));
+                CLIENT, CREDENTIAL, ClientVerificationMode.REQUEST_SIGNATURE, NOW));
     }
 
-    private static IngressAccessCommand command(ClientVerificationMode requirement, boolean credentials,
-                                                AppId declaredApp) {
-        ClientPolicy client = new ClientPolicy(CLIENT, Set.of(APP));
-        if (credentials) {
-            client = client.withCredentials(new Credentials(new Credential(CREDENTIAL, CLIENT,
-                    SignatureContract.HTTP_REQUEST_SIGNATURE_V1, "secret-ref", NOW.minusSeconds(60),
-                    NOW.plusSeconds(3600)), null));
-        }
-        EndpointPolicy endpoint = new EndpointPolicy(ENDPOINT.endpointId(), ClientVerificationRequirement.REQUIRED, requirement,
-                SubjectAuthenticationRequirement.HOST_SESSION_OPTIONAL, Set.of(), Set.of("api"), CredentialForwarding.stripAll(),
-                EndpointStatus.ENABLED);
+    private static IngressAccessCommand command(boolean credentials, AppId declaredApp) {
+        Credentials pair = credentials
+                ? new Credentials(new Credential(CREDENTIAL, "secret-ref",
+                        SignatureContract.HTTP_REQUEST_SIGNATURE_V1, NOW.minusSeconds(60), NOW.plusSeconds(3600)), null)
+                : null;
+        IngressAccessSnapshot snapshot = new IngressAccessSnapshot(new AccessSnapshotVersion(7),
+                new IngressAccessContent(
+                        new AppRegistry(List.of(new App(APP, "web", AppStatus.ENABLED, new AppAccess(Set.of())))),
+                        new ClientRegistry(List.of(new Client(CLIENT, ClientStatus.ENABLED,
+                                new ClientAccess(Set.of(APP), pair)))),
+                        new EndpointRegistry(List.of(ENDPOINT)), policies()),
+                "hash", NOW);
+        return new IngressAccessCommand(snapshot, EndpointMatch.of(List.of(ENDPOINT)),
+                new RequestEvidence("GET", "/test", null, declaredApp, CLIENT, null, "192.0.2.1"));
+    }
+
+    private static IngressAccessCommand ambiguousCommand() {
+        IngressAccessSnapshot snapshot = new IngressAccessSnapshot(new AccessSnapshotVersion(7),
+                new IngressAccessContent(
+                        new AppRegistry(List.of(new App(APP, "web", AppStatus.ENABLED, new AppAccess(Set.of())))),
+                        new ClientRegistry(List.of()), new EndpointRegistry(List.of(ENDPOINT)), policies()),
+                "hash", NOW);
+        Endpoint other = new Endpoint(new EndpointId("TEST.OTHER"),
+                new com.cloud.gateway.domain.endpoint.ServiceId("service"),
+                new com.cloud.gateway.domain.endpoint.RouteId("route"),
+                List.of(new EndpointMatcher("GET", "/test/**")), Set.of(), EndpointStatus.ENABLED,
+                new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
+                        SubjectAuthenticationRequirement.OPTIONAL, Set.of(), Set.of()));
+        return new IngressAccessCommand(snapshot, EndpointMatch.of(List.of(ENDPOINT, other)),
+                new RequestEvidence("GET", "/test", null, APP, CLIENT, null, "192.0.2.1"));
+    }
+
+    private static PolicyConfig policies() {
         PolicyBundleId id = new PolicyBundleId("verified");
-        PolicyComposition policies = new PolicyComposition(
+        return new PolicyConfig(
                 Map.of(id, new PolicyBundle(id, null, null, null, null, CLIENT_HEADERS)),
                 List.of(new PolicyBinding(new PolicyBindingId("verified"), id, null, null, Set.of(), null, CLIENT, null)));
-        IngressAccessSnapshot snapshot = new IngressAccessSnapshot(7,
-                new IngressAccessContent(new EndpointRegistry(List.of(ENDPOINT)),
-                        Map.of(APP, new AppPolicy(APP, "web", Set.of(), PolicyStatus.ENABLED)),
-                        Map.of(CLIENT, client), Map.of(ENDPOINT.endpointId(), endpoint), policies), "hash", NOW);
-        return new IngressAccessCommand(snapshot, ENDPOINT, declaredApp, CLIENT, null, false, "192.0.2.1");
     }
 }

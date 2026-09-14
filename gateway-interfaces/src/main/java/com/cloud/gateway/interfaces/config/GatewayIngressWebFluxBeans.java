@@ -1,6 +1,6 @@
 package com.cloud.gateway.interfaces.config;
 
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
+import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
 import com.cloud.gateway.application.ingress.IngressAccessCommandService;
 import com.cloud.gateway.domain.policy.bundle.PolicyResolver;
 import com.cloud.gateway.application.governance.ResponseCache;
@@ -8,7 +8,7 @@ import com.cloud.gateway.application.governance.DownstreamCircuitBreaker;
 import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.interfaces.webflux.RequestQuotaGuard;
 import com.cloud.gateway.interfaces.webflux.DownstreamPolicyHandler;
-import com.cloud.gateway.interfaces.webflux.PolicySnapshotWebFilter;
+import com.cloud.gateway.interfaces.webflux.AccessSnapshotWebFilter;
 import com.cloud.gateway.interfaces.webflux.LocalPolicyWebFilter;
 import com.cloud.gateway.interfaces.webflux.GatewayObservationWebFilter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -30,7 +30,7 @@ import org.springframework.web.reactive.result.method.annotation.ArgumentResolve
 
 @Configuration(proxyBeanMethods = false)
 public class GatewayIngressWebFluxBeans {
-    @Bean GatewayRouteContractValidator gatewayRouteContractValidator(PolicySnapshotProvider provider,
+    @Bean GatewayRouteContractValidator gatewayRouteContractValidator(com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider,
             org.springframework.cloud.gateway.route.RouteLocator routes) {
         return new GatewayRouteContractValidator(provider, routes);
     }
@@ -58,8 +58,8 @@ public class GatewayIngressWebFluxBeans {
     @Bean DownstreamPolicyHandler downstreamPolicyHandler(ResponseCache cache, DownstreamCircuitBreaker circuits) {
         return new DownstreamPolicyHandler(cache, circuits);
     }
-    @Bean PolicySnapshotWebFilter policySnapshotWebFilter(PolicySnapshotProvider provider, RequestQuotaGuard quotas) {
-        return new PolicySnapshotWebFilter(provider, quotas);
+    @Bean AccessSnapshotWebFilter policySnapshotWebFilter(com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider, RequestQuotaGuard quotas) {
+        return new AccessSnapshotWebFilter(provider, quotas);
     }
     @Bean LocalPolicyWebFilter localPolicyWebFilter(TrustedRequestContextGlobalFilter filter) {
         return new LocalPolicyWebFilter(filter);

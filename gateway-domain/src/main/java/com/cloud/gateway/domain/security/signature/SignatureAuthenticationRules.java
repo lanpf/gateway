@@ -1,6 +1,7 @@
 package com.cloud.gateway.domain.security.signature;
 
 import com.cloud.framework.core.validation.Require;
+import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.client.Credential;
@@ -31,11 +32,11 @@ public record SignatureAuthenticationRules(Duration maxClockSkew) {
         }
     }
 
-    public List<Credential> candidates(Credentials credentials, SignatureInput evidence, Instant now) {
+    public List<Credential> candidates(ClientId clientId, Credentials credentials, SignatureInput evidence, Instant now) {
         Credential active = credentials.activeCredential();
         List<Credential> candidates = new ArrayList<>();
         if (active.signatureContract() == SignatureContract.HTTP_REQUEST_SIGNATURE_V1) {
-            if (!active.clientId().value().equals(evidence.clientId()) || !HttpRequestSignatureV1Verifier.valid(evidence)) {
+            if (!clientId.value().equals(evidence.clientId()) || !HttpRequestSignatureV1Verifier.valid(evidence)) {
                 return List.of();
             }
             if (active.credentialId().value().equals(evidence.credentialId())) {
@@ -57,14 +58,13 @@ public record SignatureAuthenticationRules(Duration maxClockSkew) {
     }
 
     /** Preserves the existing evidence encoding before the technical irreversible digest. */
-    public String replayIdentity(Credentials credentials, SignatureInput evidence) {
-        Credential active = credentials.activeCredential();
-        String clientId = active.clientId().value();
-        if (active.signatureContract() == SignatureContract.HTTP_REQUEST_SIGNATURE_V1) {
+    public String replayIdentity(ClientId clientId, Credentials credentials, SignatureInput evidence) {
+        String id = clientId.value();
+        if (credentials.activeCredential().signatureContract() == SignatureContract.HTTP_REQUEST_SIGNATURE_V1) {
             return SignatureContract.HTTP_REQUEST_SIGNATURE_V1.name() + SEPARATOR
-                    + clientId.length() + SEPARATOR + clientId + SEPARATOR + evidence.nonce();
+                    + id.length() + SEPARATOR + id + SEPARATOR + evidence.nonce();
         }
-        return String.join(SEPARATOR, clientId, evidence.timestamp(), evidence.signature().toLowerCase(Locale.ROOT));
+        return String.join(SEPARATOR, id, evidence.timestamp(), evidence.signature().toLowerCase(Locale.ROOT));
     }
 
     public Instant replayExpiresAt(Instant acceptedTimestamp) {

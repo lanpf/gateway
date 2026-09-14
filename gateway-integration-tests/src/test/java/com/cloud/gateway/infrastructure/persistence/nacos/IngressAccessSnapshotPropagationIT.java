@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.config.ConfigService;
 import com.alibaba.nacos.api.config.ConfigType;
-import com.cloud.gateway.application.policy.PolicySnapshotHasher;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.Endpoint;
@@ -18,13 +18,13 @@ import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
+import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodAccessSnapshotStore;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.DefaultNacosConfigOperations;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -85,9 +85,9 @@ class IngressAccessSnapshotPropagationIT {
 
     @TempDir Path temporaryDirectory;
     private ConfigService configService;
-    private StoredPolicySnapshotCodec codec;
-    private NacosPolicySnapshotStore firstStore;
-    private NacosPolicySnapshotStore secondStore;
+    private StoredAccessSnapshotCodec codec;
+    private NacosAccessSnapshotStore firstStore;
+    private NacosAccessSnapshotStore secondStore;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -189,31 +189,31 @@ class IngressAccessSnapshotPropagationIT {
         }
     }
 
-    private NacosPolicySnapshotStore store(
+    private NacosAccessSnapshotStore store(
             ConfigService configService,
-            StoredPolicySnapshotCodec codec,
+            StoredAccessSnapshotCodec codec,
             String lastKnownGoodFilename
     ) {
         NacosPolicyProperties properties = new NacosPolicyProperties();
         properties.setReadTimeout(Duration.ofSeconds(10));
         properties.setRecoveryInterval(Duration.ofMinutes(1));
         properties.setLastKnownGoodLocation(temporaryDirectory.resolve(lastKnownGoodFilename));
-        return new NacosPolicySnapshotStore(
+        return new NacosAccessSnapshotStore(
                 new DefaultNacosConfigOperations(configService),
                 properties,
                 codec,
-                new FileLastKnownGoodPolicySnapshotStore(properties.getLastKnownGoodLocation()));
+                new FileLastKnownGoodAccessSnapshotStore(properties.getLastKnownGoodLocation()));
     }
 
-    private static StoredPolicySnapshotCodec codec() {
-        PolicySnapshotHasher hasher = new CanonicalPolicySnapshotHasher(
+    private static StoredAccessSnapshotCodec codec() {
+        com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
                 new CanonicalPolicyContentMapper(), new ObjectMapper());
-        return new StoredPolicySnapshotCodec(
-                new StoredPolicySnapshotMapper(), hasher, new ObjectMapper().findAndRegisterModules(), com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+        return new StoredAccessSnapshotCodec(
+                new StoredAccessSnapshotMapper(), hasher, new ObjectMapper().findAndRegisterModules(), com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
     }
 
     private static IngressAccessSnapshot snapshot(long version, boolean enabled) {
-        PolicySnapshotHasher hasher = new CanonicalPolicySnapshotHasher(
+        com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
                 new CanonicalPolicyContentMapper(), new ObjectMapper());
         EndpointId endpointId = new EndpointId("USER_AUTH.LOGIN");
         EndpointRegistry catalog = new EndpointRegistry(List.of(new Endpoint(
@@ -221,7 +221,7 @@ class IngressAccessSnapshotPropagationIT {
                 "user-auth",
                 List.of(new EndpointMatcher("POST", "/api/user-auth/login")),
                 "user-auth")));
-        EndpointPolicy route = new EndpointPolicy(
+        EndpointAccess route = new EndpointAccess(
                 endpointId,
                 ClientVerificationRequirement.FORBIDDEN,
                 ClientVerificationMode.IGNORE,

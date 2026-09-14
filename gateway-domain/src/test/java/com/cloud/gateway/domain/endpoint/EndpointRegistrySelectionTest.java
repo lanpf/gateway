@@ -1,33 +1,55 @@
 package com.cloud.gateway.domain.endpoint;
 
 import com.cloud.gateway.domain.common.DomainException;
-import java.util.List;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class EndpointRegistrySelectionTest {
+
     @Test
-    void shouldRejectAmbiguousCandidatesWithoutDependingOnPathGrammar() {
+    void shouldLookupEndpointsById() {
         Endpoint one = endpoint("one", "/a/**");
-        Endpoint two = endpoint("two", "/a/b");
-        EndpointRegistry registry = new EndpointRegistry(List.of(one, two));
-        assertTrue(registry.select(List.of()).isEmpty());
-        assertSame(one, registry.select(List.of(one)).orElseThrow());
-        assertThrows(DomainException.class, () -> registry.select(List.of(one, two)));
+        EndpointRegistry registry = new EndpointRegistry(List.of(one));
+
+        assertSame(one, registry.find(one.getId()).orElseThrow());
+        assertTrue(registry.find(new EndpointId("missing")).isEmpty());
     }
 
     @Test
-    void shouldRejectMissingDefinitionsAndMatchersWithDomainErrors() {
+    void shouldRejectDuplicateMatchersAcrossEndpoints() {
+        Endpoint one = endpoint("one", "/a/**");
+        Endpoint two = endpoint("two", "/a/**");
+
+        assertThrows(DomainException.class, () -> new EndpointRegistry(List.of(one, two)));
+    }
+
+    @Test
+    void shouldRejectDuplicateEndpointIds() {
+        assertThrows(DomainException.class,
+                () -> new EndpointRegistry(List.of(endpoint("one", "/a"), endpoint("one", "/b"))));
+    }
+
+    @Test
+    void shouldRejectNullElementsAndMissingMatchersWithDomainErrors() {
         assertThrows(DomainException.class, () -> new EndpointRegistry(Arrays.asList((Endpoint) null)));
-        assertThrows(DomainException.class, () -> new EndpointRegistry(List.of())
-                .select(Arrays.asList((Endpoint) null)));
-        assertThrows(DomainException.class, () -> new Endpoint(new EndpointId("one"), "service",
-                Arrays.asList((EndpointMatcher) null), "route"));
+        assertThrows(DomainException.class, () -> new Endpoint(new EndpointId("one"), new ServiceId("service"),
+                new RouteId("route"), Arrays.asList((EndpointMatcher) null), Set.of(), EndpointStatus.ENABLED,
+                policy()));
+        assertThrows(DomainException.class, () -> new Endpoint(new EndpointId("one"), new ServiceId("service"),
+                new RouteId("route"), List.of(), Set.of(), EndpointStatus.ENABLED, policy()));
     }
 
     private static Endpoint endpoint(String id, String path) {
-        return new Endpoint(new EndpointId(id), "service", List.of(new EndpointMatcher("GET", path)), "route");
+        return new Endpoint(new EndpointId(id), new ServiceId("service"), new RouteId("route"),
+                List.of(new EndpointMatcher("GET", path)), Set.of(), EndpointStatus.ENABLED, policy());
+    }
+
+    private static EndpointAccess policy() {
+        return new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
+                SubjectAuthenticationRequirement.OPTIONAL, Set.of(), Set.of());
     }
 }

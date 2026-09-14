@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LocalTokenBucketFallbackTest {
     private final AtomicLong nanos = new AtomicLong();
     private final LocalTokenBucketFallback fallback = new LocalTokenBucketFallback(2, nanos::get);
-    private final RateLimitPolicy rule = new RateLimitPolicy("stable", RateLimitDimension.IP, 1, 2, RateLimitMode.EXACT);
+    private final RateLimitRule rule = new RateLimitRule("stable", RateLimitDimension.IP, 1, 2, RateLimitMode.EXACT);
 
     @Test
     void shouldPreserveFractionalTokensAcrossRepeatedDenial() {
@@ -26,7 +26,7 @@ class LocalTokenBucketFallbackTest {
     void shouldPreserveBalanceAndSettleOldRateBeforeApplyingUpdatedConfiguration() {
         assertTrue(fallback.tryAcquire(rule, "a", "a").allowed());
         nanos.set(250_000_000);
-        RateLimitPolicy updated = new RateLimitPolicy("stable", RateLimitDimension.IP, 100, 10, RateLimitMode.EXACT);
+        RateLimitRule updated = new RateLimitRule("stable", RateLimitDimension.IP, 100, 10, RateLimitMode.EXACT);
         RateLimitDecision decision = fallback.tryAcquire(updated, "a", "a");
         assertFalse(decision.allowed());
         assertEquals(Duration.ofMillis(50), decision.retryAfter());
@@ -46,7 +46,7 @@ class LocalTokenBucketFallbackTest {
 
     @Test
     void shouldClampBalanceWhenCapacityIsReduced() {
-        RateLimitPolicy large = new RateLimitPolicy("stable", RateLimitDimension.IP, 100, 1, RateLimitMode.EXACT);
+        RateLimitRule large = new RateLimitRule("stable", RateLimitDimension.IP, 100, 1, RateLimitMode.EXACT);
         assertEquals(99, fallback.tryAcquire(large, "a", "a").remaining());
         assertEquals(0, fallback.tryAcquire(rule, "a", "a").remaining());
         assertFalse(fallback.tryAcquire(rule, "a", "a").allowed());

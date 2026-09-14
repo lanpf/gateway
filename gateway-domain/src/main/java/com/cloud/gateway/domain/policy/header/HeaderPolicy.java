@@ -17,14 +17,15 @@ public record HeaderPolicy(Set<RequestHeader> trustedHeaders,
     public static final String GATEWAY_PREFIX = "x-gateway-";
 
     public HeaderPolicy {
-        trustedHeaders = trustedHeaders == null ? Set.of() : Set.copyOf(trustedHeaders);
-        trustedHeaders.forEach(header -> Require.notNull(header, DomainException::invalidField));
-
-        setHeaders = setHeaders == null ? Map.of() : Map.copyOf(setHeaders);
-        setHeaders.forEach((name, value) -> {
-            HeaderRules.normalizeName(name);
-            HeaderValueRules.requireValid(value);
-        });
+        if (trustedHeaders != null) {
+            trustedHeaders.forEach(header -> Require.notNull(header, DomainException::invalidField));
+        }
+        if (setHeaders != null) {
+            setHeaders.forEach((name, value) -> {
+                HeaderRules.normalizeName(name);
+                HeaderValueRules.requireValid(value);
+            });
+        }
         if (removeHeaders != null) {
             removeHeaders.forEach(HeaderRules::normalizeName);
         }

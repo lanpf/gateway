@@ -8,14 +8,14 @@ public record App(
         AppId appId,
         String platform,
         AppStatus status,
-        AppPolicy accessPolicy
+        AppAccess access
 ) implements AggregateRoot<AppId>
 {
     public App {
         Require.notNull(appId, DomainException::missingField);
         platform = Require.notBlank(platform, DomainException::missingField).trim();
         Require.notNull(status, DomainException::missingField);
-        Require.notNull(accessPolicy, DomainException::missingField);
+        Require.notNull(access, DomainException::missingField);
     }
 
     @Override
@@ -29,7 +29,7 @@ public record App(
         if (!enabled()) {
             return false;
         }
-        return accessPolicy.allowsOrigin(origin);
+        return access.allowsOrigin(origin);
     }
 }
 

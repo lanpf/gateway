@@ -1,7 +1,7 @@
 package com.cloud.gateway.interfaces.security;
 
 import com.cloud.gateway.domain.endpoint.Endpoint;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 import com.cloud.gateway.domain.security.SubjectAuthenticationSelection;
 import com.cloud.gateway.interfaces.webflux.GatewayRequestAttributes;
@@ -20,8 +20,8 @@ public final class PolicyAwareBearerTokenConverter implements ServerAuthenticati
         IngressAccessSnapshot snapshot = exchange.getAttribute(GatewayRequestAttributes.SNAPSHOT);
         Endpoint endpoint = exchange.getAttribute(GatewayRequestAttributes.ENDPOINT);
         if (snapshot != null && endpoint != null) {
-            EndpointPolicy policy = snapshot.content().endpointPolicies().get(endpoint.endpointId());
-            if (policy != null && SubjectAuthenticationSelection.from(policy.subjectAuthencationRequirement())
+            EndpointAccess policy = endpoint.access();
+            if (SubjectAuthenticationSelection.from(policy.subjectAuthenticationRequirement())
                     != SubjectAuthenticationSelection.HOST) {
                 return Mono.empty();
             }

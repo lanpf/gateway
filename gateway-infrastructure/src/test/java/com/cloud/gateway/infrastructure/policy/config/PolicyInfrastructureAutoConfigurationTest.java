@@ -3,11 +3,11 @@ package com.cloud.gateway.infrastructure.policy.config;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.cloud.gateway.application.policy.AppPolicyCommandService;
-import com.cloud.gateway.application.policy.PolicyPublishLock;
-import com.cloud.gateway.application.policy.PolicySnapshotCommandService;
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
-import com.cloud.gateway.application.policy.PolicySnapshotPublisher;
+import com.cloud.gateway.application.access.editing.AppAccessCommandService;
+import com.cloud.gateway.application.access.AccessPublishLock;
+import com.cloud.gateway.application.access.publication.AccessSnapshotCommandService;
+import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
+import com.cloud.gateway.application.access.publication.AccessSnapshotPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -33,14 +33,14 @@ class PolicyInfrastructureAutoConfigurationTest {
 
             context.refresh();
 
-            assertNotNull(context.getBean(PolicySnapshotProvider.class));
-            assertNull(context.getBeanProvider(PolicySnapshotPublisher.class).getIfAvailable());
-            assertNull(context.getBeanProvider(PolicyPublishLock.class).getIfAvailable());
-            assertNull(context.getBeanProvider(AppPolicyCommandService.class).getIfAvailable());
-            assertNull(context.getBeanProvider(PolicySnapshotCommandService.class).getIfAvailable());
-            assertNotNull(context.getBean(com.cloud.gateway.application.policy.PolicyCompositionDefinitionRepository.class));
-            assertNull(context.getBeanProvider(com.cloud.gateway.application.policy.WritablePolicyCompositionDefinitionRepository.class).getIfAvailable());
-            assertNull(context.getBeanProvider(com.cloud.gateway.application.policy.PolicyCompositionCommandService.class).getIfAvailable());
+            assertNotNull(context.getBean(com.cloud.gateway.application.access.publication.AccessSnapshotProvider.class));
+            assertNull(context.getBeanProvider(com.cloud.gateway.application.access.publication.AccessSnapshotPublisher.class).getIfAvailable());
+            assertNull(context.getBeanProvider(AccessPublishLock.class).getIfAvailable());
+            assertNull(context.getBeanProvider(com.cloud.gateway.application.access.editing.AppAccessCommandService.class).getIfAvailable());
+            assertNull(context.getBeanProvider(com.cloud.gateway.application.access.publication.AccessSnapshotCommandService.class).getIfAvailable());
+            assertNotNull(context.getBean(com.cloud.gateway.application.access.com.cloud.gateway.application.access.definition.PolicyConfigDefinitionRepository.class));
+            assertNull(context.getBeanProvider(com.cloud.gateway.application.access.com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository.class).getIfAvailable());
+            assertNull(context.getBeanProvider(com.cloud.gateway.application.access.com.cloud.gateway.application.access.publication.PolicyConfigCommandService.class).getIfAvailable());
         }
     }
 }

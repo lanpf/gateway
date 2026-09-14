@@ -17,7 +17,7 @@ public final class RequestSignatureVerifierRegistry {
         Map<SignatureContract, RequestSignatureVerifier> indexed = new EnumMap<>(SignatureContract.class);
         verifiers.forEach(verifier -> {
             Require.notNull(verifier, DomainException::missingField);
-            Require.that(verifier, v -> indexed.putIfAbsent(v.contract(), v) != null,
+            Require.that(verifier, v -> indexed.putIfAbsent(v.contract(), v) == null,
                     DomainException::invalidField);
         });
         Require.that(indexed.keySet(),

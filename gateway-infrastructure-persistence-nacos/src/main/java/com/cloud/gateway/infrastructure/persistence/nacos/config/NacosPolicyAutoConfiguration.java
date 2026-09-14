@@ -3,25 +3,23 @@ package com.cloud.gateway.infrastructure.persistence.nacos.config;
 import com.alibaba.cloud.nacos.NacosConfigAutoConfiguration;
 import com.alibaba.cloud.nacos.NacosConfigManager;
 import com.alibaba.cloud.nacos.NacosConfigProperties;
-import com.cloud.gateway.application.policy.PolicySnapshotHistory;
-import com.cloud.gateway.application.policy.WritableClientPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableAppPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableEndpointRegistryDefinitionRepository;
-import com.cloud.gateway.application.policy.WritableEndpointAccessPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.WritablePolicyCompositionDefinitionRepository;
-import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodPolicySnapshotStore;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHistory;
+import com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository;
+import com.cloud.gateway.application.access.definition.WritableAppAccessDefinitionRepository;
+import com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository;
+import com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository;
+import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodAccessSnapshotStore;
+import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodAccessSnapshotStore;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosClientPolicyDefinitionRepository;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosAppPolicyDefinitionRepository;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosEndpointRegistryDefinitionRepository;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosPolicyCompositionDefinitionRepository;
-import com.cloud.gateway.infrastructure.persistence.nacos.NacosEndpointAccessPolicyDefinitionRepository;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosClientAccessDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosAppAccessDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosEndpointAccessDefinitionRepository;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosAccessSnapshotStore;
+import com.cloud.gateway.infrastructure.persistence.nacos.NacosPolicyConfigDefinitionRepository;
 import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicyHistorySource;
 import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicyHistorySourceAdapter;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicySnapshotHistory;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosAccessSnapshotHistory;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.DefaultNacosConfigOperations;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.NacosConfigOperations;
 import java.net.http.HttpClient;
@@ -48,51 +46,51 @@ public class NacosPolicyAutoConfiguration {
     }
 
     @Bean
-    LastKnownGoodPolicySnapshotStore lastKnownGoodPolicySnapshotStore(NacosPolicyProperties properties) {
-        return new FileLastKnownGoodPolicySnapshotStore(properties.getLastKnownGoodLocation());
+    LastKnownGoodAccessSnapshotStore lastKnownGoodAccessSnapshotStore(NacosPolicyProperties properties) {
+        return new FileLastKnownGoodAccessSnapshotStore(properties.getLastKnownGoodLocation());
     }
 
     @Bean(initMethod = "initialize", destroyMethod = "close")
-    NacosPolicySnapshotStore nacosPolicySnapshotStore(
+    NacosAccessSnapshotStore nacosAccessSnapshotStore(
             NacosConfigOperations operations,
             NacosPolicyProperties properties,
-            StoredPolicySnapshotCodec codec,
-            LastKnownGoodPolicySnapshotStore lastKnownGood
+            StoredAccessSnapshotCodec codec,
+            LastKnownGoodAccessSnapshotStore lastKnownGood
     ) {
-        return new NacosPolicySnapshotStore(operations, properties, codec, lastKnownGood);
+        return new NacosAccessSnapshotStore(operations, properties, codec, lastKnownGood);
     }
 
     @Bean
-    WritableEndpointRegistryDefinitionRepository nacosEndpointRegistryDefinitionRepository(
+    com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository nacosEndpointRegistryDefinitionRepository(
             NacosConfigOperations operations,
             NacosPolicyProperties properties,
             StoredPolicyDefinitionCodec codec
     ) {
-        return new NacosEndpointRegistryDefinitionRepository(operations, properties, codec);
+        return new NacosEndpointAccessDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritableAppPolicyDefinitionRepository nacosAppPolicyDefinitionRepository(
+    com.cloud.gateway.application.access.definition.WritableAppAccessDefinitionRepository nacosAppAccessDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosAppPolicyDefinitionRepository(operations, properties, codec);
+        return new NacosAppAccessDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritableClientPolicyDefinitionRepository nacosClientPolicyDefinitionRepository(
+    com.cloud.gateway.application.access.definition.WritableClientAccessDefinitionRepository nacosClientAccessDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosClientPolicyDefinitionRepository(operations, properties, codec);
+        return new NacosClientAccessDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritableEndpointAccessPolicyDefinitionRepository nacosEndpointAccessPolicyDefinitionRepository(
+    com.cloud.gateway.application.access.definition.WritableEndpointAccessDefinitionRepository nacosEndpointAccessDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosEndpointAccessPolicyDefinitionRepository(operations, properties, codec);
+        return new NacosEndpointAccessDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
-    WritablePolicyCompositionDefinitionRepository nacosPolicyConfigurationDefinitionRepository(
+    com.cloud.gateway.application.access.definition.WritablePolicyConfigDefinitionRepository nacosPolicyConfigurationDefinitionRepository(
             NacosConfigOperations operations, NacosPolicyProperties properties, StoredPolicyDefinitionCodec codec) {
-        return new NacosPolicyCompositionDefinitionRepository(operations, properties, codec);
+        return new NacosPolicyConfigDefinitionRepository(operations, properties, codec);
     }
 
     @Bean
@@ -120,11 +118,11 @@ public class NacosPolicyAutoConfiguration {
     }
 
     @Bean
-    PolicySnapshotHistory policySnapshotHistory(
+    com.cloud.gateway.application.access.publication.AccessSnapshotHistory policySnapshotHistory(
             NacosPolicyHistorySource source,
-            StoredPolicySnapshotCodec codec
+            StoredAccessSnapshotCodec codec
     ) {
-        return new NacosPolicySnapshotHistory(source, codec);
+        return new NacosAccessSnapshotHistory(source, codec);
     }
 
     private static RestClient historyRestClient(

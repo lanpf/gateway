@@ -2,6 +2,7 @@ package com.cloud.gateway.domain.access;
 
 import com.cloud.framework.core.SubjectType;
 import com.cloud.framework.core.validation.Require;
+import com.cloud.gateway.domain.access.app.VerifiedApp;
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.access.client.VerifiedClient;
 import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
@@ -35,6 +36,7 @@ public final class IngressAccessEvaluator {
         if (app == null) {
             return IngressAccessDecision.denied(IngressAccessDenyReason.APP_NOT_FOUND, snapshot.version());
         }
+        VerifiedApp verifiedApp = new VerifiedApp(app.appId(), app.platform());
 
         IngressAccessDenyReason clientDenyReason = evaluateClient(snapshot, request, clientVerification, endpoint);
         if (clientDenyReason != null) {
@@ -57,18 +59,19 @@ public final class IngressAccessEvaluator {
             }
         }
 
-        return new IngressAccessDecision.Allowed(new IngressAccessGrantedContext(app, verifiedClient, authenticatedSubject), snapshot.version());
+        return new IngressAccessDecision.Allowed(new IngressAccessGrantedContext(verifiedApp, verifiedClient, authenticatedSubject), snapshot.version());
     }
 
 
     private static IngressAccessDenyReason evaluateClient(IngressAccessSnapshot snapshot, IngressAccessRequest request, ClientVerificationOutcome clientVerification, Endpoint endpoint) {
         if (request.clientId() == null) {
-            if (endpoint.accessPolicy().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
+            if (endpoint.access().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
                 return IngressAccessDenyReason.CLIENT_REQUIRED;
             }
             if (!(clientVerification instanceof ClientVerificationOutcome.Absent)) {
                 return IngressAccessDenyReason.CLIENT_VERIFICATION_MISMATCH;
             }
+            return null;
         }
         // if a client is provided, it must be match the client policy and allowed apps
         Client client = snapshot.content().clientRegistry().find(request.clientId()).filter(Client::enabled).orElse(null);
@@ -80,7 +83,7 @@ public final class IngressAccessEvaluator {
         }
 
         if (clientVerification instanceof ClientVerificationOutcome.Absent) {
-            if (endpoint.accessPolicy().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
+            if (endpoint.access().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
                 return IngressAccessDenyReason.CLIENT_VERIFICATION_REQUIRED;
             }
         }
@@ -100,17 +103,17 @@ public final class IngressAccessEvaluator {
 
 
     private static IngressAccessDenyReason evaluateSubject(SubjectAuthenticationOutcome subjectAuthentication, Endpoint endpoint) {
-        SubjectAuthenticationRequirement requirement = endpoint.accessPolicy().subjectAuthencationRequirement();
+        SubjectAuthenticationRequirement requirement = endpoint.access().subjectAuthenticationRequirement();
         if (subjectAuthentication instanceof SubjectAuthenticationOutcome.Absent) {
-            return requirement == SubjectAuthenticationRequirement.REQUIRED
-                    ? IngressAccessDenyReason.SUBJECT_REQUIRED
-                    : null;
+            if (requirement == SubjectAuthenticationRequirement.REQUIRED) {
+                return IngressAccessDenyReason.SUBJECT_REQUIRED;
+            }
         }
         if (subjectAuthentication instanceof SubjectAuthenticationOutcome.Authenticated authenticated) {
-            if (!authenticated.subject().audiences().containsAll(endpoint.accessPolicy().requiredAudiences())) {
+            if (!authenticated.subject().audiences().containsAll(endpoint.access().requiredAudiences())) {
                 return IngressAccessDenyReason.AUDIENCE_NOT_ALLOWED;
             }
-            if (!authenticated.subject().scopes().containsAll(endpoint.accessPolicy().requiredScopes())) {
+            if (!authenticated.subject().scopes().containsAll(endpoint.access().requiredScopes())) {
                 return IngressAccessDenyReason.SCOPE_NOT_ALLOWED;
             }
         }

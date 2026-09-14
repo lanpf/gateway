@@ -5,14 +5,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
-public record RateLimitRules(List<RateLimitPolicy> rules, RedisFailurePolicy onRedisFailure) {
+public record RateLimitRules(List<RateLimitRule> rules, RedisFailurePolicy onRedisFailure) {
     public RateLimitRules {
         if (rules != null && rules.stream().anyMatch(Objects::isNull)) {
             throw DomainException.missingField();
         }
         rules = rules == null ? List.of() : List.copyOf(rules);
-        HashSet<String> ruleIds = new HashSet<>();
-        for (RateLimitPolicy rule : rules) {
+        HashSet<RateLimitRuleId> ruleIds = new HashSet<>();
+        for (RateLimitRule rule : rules) {
             if (!ruleIds.add(rule.ruleId())) {
                 throw DomainException.invalidField();
             }

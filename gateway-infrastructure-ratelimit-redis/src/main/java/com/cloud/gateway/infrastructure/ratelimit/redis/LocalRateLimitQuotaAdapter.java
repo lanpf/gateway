@@ -2,7 +2,7 @@ package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.gateway.application.quota.LocalRateLimitQuota;
 import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitPolicy;
+import com.cloud.gateway.domain.policy.capability.RateLimitRule;
 import java.util.Objects;
 import java.util.function.LongSupplier;
 
@@ -21,7 +21,7 @@ public final class LocalRateLimitQuotaAdapter implements LocalRateLimitQuota {
     }
 
     @Override
-    public RateLimitDecision tryAcquire(RateLimitPolicy rule, String key) {
+    public RateLimitDecision tryAcquire(RateLimitRule rule, String key) {
         return fallback.tryAcquire(rule, key, keyResolver.bucket(rule, key));
     }
 }

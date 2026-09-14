@@ -13,7 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class MicrometerQuotaObserverTest {
-    private static final RateLimitPolicy RULE = new RateLimitPolicy("stable", RateLimitDimension.CLIENT, 1, 1, RateLimitMode.EXACT);
+    private static final RateLimitRule RULE = new RateLimitRule("stable", RateLimitDimension.CLIENT, 1, 1, RateLimitMode.EXACT);
 
     @Test
     void shouldPreserveMetricNameAndLowCardinalityOutcomeLabels() {

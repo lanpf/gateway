@@ -23,15 +23,15 @@ class CanonicalIngressAccessSnapshotHasherTest {
     private static final String FIRST_CLIENT_APP_ID = "app-a";
     private static final String SECOND_CLIENT_APP_ID = "app-b";
 
-    private final CanonicalPolicySnapshotHasher hasher =
-            new CanonicalPolicySnapshotHasher(new CanonicalPolicyContentMapper(), new ObjectMapper());
+    private final CanonicalAccessSnapshotHasher hasher =
+            new CanonicalAccessSnapshotHasher(new CanonicalPolicyContentMapper(), new ObjectMapper());
 
     @Test
     void shouldProduceSameHashForEquivalentMapInsertionOrders() {
-        Map<AppId, AppPolicy> forward = new LinkedHashMap<>();
+        Map<AppId, AppAccess> forward = new LinkedHashMap<>();
         forward.put(new AppId(FIRST_CLIENT_APP_ID), client(FIRST_CLIENT_APP_ID));
         forward.put(new AppId(SECOND_CLIENT_APP_ID), client(SECOND_CLIENT_APP_ID));
-        Map<AppId, AppPolicy> reverse = new LinkedHashMap<>();
+        Map<AppId, AppAccess> reverse = new LinkedHashMap<>();
         reverse.put(new AppId(SECOND_CLIENT_APP_ID), client(SECOND_CLIENT_APP_ID));
         reverse.put(new AppId(FIRST_CLIENT_APP_ID), client(FIRST_CLIENT_APP_ID));
 
@@ -52,7 +52,7 @@ class CanonicalIngressAccessSnapshotHasherTest {
 
     @Test
     void shouldProduceStableV1CanonicalHash() {
-        Map<AppId, AppPolicy> apps = new LinkedHashMap<>();
+        Map<AppId, AppAccess> apps = new LinkedHashMap<>();
         apps.put(new AppId(FIRST_CLIENT_APP_ID), client(FIRST_CLIENT_APP_ID));
         apps.put(new AppId(SECOND_CLIENT_APP_ID), client(SECOND_CLIENT_APP_ID));
 
@@ -61,12 +61,12 @@ class CanonicalIngressAccessSnapshotHasherTest {
 
     @Test
     void shouldIncludeNormalizedBrowserOriginsInHashIndependentOfSetOrder() {
-        AppPolicy forward = client(FIRST_CLIENT_APP_ID,
+        AppAccess forward = client(FIRST_CLIENT_APP_ID,
                 Set.of("https://one.example.com", "https://two.example.com"));
-        AppPolicy reverse = client(FIRST_CLIENT_APP_ID,
+        AppAccess reverse = client(FIRST_CLIENT_APP_ID,
                 new LinkedHashSet<>(List.of(
                         "https://two.example.com", "https://one.example.com")));
-        AppPolicy changed = client(FIRST_CLIENT_APP_ID,
+        AppAccess changed = client(FIRST_CLIENT_APP_ID,
                 Set.of("https://three.example.com"));
 
         assertEquals(
@@ -77,12 +77,12 @@ class CanonicalIngressAccessSnapshotHasherTest {
                 hasher.hash(content(Map.of(changed.appId(), changed))));
     }
 
-    private static IngressAccessContent content(Map<AppId, AppPolicy> apps) {
+    private static IngressAccessContent content(Map<AppId, AppAccess> apps) {
         return content(apps, List.of(new EndpointMatcher("GET", "/test")));
     }
 
     private static IngressAccessContent content(
-            Map<AppId, AppPolicy> apps,
+            Map<AppId, AppAccess> apps,
             List<EndpointMatcher> matchers
     ) {
         EndpointRegistry catalog = new EndpointRegistry(List.of(new Endpoint(
@@ -91,12 +91,12 @@ class CanonicalIngressAccessSnapshotHasherTest {
         return new IngressAccessContent(catalog, apps, Map.of(), Map.of());
     }
 
-    private static AppPolicy client(String appId) {
+    private static AppAccess client(String appId) {
         return client(appId, Set.of());
     }
 
-    private static AppPolicy client(String appId, Set<String> allowedOrigins) {
-        return new AppPolicy(
+    private static AppAccess client(String appId, Set<String> allowedOrigins) {
+        return new AppAccess(
                 new AppId(appId), "TEST", allowedOrigins, PolicyStatus.ENABLED);
     }
 }

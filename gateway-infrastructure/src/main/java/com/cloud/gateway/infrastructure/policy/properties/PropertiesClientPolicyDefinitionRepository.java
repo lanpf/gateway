@@ -1,28 +1,28 @@
 package com.cloud.gateway.infrastructure.policy.properties;
 
-import com.cloud.gateway.application.policy.ClientPolicyDefinitionRepository;
-import com.cloud.gateway.application.policy.VersionedPolicyDefinition;
+import com.cloud.gateway.application.access.definition.ClientAccessDefinitionRepository;
+import com.cloud.gateway.application.access.definition.VersionedAccessDefinition;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.client.ClientPolicy;
+import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.infrastructure.policy.ClientPropertiesMapper;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.config.GatewayPolicyDefinitionProperties;
 import java.util.Map;
 
-public final class PropertiesClientPolicyDefinitionRepository
-        implements ClientPolicyDefinitionRepository {
-    private final PropertiesPolicyDefinitionSource<Map<ClientId, ClientPolicy>> source;
+public final class PropertiesClientAccessDefinitionRepository
+        implements com.cloud.gateway.application.access.definition.ClientAccessDefinitionRepository {
+    private final PropertiesPolicyDefinitionSource<Map<ClientId, ClientAccess>> source;
 
-    public PropertiesClientPolicyDefinitionRepository(GatewayPolicyDefinitionProperties properties,
-            StoredPolicySnapshotMapper mapper, ClientPropertiesMapper clients,
+    public PropertiesClientAccessDefinitionRepository(GatewayPolicyDefinitionProperties properties,
+            StoredAccessSnapshotMapper mapper, ClientPropertiesMapper clients,
             StoredPolicyDefinitionCodec codec) {
         source = new PropertiesPolicyDefinitionSource<>(
                 () -> mapper.toDomainClients(clients.toStored(properties.getClients())),
                 codec::encodeClients);
     }
 
-    @Override public VersionedPolicyDefinition<Map<ClientId, ClientPolicy>> load() {
+    @Override public com.cloud.gateway.application.access.definition.VersionedAccessDefinition<Map<ClientId, ClientAccess>> load() {
         return source.load();
     }
 }

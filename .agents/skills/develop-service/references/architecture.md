@@ -6,6 +6,7 @@
 - [Modules](#modules)
 - [Package structure](#package-structure)
 - [Dependency direction](#dependency-direction)
+- [Responsibility cohesion and boundary checks](#responsibility-cohesion-and-boundary-checks)
 - [Project configuration](#project-configuration)
 
 ## Service domain contract
@@ -44,6 +45,14 @@
 - **ARCH-DEP-OUTER-001** **[REQUIRED][TOPIC]** — Interfaces depends on API and application, OpenFeign client depends on API, and boot performs final assembly.
 - **ARCH-DEP-INTEGRATION-TESTS-001** **[REQUIRED][TOPIC]** — Integration-tests may depend on boot and observed service modules in test scope only; those verification dependencies never participate in production dependency direction.
 - **ARCH-DEP-INWARD-001** **[REQUIRED][TOPIC]** — No inner module may depend on outer protocol types, persistence objects, concrete technologies, or boot.
+
+## Responsibility cohesion and boundary checks
+
+- **ARCH-SEMANTIC-OWNERSHIP-001** **[REQUIRED][TOPIC]** — Determine ownership from authoritative project responsibility/domain documents and business semantics, not names, packages, annotations, or branch counts. Protocol parsing, serialization, connection management, and technical retries that preserve business semantics are adapter behavior. Classify gateway protocol authentication and route execution by their actual semantics rather than automatically moving them into domain/application.
+- **ARCH-DOMAIN-COHESION-001** **[REQUIRED][TOPIC]** — Locate where eligibility decisions, business invariants, state transitions, and business decisions actually execute. Keep each rule in its owning domain model or domain service and reuse it across entry points; controllers, filters, listeners, adapters, and application must not maintain independent copies of domain decisions. Distinguish protocol-format validation from domain validity using the validation rules.
+- **ARCH-ORCHESTRATION-COHESION-001** **[REQUIRED][TOPIC]** — Trace use-case call chains to locate business step ordering, coordination of domain capabilities or ports, business-result branching, and business compensation decisions; application owns this orchestration. Multiple SDK calls, page fetching, or technical retries within one adapter operation do not alone imply application orchestration; independent infrastructure recovery follows the compensation rules.
+- **ARCH-SUBSTANTIVE-LAYERING-001** **[REQUIRED][TOPIC]** — Do not treat the existence of domain/application modules or an intermediate forwarding service as proof of cohesion; trace the implementation that actually decides and orchestrates. Responsibility migration must move the decisions and their behavioral verification, not merely move classes, rename packages, or add forwarding layers while leaving business logic in outer layers.
+- **ARCH-DEPENDENCY-AUDIT-001** **[REQUIRED][TOPIC]** — Check dependency direction in declared/inherited POM dependencies and source imports, fully qualified type references, method signatures, inheritance/implementation relationships, and injected types; trace related call chains for implicit reverse dependencies. Apply the allowed layer dependencies and type boundaries, not merely successful compilation, absence of cycles, or use of interfaces.
 
 ## Project configuration
 

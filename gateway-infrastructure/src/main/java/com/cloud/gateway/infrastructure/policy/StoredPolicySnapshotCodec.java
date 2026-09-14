@@ -2,20 +2,20 @@ package com.cloud.gateway.infrastructure.policy;
 
 import com.cloud.gateway.domain.policy.header.HeaderRules;
 
-import com.cloud.gateway.application.policy.PolicySnapshotHasher;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-public final class StoredPolicySnapshotCodec extends PolicyYamlCodec {
-    private final StoredPolicySnapshotMapper mapper;
-    private final PolicySnapshotHasher hasher;
+public final class StoredAccessSnapshotCodec extends PolicyYamlCodec {
+    private final StoredAccessSnapshotMapper mapper;
+    private final com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher;
     private final HeaderRules headerRules;
 
-    public StoredPolicySnapshotCodec(
-            StoredPolicySnapshotMapper mapper,
-            PolicySnapshotHasher hasher,
+    public StoredAccessSnapshotCodec(
+            StoredAccessSnapshotMapper mapper,
+            com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher,
             ObjectMapper objectMapper,
             HeaderRules headerRules
     ) {
@@ -31,7 +31,7 @@ public final class StoredPolicySnapshotCodec extends PolicyYamlCodec {
     }
 
     public IngressAccessSnapshot decodeSnapshot(String content) {
-        IngressAccessSnapshot snapshot = decode(content, StoredPolicySnapshot.class, stored -> {
+        IngressAccessSnapshot snapshot = decode(content, StoredAccessSnapshot.class, stored -> {
             IngressAccessSnapshot decoded = mapper.toDomain(stored);
             headerRules.validate(decoded.content().policies());
             return decoded;

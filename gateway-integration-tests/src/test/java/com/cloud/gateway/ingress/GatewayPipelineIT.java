@@ -1,7 +1,7 @@
 package com.cloud.gateway.ingress;
 
-import com.cloud.gateway.application.policy.PolicySnapshotProvider;
-import com.cloud.gateway.application.policy.VersionedPolicySnapshot;
+import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
+import com.cloud.gateway.application.access.publication.VersionedAccessSnapshot;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
@@ -17,7 +17,7 @@ import com.cloud.gateway.domain.policy.bundle.*;
 import com.cloud.gateway.domain.policy.capability.*;
 import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
@@ -68,7 +68,7 @@ class GatewayPipelineIT {
     private static final String ROUTE = "pipeline-route";
     private static final String SERVICE = "pipeline-downstream";
     private static final String OBSERVE_SECONDS = "gateway.it.manual-observation-seconds";
-    private final AtomicReference<VersionedPolicySnapshot> snapshots = new AtomicReference<>();
+    private final AtomicReference<com.cloud.gateway.application.access.publication.VersionedAccessSnapshot> snapshots = new AtomicReference<>();
     private final AtomicInteger downstreamCalls = new AtomicInteger();
     private DisposableServer downstream;
     private ReactiveWebServerApplicationContext gateway;
@@ -97,7 +97,7 @@ class GatewayPipelineIT {
         gateway = (ReactiveWebServerApplicationContext) new SpringApplicationBuilder(PipelineApplication.class)
                 .web(WebApplicationType.REACTIVE)
                 .initializers(context -> context.getBeanFactory().registerSingleton(
-                        "policySnapshotProvider", (PolicySnapshotProvider) snapshots::get))
+                        "policySnapshotProvider", (com.cloud.gateway.application.access.publication.AccessSnapshotProvider) snapshots::get))
                 .properties(Map.of(
                         "server.port", "0",
                         "spring.application.name", "gateway-pipeline-it",
@@ -188,15 +188,15 @@ class GatewayPipelineIT {
                 .block(Duration.ofSeconds(10));
     }
 
-    private static VersionedPolicySnapshot snapshot(long version, boolean appEnabled,
+    private static com.cloud.gateway.application.access.publication.VersionedAccessSnapshot snapshot(long version, boolean appEnabled,
                                                      HeaderPolicy headers, TimeoutPolicy timeout) {
         var definitions = new java.util.ArrayList<Endpoint>();
-        var accesses = new java.util.HashMap<EndpointId, EndpointPolicy>();
+        var accesses = new java.util.HashMap<EndpointId, EndpointAccess>();
         for (String name : List.of("echo", "cache", "slow")) {
             var id = new EndpointId("PUBLIC." + name.toUpperCase(java.util.Locale.ROOT));
             definitions.add(new Endpoint(id, SERVICE,
                     List.of(new EndpointMatcher("GET", "/public/" + name)), ROUTE, Set.of("public-read")));
-            accesses.put(id, new EndpointPolicy(id, ClientVerificationRequirement.OPTIONAL,
+            accesses.put(id, new EndpointAccess(id, ClientVerificationRequirement.OPTIONAL,
                     ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(),
                     CredentialForwarding.stripAll(), EndpointStatus.ENABLED));
         }
@@ -205,14 +205,14 @@ class GatewayPipelineIT {
         var base = new PolicyBundle(baseId, null, timeout, null, null, headers);
         var cache = new PolicyBundle(cacheId, null, null, null,
                 new CachePolicy(Duration.ofSeconds(30), Duration.ZERO, 16384, Set.of()), null);
-        var policies = new PolicyComposition(Map.of(baseId, base, cacheId, cache), List.of(
+        var policies = new PolicyConfig(Map.of(baseId, base, cacheId, cache), List.of(
                 new PolicyBinding(new PolicyBindingId("base"), baseId, SERVICE, null, Set.of(), null, null, null),
                 new PolicyBinding(new PolicyBindingId("cache"), cacheId, null,
                         new EndpointId("PUBLIC.CACHE"), Set.of(), null, null, null)));
-        var app = new AppPolicy(APP,"browser", Set.of(), appEnabled ? PolicyStatus.ENABLED : PolicyStatus.DISABLED);
+        var app = new AppAccess(APP,"browser", Set.of(), appEnabled ? PolicyStatus.ENABLED : PolicyStatus.DISABLED);
         var content = new IngressAccessContent(new EndpointRegistry(definitions),
                 Map.of(APP, app), Map.of(), accesses, policies);
-        return new VersionedPolicySnapshot(new IngressAccessSnapshot(version, content,
+        return new com.cloud.gateway.application.access.publication.VersionedAccessSnapshot(new IngressAccessSnapshot(version, content,
                 "pipeline-" + version, Instant.now()), Long.toString(version));
     }
 

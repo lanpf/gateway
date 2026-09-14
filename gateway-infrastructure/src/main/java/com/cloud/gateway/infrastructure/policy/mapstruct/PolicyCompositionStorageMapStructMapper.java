@@ -13,16 +13,16 @@ import java.util.stream.Collectors;
 import org.mapstruct.Mapper;
 
 @Mapper(config = PolicyStorageMapperConfig.class)
-public abstract class PolicyCompositionStorageMapStructMapper implements PolicyCompositionStorageMapper {
-    @Override public abstract StoredPolicyComposition toStored(PolicyComposition source);
-    protected abstract StoredPolicyComposition.Bundle bundle(PolicyBundle source);
-    protected abstract StoredPolicyComposition.Binding binding(PolicyBinding source);
+public abstract class PolicyConfigStorageMapStructMapper implements PolicyConfigStorageMapper {
+    @Override public abstract StoredPolicyConfig toStored(PolicyConfig source);
+    protected abstract StoredPolicyConfig.Bundle bundle(PolicyBundle source);
+    protected abstract StoredPolicyConfig.Binding binding(PolicyBinding source);
     protected String identifier(StringEntityId source) { return source == null ? null : source.value(); }
 
     /** Explicit domain construction runs invariants; storage objects never become runtime policies directly. */
-    @Override public PolicyComposition toDomain(StoredPolicyComposition source) {
+    @Override public PolicyConfig toDomain(StoredPolicyConfig source) {
         java.util.Objects.requireNonNull(source, "Policy configuration is required");
-        return new PolicyComposition(source.bundles().entrySet().stream().collect(Collectors.toMap(
+        return new PolicyConfig(source.bundles().entrySet().stream().collect(Collectors.toMap(
                 entry -> new PolicyBundleId(entry.getKey()), entry -> domainBundle(entry.getValue()))),
                 source.bindings().stream().map(value -> new PolicyBinding(
                         new PolicyBindingId(value.bindingId()), new PolicyBundleId(value.bundleId()),
@@ -32,14 +32,14 @@ public abstract class PolicyCompositionStorageMapStructMapper implements PolicyC
                         value.subjectType())).toList());
     }
 
-    private PolicyBundle domainBundle(StoredPolicyComposition.Bundle value) {
-        StoredPolicyComposition.RateLimit rate = value.rateLimit();
-        StoredPolicyComposition.Timeout timeout = value.timeout();
-        StoredPolicyComposition.CircuitBreaker breaker = value.circuitBreaker();
-        StoredPolicyComposition.Cache cache = value.cache();
-        StoredPolicyComposition.Headers headers = value.headers();
+    private PolicyBundle domainBundle(StoredPolicyConfig.Bundle value) {
+        StoredPolicyConfig.RateLimit rate = value.rateLimit();
+        StoredPolicyConfig.Timeout timeout = value.timeout();
+        StoredPolicyConfig.CircuitBreaker breaker = value.circuitBreaker();
+        StoredPolicyConfig.Cache cache = value.cache();
+        StoredPolicyConfig.Headers headers = value.headers();
         return new PolicyBundle(new PolicyBundleId(value.bundleId()),
-                rate == null ? null : new RateLimitRules(rate.rules().stream().map(rule -> new RateLimitPolicy(
+                rate == null ? null : new RateLimitRules(rate.rules().stream().map(rule -> new RateLimitRule(
                         rule.ruleId(), rule.dimension(), rule.capacity(), rule.refillPerSecond(), rule.mode())).toList(), rate.onRedisFailure()),
                 timeout == null ? null : new TimeoutPolicy(timeout.connect(), timeout.read(), timeout.total()),
                 breaker == null ? null : new CircuitBreakerPolicy(breaker.failureRateThreshold(), breaker.slowCallRateThreshold(),

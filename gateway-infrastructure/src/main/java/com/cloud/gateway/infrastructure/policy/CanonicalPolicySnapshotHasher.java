@@ -1,6 +1,6 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.application.policy.PolicySnapshotHasher;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
@@ -11,13 +11,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-public final class CanonicalPolicySnapshotHasher implements PolicySnapshotHasher {
+public final class CanonicalAccessSnapshotHasher implements com.cloud.gateway.application.access.publication.AccessSnapshotHasher {
     private static final String HASH_ALGORITHM = "SHA-256";
 
     private final CanonicalPolicyContentMapper mapper;
     private final ObjectMapper objectMapper;
 
-    public CanonicalPolicySnapshotHasher(
+    public CanonicalAccessSnapshotHasher(
             CanonicalPolicyContentMapper mapper,
             ObjectMapper objectMapper
     ) {

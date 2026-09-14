@@ -7,17 +7,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
 import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicyHistorySource;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosPolicySnapshotHistory;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.NacosAccessSnapshotHistory;
 import org.junit.jupiter.api.Test;
 
 class IngressAccessSnapshotHistoryTest {
-    private final StoredPolicySnapshotCodec codec = PolicyTestFixtures.codec();
+    private final StoredAccessSnapshotCodec codec = PolicyTestFixtures.codec();
 
     @Test
     void shouldFindHistoricalSnapshotByBusinessVersion() {
-        NacosPolicySnapshotHistory history = new NacosPolicySnapshotHistory(
+        NacosAccessSnapshotHistory history = new NacosAccessSnapshotHistory(
                 new FakeHistorySource(List.of(
                         codec.encodeSnapshot(PolicyTestFixtures.snapshot(3, false)),
                         codec.encodeSnapshot(PolicyTestFixtures.snapshot(2, true)))), codec);

@@ -2,9 +2,9 @@ package com.cloud.gateway.infrastructure.coordination.redis.config;
 
 import com.cloud.framework.core.naming.NamespaceResolver;
 import com.cloud.framework.core.naming.NamespacedResourceNameResolver;
-import com.cloud.gateway.application.policy.PolicyRollbackState;
-import com.cloud.gateway.infrastructure.coordination.redis.PolicyRollbackStateKeyResolver;
-import com.cloud.gateway.infrastructure.coordination.redis.RedisPolicyRollbackState;
+import com.cloud.gateway.application.access.publication.AccessRollbackState;
+import com.cloud.gateway.infrastructure.coordination.redis.AccessRollbackStateKeyResolver;
+import com.cloud.gateway.infrastructure.coordination.redis.RedisAccessRollbackState;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -17,19 +17,19 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 public class RedisPolicyCoordinationAutoConfiguration {
 
     @Bean
-    PolicyRollbackStateKeyResolver policyRollbackStateKeyResolver(
+    AccessRollbackStateKeyResolver policyRollbackStateKeyResolver(
             RedisPolicyCoordinationProperties properties,
             NamespaceResolver namespaceResolver
     ) {
-        return new PolicyRollbackStateKeyResolver(
+        return new AccessRollbackStateKeyResolver(
                 new NamespacedResourceNameResolver(namespaceResolver, properties));
     }
 
     @Bean
-    PolicyRollbackState policyRollbackState(
+    com.cloud.gateway.application.access.publication.AccessRollbackState policyRollbackState(
             StringRedisTemplate redisTemplate,
-            PolicyRollbackStateKeyResolver keyResolver
+            AccessRollbackStateKeyResolver keyResolver
     ) {
-        return new RedisPolicyRollbackState(redisTemplate, keyResolver);
+        return new RedisAccessRollbackState(redisTemplate, keyResolver);
     }
 }

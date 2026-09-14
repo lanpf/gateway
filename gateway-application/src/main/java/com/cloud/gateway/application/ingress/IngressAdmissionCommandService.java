@@ -4,7 +4,8 @@ import com.cloud.gateway.application.quota.RequestQuotaExecutor;
 import com.cloud.gateway.application.security.ClientSignatureEvidence;
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
-import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
+import com.cloud.gateway.domain.endpoint.EndpointMatch;
+import com.cloud.gateway.domain.policy.capability.RateLimitRuleId;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -18,21 +19,25 @@ public final class IngressAdmissionCommandService {
     private final RequestQuotaExecutor quotas;
 
     public CompletionStage<IngressAdmissionOutput> admit(IngressAccessCommand command,
-            ClientSignatureEvidence evidence, Supplier<CompletionStage<SubjectAuthenticationOutcome>> host,
-            Supplier<CompletionStage<SubjectAuthenticationOutcome>> browser, Set<String> applied) {
+            ClientSignatureEvidence evidence, Supplier<CompletionStage<SubjectAuthenticationOutcome>> subjectAuth,
+            Set<RateLimitRuleId> applied) {
         IngressTask<IngressAdmissionOutput> task = new IngressTask<>();
         try {
-            SubjectAuthenticationRequirement requirement = command.snapshot().content().endpointPolicies()
-                    .get(command.endpoint().endpointId()).subjectRequirement();
+            if (!(command.endpointMatch() instanceof EndpointMatch.Unique unique)) {
+                // Ambiguity and unknown paths deny uniformly; no authentication is joined for them.
+                task.finish(CompletableFuture.completedFuture(new IngressAdmissionOutput(
+                        access.evaluate(command, ClientVerificationOutcome.absent(),
+                                SubjectAuthenticationOutcome.absent()), null)));
+                return task;
+            }
             CompletionStage<ClientVerificationOutcome> client = task.track(
                     access.authenticateClient(command, evidence));
             if (task.isDone()) {
                 return task;
             }
-            CompletionStage<SubjectAuthenticationOutcome> subject = task.track(
-                    access.authenticateSubject(requirement, host, browser));
+            CompletionStage<SubjectAuthenticationOutcome> subject = task.track(subjectAuth.get());
             task.finish(client.thenCombine(subject, (clientIdentity, subjectIdentity) ->
-                    access.evaluate(command, clientIdentity, subjectIdentity)).thenCompose(output -> {
+                    admitOutput(command, clientIdentity, subjectIdentity)).thenCompose(output -> {
                         if (output instanceof IngressAccessOutput.Denied) {
                             return CompletableFuture.completedFuture(new IngressAdmissionOutput(output, null));
                         }
@@ -45,5 +50,10 @@ public final class IngressAdmissionCommandService {
             return CompletableFuture.failedFuture(failure);
         }
         return task;
+    }
+
+    private IngressAccessOutput admitOutput(IngressAccessCommand command,
+            ClientVerificationOutcome clientVerification, SubjectAuthenticationOutcome subjectAuthentication) {
+        return access.evaluate(command, clientVerification, subjectAuthentication);
     }
 }

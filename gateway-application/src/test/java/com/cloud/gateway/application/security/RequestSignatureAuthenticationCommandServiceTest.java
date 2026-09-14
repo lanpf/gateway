@@ -27,7 +27,7 @@ class RequestSignatureAuthenticationCommandServiceTest {
             throw new IllegalStateException("offline");
         }, (key, expiry) -> { throw new AssertionError("must not register"); });
         assertInstanceOf(ClientVerificationOutcome.Failed.class,
-                service.authenticate(credentials(), evidence(), NOW).toCompletableFuture().join());
+                service.authenticate(credentials(), new ClientId("client"), evidence(), NOW).toCompletableFuture().join());
         assertEquals(1, resolutions.get());
     }
 
@@ -36,7 +36,7 @@ class RequestSignatureAuthenticationCommandServiceTest {
         CompletableFuture<Boolean> registration = new CompletableFuture<>();
         RequestSignatureAuthenticationCommandService service = service(ref -> "secret", (key, expiry) -> registration);
         CompletableFuture<ClientVerificationOutcome> authentication =
-                service.authenticate(credentials(), evidence(), NOW).toCompletableFuture();
+                service.authenticate(credentials(), new ClientId("client"), evidence(), NOW).toCompletableFuture();
         assertFalse(authentication.isDone());
         registration.complete(true);
         assertEquals("active", assertInstanceOf(ClientVerificationOutcome.Verified.class,
@@ -48,7 +48,7 @@ class RequestSignatureAuthenticationCommandServiceTest {
         CompletableFuture<Boolean> registration = new CompletableFuture<>();
         RequestSignatureAuthenticationCommandService service = service(ref -> "secret", (key, expiry) -> registration);
         CompletableFuture<ClientVerificationOutcome> authentication =
-                service.authenticate(credentials(), evidence(), NOW).toCompletableFuture();
+                service.authenticate(credentials(), new ClientId("client"), evidence(), NOW).toCompletableFuture();
         authentication.cancel(true);
         assertTrue(registration.isCancelled());
         assertTrue(authentication.isCancelled());
@@ -59,7 +59,7 @@ class RequestSignatureAuthenticationCommandServiceTest {
         CompletableFuture<Boolean> registration = new CompletableFuture<>();
         RequestSignatureAuthenticationCommandService service = service(ref -> "secret", (key, expiry) -> registration);
         CompletableFuture<ClientVerificationOutcome> authentication =
-                service.authenticate(credentials(), evidence(), NOW).toCompletableFuture();
+                service.authenticate(credentials(), new ClientId("client"), evidence(), NOW).toCompletableFuture();
         registration.cancel(false);
         assertTrue(authentication.isCancelled());
     }
@@ -67,13 +67,13 @@ class RequestSignatureAuthenticationCommandServiceTest {
     @Test
     void shouldDistinguishDuplicateRegistrationFromDependencyFailureAndNullReply() {
         assertInstanceOf(ClientVerificationOutcome.Rejected.class, service(ref -> "secret",
-                (key, expiry) -> CompletableFuture.completedFuture(false)).authenticate(credentials(), evidence(), NOW)
+                (key, expiry) -> CompletableFuture.completedFuture(false)).authenticate(credentials(), new ClientId("client"), evidence(), NOW)
                 .toCompletableFuture().join());
         assertInstanceOf(ClientVerificationOutcome.Failed.class, service(ref -> "secret",
                 (key, expiry) -> CompletableFuture.failedFuture(new IllegalStateException("missing reply")))
-                .authenticate(credentials(), evidence(), NOW).toCompletableFuture().join());
+                .authenticate(credentials(), new ClientId("client"), evidence(), NOW).toCompletableFuture().join());
         assertInstanceOf(ClientVerificationOutcome.Failed.class, service(ref -> "secret",
-                (key, expiry) -> CompletableFuture.completedFuture(null)).authenticate(credentials(), evidence(), NOW)
+                (key, expiry) -> CompletableFuture.completedFuture(null)).authenticate(credentials(), new ClientId("client"), evidence(), NOW)
                 .toCompletableFuture().join());
     }
 
@@ -92,8 +92,8 @@ class RequestSignatureAuthenticationCommandServiceTest {
     }
 
     private static Credential credential(String id) {
-        return new Credential(new CredentialId(id), new ClientId("client"),
-                SignatureContract.LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256, id,
+        return new Credential(new CredentialId(id), id,
+                SignatureContract.LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256,
                 NOW.minusSeconds(60), NOW.plusSeconds(600));
     }
 

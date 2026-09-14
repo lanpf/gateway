@@ -15,17 +15,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
-public record StoredPolicySnapshot(
+public record StoredAccessSnapshot(
         long snapshotVersion,
         List<Endpoint> endpoints,
         Map<String, App> apps,
         Map<String, Client> clients,
         Map<String, Route> routes,
-        StoredPolicyComposition policies,
+        StoredPolicyConfig policies,
         String contentHash,
         Instant publishedAt
 ) {
-    public StoredPolicySnapshot {
+    public StoredAccessSnapshot {
         endpoints = endpoints == null ? List.of() : List.copyOf(endpoints);
         apps = apps == null ? Map.of() : Map.copyOf(apps);
         clients = clients == null ? Map.of() : Map.copyOf(clients);

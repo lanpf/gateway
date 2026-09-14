@@ -3,7 +3,7 @@ package com.cloud.gateway.infrastructure.policy;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.access.IngressAccessContent;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.client.Credential;
 import com.cloud.gateway.domain.client.Credentials;
 import java.util.Collection;
@@ -14,7 +14,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public final class CanonicalPolicyContentMapper {
-    private final StoredPolicySnapshotMapper storageMapper = new StoredPolicySnapshotMapper();
+    private final StoredAccessSnapshotMapper storageMapper = new StoredAccessSnapshotMapper();
     private static final String MATCHER_SEPARATOR = " ";
 
     public CanonicalPolicyContent toCanonical(IngressAccessContent source) {
@@ -52,7 +52,7 @@ public final class CanonicalPolicyContentMapper {
                 source.routeId(), source.endpointId().value(), matchers, source.serviceId(), source.tags().stream().sorted().toList());
     }
 
-    private CanonicalPolicyContent.App app(AppPolicy source) {
+    private CanonicalPolicyContent.App app(AppAccess source) {
         return new CanonicalPolicyContent.App(
                 source.appId().value(),
                 source.status(),
@@ -70,7 +70,7 @@ public final class CanonicalPolicyContentMapper {
                 source.validFrom().toString());
     }
 
-    private CanonicalPolicyContent.EndpointAccess endpointAccess(EndpointPolicy source) {
+    private CanonicalPolicyContent.EndpointAccess endpointAccess(EndpointAccess source) {
         return new CanonicalPolicyContent.EndpointAccess(
                 source.clientVerificationMode(),
                 source.clientVerificationRequirement(),
@@ -82,7 +82,7 @@ public final class CanonicalPolicyContentMapper {
                 source.endpointId().value(),
                 sorted(source.requiredAudiences(), Function.identity()),
                 sorted(source.requiredScopes(), Function.identity()),
-                source.subjectAuthencationRequirement());
+                source.subjectAuthenticationRequirement());
     }
 
     private static <T> List<String> sorted(Collection<T> source, Function<T, String> valueMapper) {

@@ -14,15 +14,15 @@ public final class RateLimitEvaluator {
     private RateLimitEvaluator() { }
 
     public static List<ApplicableQuota> applicable(List<RateLimitRules> groups,
-            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<String> applied) {
+            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<RateLimitRuleId> applied) {
         Require.notNull(groups, DomainException::missingField);
         Require.notNull(dimensions, DomainException::missingField);
         Require.notNull(applied, DomainException::missingField);
-        Set<String> selected = new HashSet<>(applied);
+        Set<RateLimitRuleId> selected = new HashSet<>(applied);
         List<ApplicableQuota> applicable = new ArrayList<>();
         for (RateLimitRules group : groups) {
             Require.notNull(group, DomainException::missingField);
-            for (RateLimitPolicy rule : group.rules()) {
+            for (RateLimitRule rule : group.rules()) {
                 if (ipOnly && rule.dimension() != RateLimitDimension.IP) {
                     continue;
                 }

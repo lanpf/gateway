@@ -1,6 +1,6 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
-import com.cloud.gateway.application.policy.PolicySnapshotHasher;
+import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
@@ -11,12 +11,12 @@ import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.access.IngressAccessContent;
 import com.cloud.gateway.domain.access.IngressAccessSnapshot;
-import com.cloud.gateway.domain.endpoint.EndpointPolicy;
+import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
-import com.cloud.gateway.infrastructure.policy.CanonicalPolicySnapshotHasher;
+import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotCodec;
-import com.cloud.gateway.infrastructure.policy.StoredPolicySnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
+import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
@@ -28,13 +28,13 @@ final class PolicyTestFixtures {
 
     private PolicyTestFixtures() { }
 
-    static PolicySnapshotHasher hasher() {
-        return new CanonicalPolicySnapshotHasher(new CanonicalPolicyContentMapper(), new ObjectMapper());
+    static com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher() {
+        return new CanonicalAccessSnapshotHasher(new CanonicalPolicyContentMapper(), new ObjectMapper());
     }
 
-    static StoredPolicySnapshotCodec codec() {
-        return new StoredPolicySnapshotCodec(
-                new StoredPolicySnapshotMapper(), hasher(), new ObjectMapper().findAndRegisterModules(),
+    static StoredAccessSnapshotCodec codec() {
+        return new StoredAccessSnapshotCodec(
+                new StoredAccessSnapshotMapper(), hasher(), new ObjectMapper().findAndRegisterModules(),
                 com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
     }
 
@@ -42,7 +42,7 @@ final class PolicyTestFixtures {
         EndpointId endpointId = new EndpointId("USER_AUTH.LOGIN");
         EndpointRegistry catalog = new EndpointRegistry(List.of(new Endpoint(endpointId, "user-auth",
                 List.of(new EndpointMatcher("POST", "/api/user-auth/login")), "user-auth")));
-        EndpointPolicy route = new EndpointPolicy(endpointId, ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED);
+        EndpointAccess route = new EndpointAccess(endpointId, ClientVerificationRequirement.FORBIDDEN, ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(), CredentialForwarding.stripAll(), enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED);
         IngressAccessContent content = new IngressAccessContent(
                 catalog, Map.of(), Map.of(), Map.of(endpointId, route));
         return new IngressAccessSnapshot(version, content, hasher().hash(content), PUBLISHED_AT.plusSeconds(version));

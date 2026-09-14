@@ -1,6 +1,7 @@
 package com.cloud.gateway.application.security;
 
 import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.Credentials;
 
 import java.time.Instant;
@@ -12,7 +13,8 @@ public interface ClientCredentialAuthenticator {
      * required verification dependency cannot complete. Unavailable is not anonymous access.
      */
     CompletionStage<ClientVerificationOutcome> authenticate(
-            Credentials policy,
+            Credentials credentials,
+            ClientId clientId,
             ClientSignatureEvidence evidence,
             Instant now);
 }

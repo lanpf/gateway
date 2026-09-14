@@ -19,13 +19,13 @@ class QuotaCommandServiceTest {
         List<String> calls = new ArrayList<>();
         List<RateLimitDecision> observations = new ArrayList<>();
         QuotaCommandService service = service((rule, key) -> {
-            calls.add(rule.ruleId());
+            calls.add(rule.ruleId().value());
             return RateLimitDecision.rejected(rule.dimension(), key, Duration.ofMillis(rule.capacity()));
         }, unusedLocal(), (rule, decision) -> observations.add(decision));
-        Set<String> applied = new HashSet<>();
+        Set<RateLimitRuleId> applied = new HashSet<>();
         RateLimitDecision decision = service.acquire(command(RedisFailurePolicy.CLOSED), applied);
         assertEquals(List.of("short", "long", "ip"), calls);
-        assertEquals(Set.of("short", "long", "ip"), applied);
+        assertEquals(Set.of(new RateLimitRuleId("short"), new RateLimitRuleId("long"), new RateLimitRuleId("ip")), applied);
         assertEquals(3, observations.size());
         assertEquals(Duration.ofMillis(900), decision.retryAfter());
     }
@@ -36,7 +36,7 @@ class QuotaCommandServiceTest {
         List<RateLimitDecision> observations = new ArrayList<>();
         QuotaCommandService service = service((rule, key) -> RateLimitDecision.unavailable(rule.dimension(), key),
                 (rule, key) -> {
-                    localCalls.add(rule.ruleId());
+                    localCalls.add(rule.ruleId().value());
                     return RateLimitDecision.allowed(rule.dimension(), key, 2);
                 }, (rule, decision) -> observations.add(decision));
         QuotaCommand open = command(RedisFailurePolicy.OPEN_WITH_LOCAL);
@@ -73,11 +73,11 @@ class QuotaCommandServiceTest {
     void shouldShareExecutionRecordAcrossStagesAndDeduplicateRepeatedGroups() {
         List<String> calls = new ArrayList<>();
         QuotaCommandService service = service((rule, key) -> {
-            calls.add(rule.ruleId());
+            calls.add(rule.ruleId().value());
             return RateLimitDecision.allowed(rule.dimension(), key, 1);
         }, unusedLocal(), QuotaObserver.noop());
         QuotaCommand all = command(RedisFailurePolicy.CLOSED);
-        Set<String> applied = new HashSet<>();
+        Set<RateLimitRuleId> applied = new HashSet<>();
         service.acquire(new QuotaCommand(all.groups(), all.dimensions(), true), applied);
         assertEquals(List.of("ip"), calls);
         service.acquire(new QuotaCommand(List.of(all.groups().get(0), all.groups().get(0)), all.dimensions(), false), applied);
@@ -93,7 +93,7 @@ class QuotaCommandServiceTest {
         Map<RateLimitDimension, String> dimensions = new EnumMap<>(RateLimitDimension.class);
         dimensions.put(RateLimitDimension.IP, null);
         dimensions.put(RateLimitDimension.CLIENT, " \t");
-        Set<String> applied = new HashSet<>();
+        Set<RateLimitRuleId> applied = new HashSet<>();
         assertTrue(service.acquire(new QuotaCommand(command(RedisFailurePolicy.CLOSED).groups(), dimensions, false), applied).allowed());
         assertTrue(applied.isEmpty());
     }
@@ -120,7 +120,7 @@ class QuotaCommandServiceTest {
     void shouldPropagateProgrammingFailuresWithoutClaimingDegradation() {
         QuotaCommandService service = service((rule, key) -> { throw new IllegalStateException("unexpected"); },
                 unusedLocal(), QuotaObserver.noop());
-        Set<String> applied = new HashSet<>();
+        Set<RateLimitRuleId> applied = new HashSet<>();
         assertThrows(IllegalStateException.class, () -> service.acquire(command(RedisFailurePolicy.OPEN_WITH_LOCAL), applied));
         assertTrue(applied.isEmpty());
     }
@@ -135,9 +135,9 @@ class QuotaCommandServiceTest {
 
     private static QuotaCommand command(RedisFailurePolicy failure) {
         return new QuotaCommand(List.of(new RateLimitRules(List.of(
-                new RateLimitPolicy("short", RateLimitDimension.CLIENT, 100, 1, RateLimitMode.EXACT),
-                new RateLimitPolicy("long", RateLimitDimension.CLIENT, 900, 1, RateLimitMode.EXACT),
-                new RateLimitPolicy("ip", RateLimitDimension.IP, 500, 1, RateLimitMode.EXACT)), failure)),
+                new RateLimitRule("short", RateLimitDimension.CLIENT, 100, 1, RateLimitMode.EXACT),
+                new RateLimitRule("long", RateLimitDimension.CLIENT, 900, 1, RateLimitMode.EXACT),
+                new RateLimitRule("ip", RateLimitDimension.IP, 500, 1, RateLimitMode.EXACT)), failure)),
                 Map.of(RateLimitDimension.CLIENT, "client", RateLimitDimension.IP, "192.0.2.1"), false);
     }
 }

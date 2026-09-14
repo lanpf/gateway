@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 
-import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodPolicySnapshotStore;
-import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodPolicySnapshotStore;
+import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodAccessSnapshotStore;
+import com.cloud.gateway.infrastructure.policy.lkg.LastKnownGoodAccessSnapshotStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -15,7 +15,7 @@ class LastKnownGoodIngressAccessSnapshotStoreTest {
 
     @Test
     void shouldPersistAndReplaceLastKnownGoodContent() {
-        LastKnownGoodPolicySnapshotStore store = new FileLastKnownGoodPolicySnapshotStore(
+        LastKnownGoodAccessSnapshotStore store = new FileLastKnownGoodAccessSnapshotStore(
                 temporaryDirectory.resolve("policy.yaml"));
 
         assertTrue(store.load().isEmpty());

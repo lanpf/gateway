@@ -10,9 +10,9 @@ class RateLimitKeyResolverTest {
 
     @Test
     void shouldIsolateRulesDimensionsAndUntrustedSegments() {
-        RateLimitPolicy rule = new RateLimitPolicy("a", RateLimitDimension.APP, 1, 1, RateLimitMode.EXACT);
-        RateLimitPolicy other = new RateLimitPolicy("b", RateLimitDimension.APP, 1, 1, RateLimitMode.EXACT);
-        RateLimitPolicy dimension = new RateLimitPolicy("a", RateLimitDimension.CLIENT, 1, 1, RateLimitMode.EXACT);
+        RateLimitRule rule = new RateLimitRule("a", RateLimitDimension.APP, 1, 1, RateLimitMode.EXACT);
+        RateLimitRule other = new RateLimitRule("b", RateLimitDimension.APP, 1, 1, RateLimitMode.EXACT);
+        RateLimitRule dimension = new RateLimitRule("a", RateLimitDimension.CLIENT, 1, 1, RateLimitMode.EXACT);
         assertNotEquals(keys.bucket(rule, "value"), keys.bucket(other, "value"));
         assertNotEquals(keys.bucket(rule, "value"), keys.bucket(dimension, "value"));
         assertNotEquals(keys.bucket(rule, "a:b"), keys.bucket(rule, "a/b"));
@@ -27,7 +27,7 @@ class RateLimitKeyResolverTest {
             calls.incrementAndGet();
             return "gateway:" + String.join(":", segments);
         });
-        RateLimitPolicy rule = new RateLimitPolicy("a", RateLimitDimension.APP, 1, 1, RateLimitMode.EXACT);
+        RateLimitRule rule = new RateLimitRule("a", RateLimitDimension.APP, 1, 1, RateLimitMode.EXACT);
         assertTrue(resolver.bucket(rule, "value").startsWith("gateway:ratelimit:"));
         assertEquals(1, calls.get());
     }

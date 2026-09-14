@@ -1,6 +1,10 @@
 package com.cloud.gateway.interfaces.webflux;
 
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.access.subject.SessionId;
+import com.cloud.gateway.domain.access.subject.SubjectAuthenticationRejectReason;
+import com.cloud.gateway.domain.access.subject.SubjectId;
 import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
 
 import java.time.Instant;
@@ -27,7 +31,7 @@ public final class HostSessionSubjectAuthenticator implements SubjectAuthenticat
     public Mono<SubjectAuthenticationOutcome> authenticate(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()
                 || authentication instanceof AnonymousAuthenticationToken) {
-            return Mono.just(SubjectAuthenticationOutcome.rejected());
+            return Mono.just(SubjectAuthenticationOutcome.rejected(SubjectAuthenticationRejectReason.INVALID));
         }
         Map<String, Object> attributes = tokenAttributes(authentication);
         String subjectId = text(attributes.get(SUBJECT_CLAIM));
@@ -36,10 +40,10 @@ public final class HostSessionSubjectAuthenticator implements SubjectAuthenticat
         Instant expiresAt = instant(attributes.get(EXPIRATION_CLAIM));
         if (!StringUtils.hasText(subjectId) || !StringUtils.hasText(sessionId)
                 || !StringUtils.hasText(issuer) || expiresAt == null) {
-            return Mono.just(SubjectAuthenticationOutcome.rejected());
+            return Mono.just(SubjectAuthenticationOutcome.rejected(SubjectAuthenticationRejectReason.INVALID));
         }
         AuthenticatedSubject subject = new AuthenticatedSubject(
-                SubjectType.HOST_SESSION, subjectId, sessionId, issuer,
+                SubjectType.HOST_SESSION, new SubjectId(subjectId), new SessionId(sessionId), issuer,
                 strings(attributes.get(AUDIENCE_CLAIM)), scopes(attributes), expiresAt);
         return Mono.just(SubjectAuthenticationOutcome.authenticated(subject));
     }

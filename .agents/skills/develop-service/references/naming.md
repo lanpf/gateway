@@ -4,7 +4,8 @@
 
 - **NAME-INTERFACE-001** **[REQUIRED][BASELINE]** — Name interfaces by business role, port, or technical contract without `I*` or `*Interface`; use `Abstract*` for abstract classes and reserve `Base*` for framework or shared base types.
 - **NAME-IMPLEMENTATION-001** **[REQUIRED][BASELINE]** — Do not use generic `*Impl`; name implementations by default role, technology, adapter responsibility, or strategy.
-- **NAME-AUTO-CONFIGURATION-001** **[REQUIRED][BASELINE]** — Only Spring Boot auto-configuration entry classes may have names ending in `Configuration`, and they must use the `*AutoConfiguration` suffix. All other types must be named by their actual responsibility without the `Configuration` suffix; merely annotating a class with Spring `@Configuration` does not qualify for the exception.
+- **NAME-AUTO-CONFIGURATION-001** **[REQUIRED][BASELINE]** — Spring Boot auto-configuration entry classes must use the `*AutoConfiguration` suffix. All other types must be named by their actual responsibility without the `Configuration` suffix, except component-scanned wiring classes.
+- **NAME-CONFIGURATION-001** **[REQUIRED][BASELINE]** — Name component-scanned wiring classes with the `*Configuration` suffix.
 - **NAME-PROPERTIES-001** **[REQUIRED][BASELINE]** — Name configuration-property binding classes with the `*Properties` suffix.
 - **NAME-RESULT-001** **[REQUIRED][BASELINE]** — Do not suffix payloads, command outputs, query views, or effects with `*Result`; reserve `Result<T>` and `PageResult<T>` for framework response wrappers.
 - **NAME-RESPONSE-001** **[REQUIRED][BASELINE]** — Only API payloads may use `*ApiResponse`, and only application return types may use `*Response`; other layers must not use a `*Response` suffix.
