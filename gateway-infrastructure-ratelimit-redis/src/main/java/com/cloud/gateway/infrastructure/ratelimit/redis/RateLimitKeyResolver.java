@@ -22,7 +22,7 @@ public final class RateLimitKeyResolver extends AbstractKeyResolver {
 
     String bucket(RateLimitRule rule, String value) {
         Assert.hasText(value, "dimension value must not be blank");
-        return resolve(encode(rule.ruleId()), rule.dimension().name(), encode(value));
+        return resolve(encode(rule.ruleId().value()), rule.dimension().name(), encode(value));
     }
 
     private static String encode(String value) {

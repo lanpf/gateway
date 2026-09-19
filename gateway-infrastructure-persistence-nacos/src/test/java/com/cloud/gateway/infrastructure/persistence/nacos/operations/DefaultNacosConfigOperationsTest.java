@@ -21,9 +21,9 @@ class DefaultNacosConfigOperationsTest {
         AtomicReference<String> observedContent = new AtomicReference<>();
         Consumer<String> callback = observedContent::set;
 
-        String initialContent = operations.getConfigAndListen("policy.yaml", "GATEWAY", 1_000, callback);
+        String initialContent = operations.getConfigAndListen("access.yaml", "GATEWAY", 1_000, callback);
         registeredListener.get().receiveConfigInfo("version: 2");
-        operations.removeListener("policy.yaml", "GATEWAY", callback);
+        operations.removeListener("access.yaml", "GATEWAY", callback);
 
         assertEquals("version: 1", initialContent);
         assertEquals("version: 2", observedContent.get());

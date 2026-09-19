@@ -1,19 +1,50 @@
 ---
+- endpointId: "GATEWAY.ADMIN"
+  serviceId: "gateway"
+  routeId: "gateway-admin"
+  matchers:
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/app"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/client-access"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/client-credential"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/endpoint-access"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/configuration"
+  - httpMethod: "POST"
+    pathPattern: "/admin/gateway/snapshot/publish"
+  - httpMethod: "POST"
+    pathPattern: "/admin/gateway/snapshot/rollback"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/app"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/client-access"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/endpoint-access"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/snapshot"
+  tags:
+  - "admin"
+  status: "ENABLED"
+  access:
+    clientVerificationRequirement: "OPTIONAL"
+    subjectAuthenticationRequirement: "REQUIRED"
+    requiredScopes:
+    - "admin"
+    requiredAudiences:
+    - "gateway"
 - endpointId: "USER_AUTH.LOGIN"
   serviceId: "user-auth"
+  routeId: "user-auth"
   matchers:
   - httpMethod: "POST"
     pathPattern: "/api/user-auth/login"
-  routeId: "user-auth"
-- endpointId: GATEWAY.ADMIN
-  serviceId: gateway
-  routeId: gateway-admin
-  tags: [admin]
-  matchers:
-  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/app }
-  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/client-access }
-  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/client-client }
-  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/endpoint-access }
-  - { httpMethod: PUT, pathPattern: /admin/gateway/policies/configuration }
-  - { httpMethod: POST, pathPattern: /admin/gateway/snapshot/publish }
-  - { httpMethod: POST, pathPattern: /admin/gateway/snapshot/rollback }
+  tags: []
+  status: "ENABLED"
+  access:
+    clientVerificationRequirement: "OPTIONAL"
+    subjectAuthenticationRequirement: "ANONYMOUS"
+    requiredScopes: []
+    requiredAudiences: []

@@ -1,24 +1,33 @@
 package com.cloud.gateway.interfaces.config;
 
-import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
-import com.cloud.gateway.application.ingress.IngressAccessCommandService;
-import com.cloud.gateway.domain.policy.bundle.PolicyResolver;
-import com.cloud.gateway.application.governance.ResponseCache;
-import com.cloud.gateway.application.governance.DownstreamCircuitBreaker;
+import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
+import com.cloud.gateway.application.ingress.AccessStageCommandService;
+import com.cloud.gateway.application.ingress.AdmissionStageCommandService;
+import com.cloud.gateway.application.ingress.IngressAdmissionCommandService;
+import com.cloud.gateway.application.ingress.PreparationStageCommandService;
+import com.cloud.gateway.application.ingress.PreparationObserver;
+import com.cloud.gateway.domain.policy.bundle.CapabilityResolver;
+import com.cloud.gateway.domain.policy.execution.CapabilityPlanner;
+import com.cloud.gateway.domain.policy.capability.RateLimitCapability;
+import com.cloud.gateway.application.ingress.CapabilityExecutionCommandService;
+import com.cloud.gateway.application.ingress.RateLimitCapabilityExecutor;
+import com.cloud.gateway.interfaces.webflux.CapabilityResponseWriter;
+import com.cloud.gateway.interfaces.webflux.RateLimitOutcomeWriter;
+import java.util.List;
+import com.cloud.gateway.interfaces.webflux.SnapshotEndpointMatchSource;
 import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.interfaces.webflux.RequestQuotaGuard;
-import com.cloud.gateway.interfaces.webflux.DownstreamPolicyHandler;
-import com.cloud.gateway.interfaces.webflux.AccessSnapshotWebFilter;
+import com.cloud.gateway.interfaces.webflux.IngressPreparationWebFilter;
 import com.cloud.gateway.interfaces.webflux.LocalPolicyWebFilter;
 import com.cloud.gateway.interfaces.webflux.GatewayObservationWebFilter;
 import io.micrometer.core.instrument.MeterRegistry;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
-import com.cloud.gateway.domain.access.IngressAccessEvaluator;
+import com.cloud.gateway.domain.ingress.access.AccessEvaluator;
 import com.cloud.gateway.interfaces.rest.ClientRequestBodyArgumentResolver;
 import com.cloud.gateway.interfaces.webflux.BrowserSessionSubjectAuthenticator;
 import com.cloud.gateway.interfaces.webflux.HostSessionSubjectAuthenticator;
-import com.cloud.gateway.interfaces.webflux.TrustedRequestContextGlobalFilter;
+import com.cloud.gateway.interfaces.webflux.IngressAdmissionGlobalFilter;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.ReactiveAdapterRegistry;
@@ -30,23 +39,42 @@ import org.springframework.web.reactive.result.method.annotation.ArgumentResolve
 
 @Configuration(proxyBeanMethods = false)
 public class GatewayIngressWebFluxBeans {
-    @Bean GatewayRouteContractValidator gatewayRouteContractValidator(com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider,
+    @Bean GatewayRouteContractValidator gatewayRouteContractValidator(com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer provider,
             org.springframework.cloud.gateway.route.RouteLocator routes) {
         return new GatewayRouteContractValidator(provider, routes);
     }
     @Bean
-    IngressAccessEvaluator ingressAccessPolicyEvaluator() { return new IngressAccessEvaluator(); }
-    @Bean IngressAccessCommandService ingressAccessCommandService(ClientCredentialAuthenticator authenticator,
-                                                                  IngressAccessEvaluator evaluator, Clock clock) {
-        return new IngressAccessCommandService(authenticator, evaluator, new PolicyResolver(), clock);
+    AccessEvaluator ingressAccessPolicyEvaluator() { return new AccessEvaluator(); }
+    @Bean AccessStageCommandService ingressAccessStageCommandService(ClientCredentialAuthenticator authenticator,
+                                                                  AccessEvaluator evaluator, Clock clock) {
+        return new AccessStageCommandService(authenticator, evaluator, clock);
     }
-    @Bean TrustedRequestContextGlobalFilter trustedRequestContextGlobalFilter(
-            IngressAccessCommandService ingress,
+    @Bean CapabilityPlanner capabilityPlanner() {
+        return new CapabilityPlanner(List.of(new RateLimitCapability()));
+    }
+    @Bean CapabilityExecutionCommandService capabilityExecutionCommandService(RequestQuotaGuard quotas,
+            CapabilityPlanner planner) {
+        return new CapabilityExecutionCommandService(new CapabilityResolver(), planner,
+                List.of(new RateLimitCapabilityExecutor(quotas)));
+    }
+    @Bean CapabilityResponseWriter capabilityResponseWriter(RequestQuotaGuard quotas) {
+        return new CapabilityResponseWriter(List.of(new RateLimitOutcomeWriter(quotas)));
+    }
+    @Bean AdmissionStageCommandService admissionStageCommandService(
+            CapabilityExecutionCommandService capabilities) {
+        return new AdmissionStageCommandService(capabilities);
+    }
+    @Bean IngressAdmissionCommandService ingressAdmissionCommandService(
+            AccessStageCommandService access, AdmissionStageCommandService admission) {
+        return new IngressAdmissionCommandService(access, admission);
+    }
+    @Bean IngressAdmissionGlobalFilter ingressAdmissionGlobalFilter(
+            IngressAdmissionCommandService ingress,
             HostSessionSubjectAuthenticator hostSessionSubjectAuthenticator,
             BrowserSessionSubjectAuthenticator browserSessionSubjectAuthenticator,
-            RequestQuotaGuard quotas, DownstreamPolicyHandler downstream) {
-        return new TrustedRequestContextGlobalFilter(ingress,
-                hostSessionSubjectAuthenticator, browserSessionSubjectAuthenticator, quotas, downstream);
+            CapabilityResponseWriter responses) {
+        return new IngressAdmissionGlobalFilter(ingress,
+                hostSessionSubjectAuthenticator, browserSessionSubjectAuthenticator, responses);
     }
 
     @Bean RequestQuotaGuard requestQuotaGuard(QuotaCommandService quotas) {
@@ -55,13 +83,25 @@ public class GatewayIngressWebFluxBeans {
     @Bean GatewayObservationWebFilter gatewayObservationWebFilter(ObjectProvider<MeterRegistry> registries) {
         return new GatewayObservationWebFilter(registries.getIfUnique());
     }
-    @Bean DownstreamPolicyHandler downstreamPolicyHandler(ResponseCache cache, DownstreamCircuitBreaker circuits) {
-        return new DownstreamPolicyHandler(cache, circuits);
+    @Bean PreparationStageCommandService preparationStageCommandService(AccessSnapshotCapturer capturer,
+            CapabilityExecutionCommandService capabilities, PreparationObserver observer) {
+        return new PreparationStageCommandService(capturer, new SnapshotEndpointMatchSource(),
+                capabilities, observer);
     }
-    @Bean AccessSnapshotWebFilter policySnapshotWebFilter(com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider, RequestQuotaGuard quotas) {
-        return new AccessSnapshotWebFilter(provider, quotas);
+    @Bean IngressPreparationWebFilter ingressPreparationWebFilter(
+            PreparationStageCommandService preparation, CapabilityResponseWriter responses) {
+        return new IngressPreparationWebFilter(preparation, responses);
     }
-    @Bean LocalPolicyWebFilter localPolicyWebFilter(TrustedRequestContextGlobalFilter filter) {
+
+    @Bean com.cloud.gateway.application.ingress.PreparationObserver preparationObserver(
+            ObjectProvider<MeterRegistry> registries) {
+        MeterRegistry registry = registries.getIfUnique();
+        if (registry == null) {
+            return () -> { };
+        }
+        return new com.cloud.gateway.interfaces.webflux.MicrometerPreparationObserver(registry);
+    }
+    @Bean LocalPolicyWebFilter localPolicyWebFilter(IngressAdmissionGlobalFilter filter) {
         return new LocalPolicyWebFilter(filter);
     }
 

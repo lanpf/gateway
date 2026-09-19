@@ -30,8 +30,9 @@ public class RateLimitRedisAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(RateLimitQuota.class)
-    RateLimitQuota rateLimitQuota(RedisTokenBucketLimiter limiter, RateLimitKeyResolver keyResolver) {
-        return new RateLimitQuotaAdapter(limiter, keyResolver);
+    RateLimitQuota rateLimitQuota(RedisTokenBucketLimiter limiter, RateLimitKeyResolver keyResolver,
+                                  RedisRateLimitProperties properties) {
+        return new RateLimitQuotaAdapter(limiter, keyResolver, properties.getAcquireTimeout());
     }
 
     @Bean

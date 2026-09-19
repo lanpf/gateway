@@ -28,7 +28,7 @@ class NacosPolicyHistorySourceAdapterTest {
         historyProperties.setAdminAccessToken("test-token");
         NacosPolicyHistorySourceAdapter client = client(builder.build(), historyProperties, new NacosConfigProperties());
         expectRequest(server, BASE_URL
-                + "/v3/admin/cs/history/list?dataId=gateway-policy.yaml&groupName=GATEWAY"
+                + "/v3/admin/cs/history/list?dataId=gateway-access.yaml&groupName=GATEWAY"
                 + "&namespaceId=public&pageNo=1&pageSize=100", "test-token")
                 .andRespond(withSuccess("""
                         {"code":0,"message":"success","data":{"pageItems":[{"id":"2"},{"id":"1"}]}}
@@ -56,7 +56,7 @@ class NacosPolicyHistorySourceAdapterTest {
                         {"accessToken":"login-token","tokenTtl":300}
                         """, MediaType.APPLICATION_JSON));
         expectRequest(server, BASE_URL
-                + "/v3/admin/cs/history/list?dataId=gateway-policy.yaml&groupName=GATEWAY"
+                + "/v3/admin/cs/history/list?dataId=gateway-access.yaml&groupName=GATEWAY"
                 + "&namespaceId=public&pageNo=1&pageSize=100", "login-token")
                 .andRespond(withSuccess("""
                         {"code":0,"message":"success","data":{"pageItems":[]}}
@@ -86,7 +86,7 @@ class NacosPolicyHistorySourceAdapterTest {
             String accessToken
     ) {
         expectRequest(server, BASE_URL
-                + "/v3/admin/cs/history?dataId=gateway-policy.yaml&groupName=GATEWAY"
+                + "/v3/admin/cs/history?dataId=gateway-access.yaml&groupName=GATEWAY"
                 + "&namespaceId=public&nid=" + historyId, accessToken)
                 .andRespond(withSuccess("""
                         {"code":0,"message":"success","data":{"id":"%s","content":"%s"}}

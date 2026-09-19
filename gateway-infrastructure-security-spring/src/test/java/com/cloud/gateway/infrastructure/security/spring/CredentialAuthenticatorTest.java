@@ -8,8 +8,8 @@ import com.cloud.gateway.application.security.RequestSignatureAuthenticationComm
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.security.signature.*;
 import com.cloud.gateway.application.security.ReplayGuard;
-import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
-import com.cloud.gateway.domain.access.client.VerifiedClient;
+import com.cloud.gateway.domain.ingress.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.ingress.access.client.VerifiedClient;
 import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.client.Credential;
@@ -50,13 +50,13 @@ class CredentialAuthenticatorTest {
         ClientSignatureEvidence evidence = new ClientSignatureEvidence(body, timestamp, signature);
 
         ClientVerificationOutcome first = authenticator.authenticate(
-                new Credentials(active, grace), evidence, now)
+                new Credentials(active, grace), new ClientId("PARTNER"), evidence, now)
                 .toCompletableFuture().join();
         ClientVerificationOutcome replay = authenticator.authenticate(
-                new Credentials(active, grace), evidence, now)
+                new Credentials(active, grace), new ClientId("PARTNER"), evidence, now)
                 .toCompletableFuture().join();
         ClientVerificationOutcome caseReplay = authenticator.authenticate(
-                new Credentials(active, grace),
+                new Credentials(active, grace), new ClientId("PARTNER"),
                 new ClientSignatureEvidence(body, timestamp, signature.toUpperCase(java.util.Locale.ROOT)), now)
                 .toCompletableFuture().join();
 
@@ -79,7 +79,7 @@ class CredentialAuthenticatorTest {
         ClientSignatureEvidence evidence = new ClientSignatureEvidence(new byte[0], "not-a-timestamp", "signature");
 
         ClientVerificationOutcome result = authenticator.authenticate(
-                        new Credentials(credential, null), evidence, now)
+                        new Credentials(credential, null), new ClientId("PARTNER"), evidence, now)
                 .toCompletableFuture()
                 .join();
 
@@ -87,8 +87,8 @@ class CredentialAuthenticatorTest {
     }
 
     private static Credential credential(String id, String ref, Instant now) {
-        return new Credential(new CredentialId(id), new ClientId("PARTNER"),
-                SignatureContract.LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256, ref,
+        return new Credential(new CredentialId(id), ref,
+                SignatureContract.LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256,
                 now.minusSeconds(60), now.plusSeconds(600));
     }
 

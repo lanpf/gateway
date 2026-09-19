@@ -1,14 +1,11 @@
 package com.cloud.gateway.infrastructure.policy.config;
 
-import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
-import com.cloud.gateway.domain.access.client.ClientVerificationMode;
-import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.policy.CookieForwardingMode;
-import com.cloud.gateway.domain.client.SignatureContract;
-import com.cloud.gateway.domain.endpoint.EndpointStatus;
+import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.client.ClientStatus;
-import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshot;
+import com.cloud.gateway.domain.client.SignatureContract;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
+import com.cloud.gateway.domain.endpoint.EndpointStatus;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -20,7 +17,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -30,28 +26,13 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = GatewayPolicyDefinitionProperties.PREFIX, ignoreUnknownFields = false)
 @Getter
 public class GatewayPolicyDefinitionProperties {
-    public static final String PREFIX = "gateway.policy-definition";
+    public static final String PREFIX = "gateway.access-definition";
 
-    @Valid private final PolicyConfigProperties policies = new PolicyConfigProperties();
+    @Valid private final CapabilityCompositionProperties policies = new CapabilityCompositionProperties();
 
     @NotEmpty @Valid private final List<Endpoint> endpoints = new ArrayList<>();
     @NotEmpty @Valid private final Map<@NotBlank String, App> apps = new LinkedHashMap<>();
     @Valid private final Map<@NotBlank String, Client> clients = new LinkedHashMap<>();
-    @NotEmpty @Valid private final Map<@NotBlank String, EndpointAccess> routes = new LinkedHashMap<>();
-
-    public List<StoredAccessSnapshot.Endpoint> toStoredEndpoints() {
-        return endpoints.stream().map(Endpoint::toStored).toList();
-    }
-
-    public Map<String, StoredAccessSnapshot.App> toStoredApps() {
-        return apps.entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey, entry -> entry.getValue().toStored()));
-    }
-
-    public Map<String, StoredAccessSnapshot.Route> toStoredRoutes() {
-        return routes.entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey, entry -> entry.getValue().toStored()));
-    }
 
     @Getter
     @Setter
@@ -61,11 +42,8 @@ public class GatewayPolicyDefinitionProperties {
         @NotEmpty @Valid private final List<Matcher> matchers = new ArrayList<>();
         @NotBlank private String routeId;
         private final Set<@NotBlank String> tags = new LinkedHashSet<>();
-
-        private StoredAccessSnapshot.Endpoint toStored() {
-            return new StoredAccessSnapshot.Endpoint(endpointId, serviceId,
-                    matchers.stream().map(Matcher::toStored).toList(), routeId, tags);
-        }
+        @NotNull private EndpointStatus status = EndpointStatus.ENABLED;
+        @NotNull @Valid private Access access = new Access();
     }
 
     @Getter
@@ -73,29 +51,32 @@ public class GatewayPolicyDefinitionProperties {
     public static class Matcher {
         @NotBlank private String httpMethod;
         @NotBlank private String pathPattern;
+    }
 
-        private StoredAccessSnapshot.Matcher toStored() {
-            return new StoredAccessSnapshot.Matcher(httpMethod, pathPattern);
-        }
+    @Getter
+    @Setter
+    public static class Access {
+        @NotNull private ClientVerificationRequirement clientVerificationRequirement =
+                ClientVerificationRequirement.REQUIRED;
+        @NotNull private SubjectAuthenticationRequirement subjectAuthenticationRequirement =
+                SubjectAuthenticationRequirement.ANONYMOUS;
+        @NotNull private final Set<String> requiredScopes = new LinkedHashSet<>();
+        @NotNull private final Set<String> requiredAudiences = new LinkedHashSet<>();
     }
 
     @Getter
     @Setter
     public static class App {
-        @NotNull private PolicyStatus status = PolicyStatus.ENABLED;
+        @NotNull private AppStatus status = AppStatus.ENABLED;
         @NotBlank private String platform;
-        @NotNull private final Set<@NotBlank String> allowedOrigins = new LinkedHashSet<>();
-
-        private StoredAccessSnapshot.App toStored() {
-            return new StoredAccessSnapshot.App(status, platform, allowedOrigins);
-        }
+        @NotNull private final Set<String> allowedOrigins = new LinkedHashSet<>();
     }
 
     @Getter
     @Setter
     public static class Client {
         @NotNull private ClientStatus status;
-        @NotNull private final Set<@NotBlank String> allowedAppIds = new LinkedHashSet<>();
+        @NotNull private final Set<String> allowedAppIds = new LinkedHashSet<>();
         @Valid private ClientCredentials credentials;
     }
 
@@ -104,7 +85,6 @@ public class GatewayPolicyDefinitionProperties {
     public static class ClientCredentials {
         @NotNull @Valid private Credential activeCredential;
         @Valid private Credential graceCredential;
-
     }
 
     @Getter
@@ -115,40 +95,5 @@ public class GatewayPolicyDefinitionProperties {
         @NotNull private Instant expiresAt;
         @NotNull private SignatureContract signatureContract;
         @NotBlank private String secretRef;
-
-        private StoredAccessSnapshot.Credential toStored() {
-            return new StoredAccessSnapshot.Credential(
-                    credentialId, validFrom, expiresAt, signatureContract, secretRef);
-        }
-    }
-
-    @Getter
-    @Setter
-    public static class EndpointAccess {
-        @NotNull private ClientVerificationMode clientVerificationMode =
-                ClientVerificationMode.IGNORE;
-        @NotNull private ClientVerificationRequirement clientVerificationRequirement = ClientVerificationRequirement.FORBIDDEN;
-        @NotNull private SubjectAuthenticationRequirement subjectAuthencationRequirement = SubjectAuthenticationRequirement.IGNORE;
-        @NotNull private final Set<String> requiredScopes = new LinkedHashSet<>();
-        @NotNull private final Set<String> requiredAudiences = new LinkedHashSet<>();
-        @NotNull @Valid private final Forwarding credentialForwarding = new Forwarding();
-        @NotNull private EndpointStatus status = EndpointStatus.ENABLED;
-
-        private StoredAccessSnapshot.Route toStored() {
-            return new StoredAccessSnapshot.Route(clientVerificationMode, clientVerificationRequirement,
-                    subjectAuthencationRequirement, requiredScopes, requiredAudiences, credentialForwarding.toStored(), status);
-        }
-    }
-
-    @Getter
-    @Setter
-    public static class Forwarding {
-        @NotNull private AuthorizationHeaderForwardingMode authorizationHeader = AuthorizationHeaderForwardingMode.STRIP;
-        @NotNull private CookieForwardingMode cookies = CookieForwardingMode.STRIP_ALL;
-        @NotNull private final Set<String> allowedCookieNames = new LinkedHashSet<>();
-
-        private StoredAccessSnapshot.Forwarding toStored() {
-            return new StoredAccessSnapshot.Forwarding(authorizationHeader, cookies, allowedCookieNames);
-        }
     }
 }

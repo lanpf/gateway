@@ -6,7 +6,7 @@ import com.cloud.framework.core.AuthenticatedSessionContext;
 import com.cloud.framework.core.ChannelContext;
 import com.cloud.framework.core.ClientRequest;
 import com.cloud.gateway.interfaces.webflux.GatewayRequestAttributes;
-import com.cloud.gateway.domain.access.IngressAccessGrantedContext;
+import com.cloud.gateway.domain.ingress.access.AccessGrantedContext;
 import com.cloud.gateway.interfaces.header.RequestHeaderValueAdapter;
 import java.lang.annotation.Annotation;
 import java.util.Arrays;
@@ -60,7 +60,7 @@ public final class ClientRequestBodyArgumentResolver extends AbstractMessageRead
     }
 
     private static void bindProtectedHeaders(ClientRequest request, ServerWebExchange exchange) {
-        IngressAccessGrantedContext context = exchange.getAttribute(GatewayRequestAttributes.TRUSTED_CONTEXT);
+        AccessGrantedContext context = exchange.getAttribute(GatewayRequestAttributes.TRUSTED_CONTEXT);
         request.setClientAppId(context == null ? null : context.app().appId().value());
         request.setClientPlatform(context == null ? null : context.app().platform());
         String version = exchange.getRequest().getHeaders().getFirst(RequestHeader.APP_VERSION.headerName());

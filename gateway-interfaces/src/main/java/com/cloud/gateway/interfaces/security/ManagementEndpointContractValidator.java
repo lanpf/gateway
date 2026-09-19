@@ -1,9 +1,9 @@
 package com.cloud.gateway.interfaces.security;
 
 import com.cloud.gateway.api.constants.GatewayPathApiConstants;
-import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
+import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
 import com.cloud.gateway.domain.endpoint.Endpoint;
-import com.cloud.gateway.domain.access.IngressAccessSnapshot;
+import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.security.ManagementAccessRules;
 import com.cloud.gateway.interfaces.webflux.GatewayRequestAttributes;
 import lombok.RequiredArgsConstructor;
@@ -13,12 +13,12 @@ import org.springframework.beans.factory.SmartInitializingSingleton;
 @RequiredArgsConstructor
 public final class ManagementEndpointContractValidator implements SmartInitializingSingleton {
     private static final String MANAGEMENT_DESCENDANT_PREFIX = GatewayPathApiConstants.ADMIN_BASE_PATH + "/";
-    private final com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider;
+    private final com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer provider;
     private final ManagementAccessRules rules;
 
     @Override
     public void afterSingletonsInstantiated() {
-        IngressAccessSnapshot snapshot = provider.current().snapshot();
+        IngressSnapshot snapshot = provider.capture().snapshot();
         for (Endpoint endpoint : snapshot.content().endpointRegistry().asMap().values()) {
             if (GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.routeId())
                     || endpoint.matchers().stream().anyMatch(matcher ->

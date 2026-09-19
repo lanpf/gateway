@@ -1,5 +1,10 @@
 package com.cloud.gateway.ingress;
 
+import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
+import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
+import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
+import com.cloud.gateway.infrastructure.policy.mapstruct.AccessSnapshotDocumentMapStructMapperImpl;
+
 import com.cloud.framework.core.RequestHeader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,29 +14,36 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.config.ConfigService;
 import com.cloud.framework.core.Result;
-import com.cloud.gateway.application.access.publication.AccessSnapshotHasher;
+import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
+import com.cloud.gateway.domain.app.App;
+import com.cloud.gateway.domain.app.AppAccess;
+import com.cloud.gateway.domain.app.AppRegistry;
+import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
+import com.cloud.gateway.domain.endpoint.RouteId;
+import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
+import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.domain.client.ClientStatus;
-import com.cloud.gateway.domain.policy.bundle.PolicyBinding;
-import com.cloud.gateway.domain.policy.bundle.PolicyBindingId;
-import com.cloud.gateway.domain.policy.bundle.PolicyBundle;
-import com.cloud.gateway.domain.policy.bundle.PolicyBundleId;
-import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
+import com.cloud.gateway.domain.policy.bundle.CapabilityBinding;
+import com.cloud.gateway.domain.policy.bundle.CapabilityBindingId;
+import com.cloud.gateway.domain.policy.bundle.CapabilityBundle;
+import com.cloud.gateway.domain.policy.bundle.CapabilityBundleId;
+import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
 import com.cloud.gateway.domain.policy.header.HeaderPolicy;
-import com.cloud.gateway.domain.access.IngressAccessContent;
-import com.cloud.gateway.domain.access.IngressAccessSnapshot;
+import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
+import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
@@ -315,65 +327,58 @@ class BrowserSessionIngressIT {
 
     private void seedSnapshot() throws Exception {
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-        com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
-                new CanonicalPolicyContentMapper(), objectMapper);
+        com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
+                new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl()), objectMapper);
         StoredPolicyDefinitionCodec codec = new StoredPolicyDefinitionCodec(
-                new StoredAccessSnapshotMapper(), objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl())), objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
         NacosPolicyProperties properties = nacosPolicyProperties();
 
+        // Endpoint access state is stored inline in the endpoint definition; there is no separate document.
         EndpointRegistry endpointRegistry = new EndpointRegistry(List.of(new Endpoint(
                 new EndpointId(ENDPOINT_ID),
-                "user-auth",
+                new ServiceId("user-auth"),
+                new RouteId(ROUTE_ID),
                 List.of(new EndpointMatcher("POST", BROWSER_END_PATH)),
-                ROUTE_ID)));
-        Map<AppId, AppAccess> apps = Map.of(
-                new AppId(APP_ID),
-                new AppAccess(
-                        new AppId(APP_ID),
-                        "WECHAT_MINI_PROGRAM",
-                        Set.of(ALLOWED_ORIGIN),
-                        PolicyStatus.ENABLED));
-        Map<ClientId, ClientAccess> clientAccess = Map.of(
-                new ClientId(CLIENT_ID),
-                new ClientAccess(
-                        new ClientId(CLIENT_ID),
-                        Set.of(new AppId(APP_ID)), ClientStatus.ENABLED));
-        Map<EndpointId, EndpointAccess> endpointAccess = Map.of(
-                new EndpointId(ENDPOINT_ID),
+                Set.of(),
+                EndpointStatus.ENABLED,
                 new EndpointAccess(
-                        new EndpointId(ENDPOINT_ID),
-                        ClientVerificationRequirement.REQUIRED,
-                        ClientVerificationMode.IGNORE,
-                        SubjectAuthenticationRequirement.BROWSER_SESSION_REQUIRED,
+                        // The browser entry never signs as a Client: the declared ClientId is only checked
+                        // for registration, status and App authorization, never promoted to a trusted identity.
+                        ClientVerificationRequirement.OPTIONAL,
+                        SubjectAuthenticationRequirement.REQUIRED,
                         Set.of(),
-                        Set.of(),
-                        new CredentialForwarding(
-                                AuthorizationHeaderForwardingMode.STRIP,
-                                CookieForwardingMode.ALLOW_LIST,
-                                Set.of("BROWSER_SESSION")),
-                        EndpointStatus.ENABLED));
+                        Set.of()))));
+        AppRegistry appRegistry = new AppRegistry(List.of(new App(
+                new AppId(APP_ID),
+                "WECHAT_MINI_PROGRAM",
+                AppStatus.ENABLED,
+                new AppAccess(Set.of(ALLOWED_ORIGIN)))));
+        ClientRegistry clientRegistry = new ClientRegistry(List.of(new Client(
+                new ClientId(CLIENT_ID),
+                ClientStatus.ENABLED,
+                new ClientAccess(Set.of(new AppId(APP_ID)), null))));
 
-        PolicyConfig policies = browserSessionPolicies();
+        CapabilityComposition policies = browserSessionPolicies();
 
         publish(properties.getEndpointDefinitionDataId(),
                 codec.encodeEndpointRegistry(endpointRegistry));
-        publish(properties.getAppDefinitionDataId(), codec.encodeApps(apps));
-        publish(properties.getClientDefinitionDataId(),
-                codec.encodeClients(clientAccess));
-        publish(properties.getRouteAccessDefinitionDataId(), codec.encodeEndpointAccess(endpointAccess));
+        publish(properties.getAppDefinitionDataId(), codec.encodeApps(appRegistry));
+        publish(properties.getClientDefinitionDataId(), codec.encodeClients(clientRegistry));
 
-        publish(properties.getPolicyConfigurationDefinitionDataId(), codec.encodePolicyConfiguration(policies));
+        publish(properties.getPolicyConfigurationDefinitionDataId(), codec.encodeCapabilityComposition(policies));
 
-        IngressAccessContent content = new IngressAccessContent(
-                endpointRegistry, apps, clientAccess, endpointAccess, policies);
-        IngressAccessSnapshot snapshot = new IngressAccessSnapshot(
-                0, content, hasher.hash(content), Instant.parse("2026-01-01T00:00:00Z"));
+        IngressContent content = new IngressContent(
+                appRegistry, clientRegistry, endpointRegistry, policies);
+        IngressSnapshot snapshot = new IngressSnapshot(
+                new SnapshotVersion(1), content, hasher.hash(content),
+                Instant.parse("2026-01-01T00:00:00Z"));
         publish(properties.getDataId(), snapshotCodec(objectMapper, hasher).encodeSnapshot(snapshot));
 
         await(() -> readableSnapshot(properties));
     }
 
-    private PolicyConfig browserSessionPolicies() {
+    private CapabilityComposition browserSessionPolicies() {
         // The downstream contract uses the current identity headers without compatibility aliases.
         HeaderPolicy headers = new HeaderPolicy(Set.of(
                 RequestHeader.APP_ID, RequestHeader.APP_PLATFORM, RequestHeader.SUBJECT_TYPE,
@@ -381,17 +386,18 @@ class BrowserSessionIngressIT {
                 Map.of(), Set.of(), new CredentialForwarding(
                         AuthorizationHeaderForwardingMode.STRIP, CookieForwardingMode.ALLOW_LIST, Set.of("BROWSER_SESSION")));
         // This browser entry does not authenticate a Client client: never manufacture a trusted Client alias.
-        var bundleId = new PolicyBundleId("user-auth-browser");
-        var bundle = new PolicyBundle(bundleId, null, null, null, null, headers);
-        return new PolicyConfig(Map.of(bundleId, bundle), List.of(new PolicyBinding(
-                new PolicyBindingId("user-auth-browser-end"), bundleId, "user-auth", new EndpointId(ENDPOINT_ID),
-                Set.of(), null, null, null)));
+        var bundleId = new CapabilityBundleId("user-auth-browser");
+        var bundle = new CapabilityBundle(bundleId, null, null, null, null, headers);
+        return new CapabilityComposition(Map.of(bundleId, bundle), List.of(new CapabilityBinding(
+                new CapabilityBindingId("user-auth-browser-end"), bundleId, new ServiceId("user-auth"),
+                new EndpointId(ENDPOINT_ID), Set.of(), null, null, null)));
     }
 
     private StoredAccessSnapshotCodec snapshotCodec(
-            ObjectMapper objectMapper, com.cloud.gateway.application.access.publication.AccessSnapshotHasher hasher) {
+            ObjectMapper objectMapper, com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher) {
         return new StoredAccessSnapshotCodec(
-                new StoredAccessSnapshotMapper(), hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl())), hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
     }
 
     private NacosPolicyProperties nacosPolicyProperties() {
@@ -468,8 +474,8 @@ class BrowserSessionIngressIT {
                 "--spring.cloud.nacos.discovery.enabled=false",
                 "--spring.cloud.discovery.client.simple.instances.user-auth[0].uri="
                         + "http://127.0.0.1:" + USER_AUTH_PORT,
-                "--gateway.policy.nacos.group=" + GROUP,
-                "--gateway.policy.nacos.last-known-good-location="
+                "--gateway.access.nacos.group=" + GROUP,
+                "--gateway.access.nacos.last-known-good-location="
                         + temporaryDirectory.resolve("gateway-last-known-good.yaml"),
                 "--gateway.security.admin-audience=gateway",
                 "--spring.cloud.gateway.server.webflux.routes[0].endpointId=" + ROUTE_ID,

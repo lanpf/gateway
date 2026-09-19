@@ -4,7 +4,7 @@ import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
 import com.cloud.gateway.application.security.ReplayGuard;
 import com.cloud.gateway.application.security.SecretResolver;
-import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
+import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
 
 import com.cloud.gateway.domain.security.signature.LegacySecretParamsTimestampMd5UpperSignatureVerifier;
 import com.cloud.gateway.domain.security.signature.LegacySecretTimestampBodySha256SignatureVerifier;
@@ -71,13 +71,14 @@ public class GatewaySecurityAutoConfiguration {
     }
     @Bean
     SmartInitializingSingleton clientCredentialSecretValidator(
-            com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider, SecretResolver resolver) {
-        return () -> provider.current().snapshot().content().clients().values().forEach(policy -> {
-            if (policy.credentials() == null) {
+            com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer provider, SecretResolver resolver) {
+        return () -> provider.capture().snapshot().content().clientRegistry().values().forEach(client -> {
+            com.cloud.gateway.domain.client.Credentials credentials = client.access().credentials();
+            if (credentials == null) {
                 return;
             }
-            resolver.resolve(policy.credentials().activeCredential().secretRef());
-            policy.credentials().graceCredentialOptional().ifPresent(value -> resolver.resolve(value.secretRef()));
+            resolver.resolve(credentials.activeCredential().secretRef());
+            credentials.graceCredentialOptional().ifPresent(value -> resolver.resolve(value.secretRef()));
         });
     }
     @Bean

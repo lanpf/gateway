@@ -3,7 +3,7 @@ package com.cloud.gateway.interfaces.webflux;
 import com.cloud.framework.core.RequestHeader;
 import com.cloud.framework.core.HeaderType;
 
-import com.cloud.gateway.domain.access.IngressAccessGrantedContext;
+import com.cloud.gateway.domain.ingress.access.AccessGrantedContext;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
 import com.cloud.gateway.domain.policy.header.HeaderPolicy;
@@ -16,7 +16,7 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.server.ServerWebExchange;
 
 final class RequestHeaderWriter {
-    ServerWebExchange write(ServerWebExchange exchange, IngressAccessGrantedContext context,
+    ServerWebExchange write(ServerWebExchange exchange, AccessGrantedContext context,
             HeaderPolicy policy, Set<String> allTrustedNames) {
         String declaredVersion = exchange.getRequest().getHeaders().getFirst(RequestHeader.APP_VERSION.headerName());
         ServerHttpRequest request = exchange.getRequest().mutate().headers(headers -> {

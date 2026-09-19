@@ -11,10 +11,10 @@ import lombok.RequiredArgsConstructor;
 /** Local Admin controllers also require the same authenticated context as proxy routes. */
 @RequiredArgsConstructor
 public final class LocalPolicyWebFilter implements WebFilter, Ordered {
-    private final TrustedRequestContextGlobalFilter access;
+    private final IngressAdmissionGlobalFilter access;
     @Override public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         Endpoint endpoint = exchange.getAttribute(GatewayRequestAttributes.ENDPOINT);
-        if (endpoint != null && GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.routeId())) {
+        if (endpoint != null && GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.routeId().value())) {
             return access.filter(exchange, chain::filter);
         }
         return chain.filter(exchange);

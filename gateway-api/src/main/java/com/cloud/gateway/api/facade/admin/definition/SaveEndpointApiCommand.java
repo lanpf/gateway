@@ -24,7 +24,7 @@ public record SaveEndpointApiCommand(
         @NotBlank String endpointId,
         @NotBlank String serviceId,
         @NotBlank String routeId,
-        @NotEmpty @Valid List<Matcher> matchers,
+        @NotEmpty @Valid List<MatcherApiCommand> matchers,
         Set<@NotBlank String> tags,
         @NotNull ClientVerificationRequirementApiEnum clientVerificationRequirement,
         @NotNull SubjectAuthenticationRequirementApiEnum subjectAuthenticationRequirement,
@@ -32,9 +32,11 @@ public record SaveEndpointApiCommand(
         Set<@NotBlank String> requiredAudiences
 ) implements Request {
     public SaveEndpointApiCommand {
+        matchers = matchers == null ? null : List.copyOf(matchers);
+        tags = tags == null ? null : Set.copyOf(tags);
         requiredScopes = requiredScopes == null ? null : Set.copyOf(requiredScopes);
         requiredAudiences = requiredAudiences == null ? null : Set.copyOf(requiredAudiences);
     }
 
-    public record Matcher(@NotBlank String httpMethod, @NotBlank String pathPattern) { }
+    public record MatcherApiCommand(@NotBlank String httpMethod, @NotBlank String pathPattern) { }
 }

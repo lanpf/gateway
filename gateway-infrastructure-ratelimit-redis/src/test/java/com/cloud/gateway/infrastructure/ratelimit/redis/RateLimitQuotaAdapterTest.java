@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.HashSet;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -18,11 +19,18 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class RateLimitQuotaAdapterTest {
+    private static final Duration ACQUIRE_TIMEOUT = Duration.ofSeconds(1);
+
     private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
     private final RateLimitKeyResolver keys = new RateLimitKeyResolver(new DefaultResourceNameResolver());
     private final RateLimitQuotaAdapter adapter = new RateLimitQuotaAdapter(
-            new RedisTokenBucketLimiter(redis), keys);
+            new RedisTokenBucketLimiter(redis), keys, ACQUIRE_TIMEOUT);
     private final RateLimitRule rule = new RateLimitRule("stable", RateLimitDimension.CLIENT, 1, 1, RateLimitMode.EXACT);
+
+    @AfterEach
+    void stopWorkers() {
+        adapter.close();
+    }
 
     @Test
     void shouldReturnExactFractionalRetryAfterFromScript() {
@@ -86,5 +94,25 @@ class RateLimitQuotaAdapterTest {
         when(redis.execute(any(RedisScript.class), anyList(), any(Object[].class)))
                 .thenThrow(new IllegalStateException("programming error"));
         assertThrows(IllegalStateException.class, () -> adapter.tryAcquire(rule, "partner"));
+    }
+
+    @Test
+    void shouldReportUnavailableWhenRedisCallExceedsTheAcquireTimeout() {
+        when(redis.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenAnswer(invocation -> {
+                    Thread.sleep(5_000);
+                    return List.of(1L, 0L, 0L);
+                });
+        RateLimitQuotaAdapter bounded = new RateLimitQuotaAdapter(
+                new RedisTokenBucketLimiter(redis), keys, Duration.ofMillis(50));
+        try {
+            long startedAt = System.nanoTime();
+            RateLimitDecision decision = bounded.tryAcquire(rule, "partner");
+            long elapsedMillis = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+            assertTrue(decision.unavailable(), "a hung dependency must degrade to unavailable");
+            assertTrue(elapsedMillis < 2_000, "the call must be bounded well below the hang duration");
+        } finally {
+            bounded.close();
+        }
     }
 }

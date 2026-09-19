@@ -2,7 +2,7 @@ package com.cloud.gateway.interfaces.security;
 
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
-import com.cloud.gateway.domain.access.IngressAccessSnapshot;
+import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.security.SubjectAuthenticationSelection;
 import com.cloud.gateway.interfaces.webflux.GatewayRequestAttributes;
 import org.springframework.security.core.Authentication;
@@ -17,9 +17,8 @@ public final class PolicyAwareBearerTokenConverter implements ServerAuthenticati
 
     @Override
     public Mono<Authentication> convert(ServerWebExchange exchange) {
-        IngressAccessSnapshot snapshot = exchange.getAttribute(GatewayRequestAttributes.SNAPSHOT);
         Endpoint endpoint = exchange.getAttribute(GatewayRequestAttributes.ENDPOINT);
-        if (snapshot != null && endpoint != null) {
+        if (endpoint != null) {
             EndpointAccess policy = endpoint.access();
             if (SubjectAuthenticationSelection.from(policy.subjectAuthenticationRequirement())
                     != SubjectAuthenticationSelection.HOST) {

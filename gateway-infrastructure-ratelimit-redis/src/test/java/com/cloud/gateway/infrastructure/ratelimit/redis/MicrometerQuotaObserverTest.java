@@ -25,7 +25,7 @@ class MicrometerQuotaObserverTest {
             observer.record(RULE, RateLimitDecision.unavailable(RULE.dimension(), "private-identity"));
             for (String outcome : List.of("allowed", "denied", "unavailable")) {
                 assertEquals(1, registry.get("gateway.quota.decisions")
-                        .tags("dimension", "CLIENT", "outcome", outcome).counter().count());
+                        .tags("dimension", "CLIENT", "decision", outcome).counter().count());
             }
             registry.getMeters().forEach(meter -> assertEquals(2, meter.getId().getTags().size()));
         } finally {
@@ -42,10 +42,10 @@ class MicrometerQuotaObserverTest {
                     (rule, key) -> RateLimitDecision.allowed(rule.dimension(), key, 0), new MicrometerQuotaObserver(registry));
             QuotaCommand command = new QuotaCommand(List.of(new RateLimitRules(List.of(RULE), RedisFailurePolicy.OPEN_WITH_LOCAL)),
                     Map.of(RateLimitDimension.CLIENT, "private-identity"), false);
-            HashSet<String> applied = new HashSet<>();
+            HashSet<RateLimitRuleId> applied = new HashSet<>();
             service.acquire(command, applied);
             service.acquire(command, applied);
-            assertEquals(1, registry.get("gateway.quota.decisions").tags("outcome", "allowed").counter().count());
+            assertEquals(1, registry.get("gateway.quota.decisions").tags("decision", "allowed").counter().count());
             assertEquals(1, registry.getMeters().size());
         } finally {
             registry.close();

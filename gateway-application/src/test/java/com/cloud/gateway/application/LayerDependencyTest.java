@@ -31,6 +31,6 @@ class LayerDependencyTest {
                 }
             }
         }
-        assertFalse(Files.exists(root.resolve("gateway-application/src/main/java/com/cloud/gateway/application/policy/GatewayRequestAttributes.java")));
+        assertFalse(Files.exists(root.resolve("gateway-application/src/main/java/com/cloud/gateway/application/access/GatewayRequestAttributes.java")));
     }
 }

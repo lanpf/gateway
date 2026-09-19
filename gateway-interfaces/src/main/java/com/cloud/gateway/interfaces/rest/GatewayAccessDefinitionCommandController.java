@@ -7,23 +7,23 @@ import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLI
 
 import com.cloud.framework.core.Result;
 import com.cloud.gateway.api.facade.admin.definition.DefinitionSaveApiOutput;
-import com.cloud.gateway.api.facade.admin.definition.IngressAccessDefinitionCommandFacade;
+import com.cloud.gateway.api.facade.admin.definition.AccessDefinitionCommandFacade;
 import com.cloud.gateway.api.facade.admin.definition.SetAppStatusApiCommand;
 import com.cloud.gateway.api.facade.admin.definition.SetClientStatusApiCommand;
 import com.cloud.gateway.api.facade.admin.definition.SetEndpointStatusApiCommand;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 /** Content and status writes of the access definitions; absent in read-only deployments. */
-@RestController
+@RequestMapping
+@ResponseBody
 @RequiredArgsConstructor
-@ConditionalOnBean(IngressAccessDefinitionCommandFacade.class)
 public class GatewayAccessDefinitionCommandController {
-    private final IngressAccessDefinitionCommandFacade facade;
+    private final AccessDefinitionCommandFacade facade;
     private final GatewayPolicyAdminRestMapper mapper;
 
     @PutMapping(ADMIN_POLICIES_APP)

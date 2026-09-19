@@ -10,11 +10,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Getter
 @ConfigurationProperties(prefix = "gateway.headers")
 public final class GatewayHeaderProperties {
-    private final Set<String> allowedHeaders = new LinkedHashSet<>();
-    private final Set<String> unsettableHeaders = new LinkedHashSet<>();
-    private final Set<String> unremovableHeaders = new LinkedHashSet<>();
+    private final Set<String> extraHeaders = new LinkedHashSet<>();
+    private final Set<String> forbiddenSetHeaders = new LinkedHashSet<>();
+    private final Set<String> forbiddenRemoveHeaders = new LinkedHashSet<>();
 
     public HeaderRules toRules() {
-        return new HeaderRules(allowedHeaders, unsettableHeaders, unremovableHeaders);
+        return new HeaderRules(extraHeaders, forbiddenSetHeaders, forbiddenRemoveHeaders);
     }
 }

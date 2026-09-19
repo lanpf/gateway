@@ -16,8 +16,8 @@ import com.cloud.framework.lock.LockProvider;
 import com.cloud.framework.starter.lock.redis.springintegration.SpringIntegrationLockProvider;
 import com.cloud.gateway.application.common.ApplicationError;
 import com.cloud.gateway.application.common.ApplicationException;
-import com.cloud.gateway.application.access.AccessPublishLock;
-import com.cloud.gateway.application.access.publication.AccessRollbackLock;
+import com.cloud.gateway.application.configuration.publication.AccessPublishLock;
+import com.cloud.gateway.application.configuration.publication.AccessRollbackLock;
 import com.cloud.gateway.infrastructure.coordination.redis.config.RedisPolicyCoordinationProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,8 +53,8 @@ class RedisPolicyCoordinationIT {
     private static final String NAMESPACE = "gateway-it";
     private static final String LEASE_NAMESPACE = NAMESPACE + "-lease";
     private static final String OTHER_NAMESPACE = NAMESPACE + "-other";
-    private static final String PUBLISH_LOCK_KEY = NAMESPACE + ":publish:ingress-policy";
-    private static final String ROLLBACK_STATE_KEY = NAMESPACE + ":policy:rollback-state";
+    private static final String PUBLISH_LOCK_KEY = NAMESPACE + ":publish:ingress-access";
+    private static final String ROLLBACK_STATE_KEY = NAMESPACE + ":access:rollback-state";
     private static final Duration LEASE_TIME = Duration.ofSeconds(30);
     private static final Duration SHORT_LEASE_TIME = Duration.ofSeconds(1);
 
@@ -68,7 +68,7 @@ class RedisPolicyCoordinationIT {
     private StringRedisTemplate redisTemplate;
     private RedisLockRegistry lockRegistry;
     private AccessPublishLock publishLock;
-    private com.cloud.gateway.application.access.publication.AccessRollbackLock rollbackLock;
+    private com.cloud.gateway.application.configuration.publication.AccessRollbackLock rollbackLock;
     private RedisAccessRollbackState rollbackState;
     private final List<RedisLockRegistry> createdLockRegistries = new CopyOnWriteArrayList<>();
 
@@ -83,7 +83,7 @@ class RedisPolicyCoordinationIT {
         lockRegistry = lockRegistry(NAMESPACE, LEASE_TIME);
         LockExecutor lockExecutor = new DefaultLockExecutor(lockProvider(lockRegistry));
         publishLock = new AccessPublishLock(lockExecutor);
-        rollbackLock = new com.cloud.gateway.application.access.publication.AccessRollbackLock(lockExecutor);
+        rollbackLock = new com.cloud.gateway.application.configuration.publication.AccessRollbackLock(lockExecutor);
         rollbackState = rollbackState(NAMESPACE);
     }
 
@@ -159,15 +159,15 @@ class RedisPolicyCoordinationIT {
     void shouldExpireAbandonedPublishLockAfterLease() {
         RedisLockRegistry holderRegistry = lockRegistry(LEASE_NAMESPACE, SHORT_LEASE_TIME);
         LockProvider holderProvider = lockProvider(holderRegistry);
-        Lock abandonedLock = holderProvider.obtain("publish", "ingress-policy");
+        Lock abandonedLock = holderProvider.obtain("publish", "ingress-access");
         abandonedLock.lock();
-        await(() -> isKeyPresent(LEASE_NAMESPACE + ":publish:ingress-policy"));
+        await(() -> isKeyPresent(LEASE_NAMESPACE + ":publish:ingress-access"));
 
         LockExecutor contenderExecutor = new DefaultLockExecutor(lockProvider(lockRegistry(LEASE_NAMESPACE, LEASE_TIME)));
         await(() -> {
             try {
                 return contenderExecutor.execute(
-                        new LockContext("publish", "ingress-policy"),
+                        new LockContext("publish", "ingress-access"),
                         () -> Boolean.TRUE
                 ).orElse(false);
             } catch (Exception ignored) {
@@ -207,7 +207,7 @@ class RedisPolicyCoordinationIT {
         assertTrue(rollbackState.isActive());
         assertFalse(otherNamespaceState.isActive());
         assertTrue(isKeyPresent(ROLLBACK_STATE_KEY));
-        assertFalse(isKeyPresent(OTHER_NAMESPACE + ":policy:rollback-state"));
+        assertFalse(isKeyPresent(OTHER_NAMESPACE + ":access:rollback-state"));
     }
 
     private RedisLockRegistry lockRegistry(String registryKey, Duration leaseTime) {
@@ -241,7 +241,7 @@ class RedisPolicyCoordinationIT {
         if (observationSeconds <= 0) {
             return;
         }
-        Path marker = temporaryDirectory.resolve("redis-policy-coordination-observation.active");
+        Path marker = temporaryDirectory.resolve("redis-access-coordination-observation.active");
         Files.writeString(marker, "Delete this file to finish manual observation early.\n");
         System.out.println("Redis manual observation is active for at most " + observationSeconds + " seconds.");
         System.out.println("Delete this marker to finish early: " + marker);
@@ -257,7 +257,7 @@ class RedisPolicyCoordinationIT {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (!condition.getAsBoolean()) {
             if (System.nanoTime() >= deadline) {
-                throw new AssertionError("Timed out waiting for Redis policy coordination state");
+                throw new AssertionError("Timed out waiting for Redis access coordination state");
             }
             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
         }

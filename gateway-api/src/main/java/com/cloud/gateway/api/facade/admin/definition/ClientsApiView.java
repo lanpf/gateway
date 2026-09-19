@@ -11,18 +11,25 @@ import java.util.Set;
  * The sourceRevision is the shared CAS token of the whole client collection, not a per-client
  * version; a null revision means the definition is not initialized yet.
  */
-public record ClientsApiView(String sourceRevision, Set<Client> clients) {
+public record ClientsApiView(String sourceRevision, Set<ClientApiView> clients) {
+    public ClientsApiView {
+        clients = clients == null ? null : Set.copyOf(clients);
+    }
 
-    public record Client(
+    public record ClientApiView(
             String clientId,
             ClientStatusApiEnum status,
             Set<String> allowedAppIds,
-            Credential activeCredential,
-            Credential graceCredential
-    ) { }
+            CredentialApiView activeCredential,
+            CredentialApiView graceCredential
+    ) {
+        public ClientApiView {
+            allowedAppIds = allowedAppIds == null ? null : Set.copyOf(allowedAppIds);
+        }
+    }
 
-    /** Credential facts for editing; secretRef is deliberately not echoed back. */
-    public record Credential(
+    /** CredentialApiView facts for editing; secretRef is deliberately not echoed back. */
+    public record CredentialApiView(
             String credentialId,
             SignatureContractApiEnum signatureContract,
             Instant validFrom,

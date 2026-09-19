@@ -8,16 +8,18 @@ import com.cloud.framework.core.Result;
 import com.cloud.gateway.api.facade.admin.definition.AppsApiView;
 import com.cloud.gateway.api.facade.admin.definition.ClientsApiView;
 import com.cloud.gateway.api.facade.admin.definition.EndpointsApiView;
-import com.cloud.gateway.api.facade.admin.definition.IngressAccessDefinitionQueryFacade;
+import com.cloud.gateway.api.facade.admin.definition.AccessDefinitionQueryFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 /** Editing state of the access definitions; available in every deployment. */
-@RestController
+@RequestMapping
+@ResponseBody
 @RequiredArgsConstructor
 public class GatewayAccessDefinitionQueryController {
-    private final IngressAccessDefinitionQueryFacade queryFacade;
+    private final AccessDefinitionQueryFacade queryFacade;
 
     @GetMapping(ADMIN_POLICIES_APP)
     public Result<AppsApiView> apps() {

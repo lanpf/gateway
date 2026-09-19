@@ -16,7 +16,7 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public final class GatewayObservationWebFilter implements WebFilter, Ordered {
     private static final String REQUESTS = "gateway.ingress.requests";
-    private static final String OUTCOME_TAG = "outcome";
+    private static final String OUTCOME_TAG = "decision";
     private static final String STATUS_CLASS_TAG = "status_class";
     private enum Outcome { CANCELLED, ERROR, COMPLETED }
     private final MeterRegistry registry;

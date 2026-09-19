@@ -2,8 +2,8 @@ package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationRejectReason;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationRejectReason;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 

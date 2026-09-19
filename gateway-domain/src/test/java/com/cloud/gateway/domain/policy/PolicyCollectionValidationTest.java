@@ -1,6 +1,6 @@
 package com.cloud.gateway.domain.policy;
 
-import com.cloud.gateway.domain.access.IngressAccessContent;
+import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.client.ClientId;
@@ -20,7 +20,7 @@ import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
 import com.cloud.gateway.domain.policy.CookieForwardingMode;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
-import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
+import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -82,17 +82,17 @@ class PolicyCollectionValidationTest {
 
     @Test
     void shouldKeepContentRegistriesImmutable() {
-        IngressAccessContent content = new IngressAccessContent(
+        IngressContent content = new IngressContent(
                 new AppRegistry(List.of()), new ClientRegistry(List.of()),
                 new EndpointRegistry(List.of(endpoint(List.of(new EndpointMatcher("GET", "/x"))))),
-                PolicyConfig.empty());
+                CapabilityComposition.empty());
 
         assertThrows(UnsupportedOperationException.class, () -> content.appRegistry().asMap().clear());
     }
 
     private static EndpointAccess endpointPolicy(Set<String> scopes, Set<String> audiences) {
         return new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
-                SubjectAuthenticationRequirement.OPTIONAL, scopes, audiences);
+                SubjectAuthenticationRequirement.ANONYMOUS, scopes, audiences);
     }
 
     private static Endpoint endpoint(List<EndpointMatcher> matchers) {

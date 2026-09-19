@@ -1,2 +1,1 @@
 com.cloud.gateway.infrastructure.policy.config.PolicyInfrastructureAutoConfiguration
-com.cloud.gateway.infrastructure.governance.config.GovernanceAutoConfiguration

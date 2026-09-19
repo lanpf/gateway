@@ -5,9 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.cloud.framework.core.Result;
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
-import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationFailReason;
+import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationFailReason;
 import com.cloud.userauth.api.authentication.VerifyBrowserSessionApiCommandOutput;
 import com.cloud.userauth.api.constants.UserAuthPathApiConstants;
 import java.io.IOException;
@@ -40,8 +41,8 @@ class BrowserSessionVerifierAdapterTest {
 
         AuthenticatedSubject value = result.subject();
         assertEquals(SubjectType.BROWSER_SESSION, value.subjectType());
-        assertEquals("1001", value.subjectId());
-        assertEquals("session-1", value.sessionId());
+        assertEquals("1001", value.subjectId().value());
+        assertEquals("session-1", value.sessionId().value());
         assertEquals(NOW.plusSeconds(1800), value.authenticationExpiresAt());
         assertNull(value.issuer());
         assertEquals(0, value.audiences().size());

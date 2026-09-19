@@ -1,6 +1,7 @@
 package com.cloud.gateway.infrastructure.policy.properties;
 
-import com.cloud.gateway.application.access.definition.VersionedAccessDefinition;
+import com.cloud.gateway.application.configuration.definition.RevisionedAccessDefinition;
+import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,12 +18,12 @@ final class PropertiesPolicyDefinitionSource<T> {
         this.encoder = encoder;
     }
 
-    com.cloud.gateway.application.access.definition.VersionedAccessDefinition<T> load() {
+    RevisionedAccessDefinition<T> load() {
         T value = loader.get();
-        return new com.cloud.gateway.application.access.definition.VersionedAccessDefinition<>(value, sourceRevision(encoder.apply(value)));
+        return new RevisionedAccessDefinition<>(value, new Revision(revisionToken(encoder.apply(value))));
     }
 
-    private static String sourceRevision(String content) {
+    private static String revisionToken(String content) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(content.getBytes(StandardCharsets.UTF_8)));

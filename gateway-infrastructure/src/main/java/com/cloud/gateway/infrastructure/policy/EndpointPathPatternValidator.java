@@ -14,7 +14,7 @@ final class EndpointPathPatternValidator {
     static void validate(EndpointRegistry registry) {
         PathPatternParser parser = new PathPatternParser();
         try {
-            for (Endpoint endpoint : registry.definitions()) {
+            for (Endpoint endpoint : registry.values()) {
                 for (EndpointMatcher matcher : endpoint.matchers()) {
                     if (!matcher.pathPattern().startsWith("/")) {
                         throw new IllegalArgumentException("Absolute endpoint path required");
@@ -23,7 +23,7 @@ final class EndpointPathPatternValidator {
                 }
             }
         } catch (IllegalArgumentException invalidPattern) {
-            // Do not include the full policy document in the adapter error.
+            // Do not include the full access document in the adapter error.
             throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
         }
     }

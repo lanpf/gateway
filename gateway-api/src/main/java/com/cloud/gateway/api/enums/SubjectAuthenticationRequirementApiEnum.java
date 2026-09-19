@@ -1,2 +1,2 @@
 package com.cloud.gateway.api.enums;
-public enum SubjectAuthenticationRequirementApiEnum { REQUIRED, OPTIONAL }
+public enum SubjectAuthenticationRequirementApiEnum { REQUIRED, ANONYMOUS }

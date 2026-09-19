@@ -26,12 +26,13 @@ gateway:
   headers:
     forbidden-set-headers: [Host, Content-Length, Transfer-Encoding, Authorization, Cookie, Connection, Keep-Alive, TE, Trailer, Upgrade, Proxy-Authorization, Proxy-Authenticate, Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, Signature, Signature-Input]
     forbidden-remove-headers: [Host, Content-Length, Transfer-Encoding, Authorization, Cookie, Connection, Keep-Alive, TE, Trailer, Upgrade, Proxy-Authorization, Proxy-Authenticate, Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, Signature, Signature-Input]
-  policy-definition:
+  access-definition:
     endpoints:
       - endpoint-id: GATEWAY.ADMIN
         service-id: gateway
         route-id: gateway-admin
         tags: [admin]
+        status: ENABLED
         matchers:
           - { http-method: PUT, path-pattern: /admin/gateway/policies/app }
           - { http-method: PUT, path-pattern: /admin/gateway/policies/client-access }
@@ -40,9 +41,19 @@ gateway:
           - { http-method: PUT, path-pattern: /admin/gateway/policies/configuration }
           - { http-method: POST, path-pattern: /admin/gateway/snapshot/publish }
           - { http-method: POST, path-pattern: /admin/gateway/snapshot/rollback }
+          - { http-method: GET, path-pattern: /admin/gateway/policies/app }
+          - { http-method: GET, path-pattern: /admin/gateway/policies/client-access }
+          - { http-method: GET, path-pattern: /admin/gateway/policies/endpoint-access }
+          - { http-method: GET, path-pattern: /admin/gateway/snapshot }
+        access:
+          client-verification-requirement: OPTIONAL
+          subject-authentication-requirement: REQUIRED
+          required-scopes: [admin]
+          required-audiences: [gateway]
       - endpoint-id: USER_AUTH.LOGIN_PUBLIC
         service-id: user-auth
         route-id: user-auth
+        status: ENABLED
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/challenges }
           - { http-method: POST, path-pattern: /api/user-auth/login/mobile-otp }
@@ -51,41 +62,71 @@ gateway:
           - { http-method: POST, path-pattern: /api/user-auth/login/external/attempt }
           - { http-method: POST, path-pattern: /api/user-auth/login/external/complete }
           - { http-method: POST, path-pattern: /api/user-auth/login/external/bound-credential }
+        access:
+          client-verification-requirement: REQUIRED
+          subject-authentication-requirement: ANONYMOUS
       - endpoint-id: USER_AUTH.LOGIN_PARTNER_TRUSTED_MOBILE
         service-id: user-auth
         route-id: user-auth
+        status: ENABLED
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/login/partner/trusted-mobile }
+        access:
+          client-verification-requirement: REQUIRED
+          subject-authentication-requirement: ANONYMOUS
       - endpoint-id: USER_AUTH.AUTHENTICATED_API
         service-id: user-auth
         route-id: user-auth
+        status: ENABLED
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/credentials/bind }
           - { http-method: POST, path-pattern: /api/user-auth/logout }
           - { http-method: POST, path-pattern: /api/user-auth/handoffs }
+        access:
+          client-verification-requirement: REQUIRED
+          subject-authentication-requirement: REQUIRED
+          required-audiences: [cloud-api]
       - endpoint-id: USER_AUTH.HANDOFF_EXCHANGE
         service-id: user-auth
         route-id: user-auth
+        status: ENABLED
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/handoffs/exchange }
+        access:
+          client-verification-requirement: REQUIRED
+          subject-authentication-requirement: ANONYMOUS
       - endpoint-id: USER_AUTH.BROWSER_SESSION_API
         service-id: user-auth
         route-id: user-auth
+        status: ENABLED
         matchers:
           - { http-method: POST, path-pattern: /api/user-auth/browser-sessions/** }
+        access:
+          client-verification-requirement: REQUIRED
+          subject-authentication-requirement: REQUIRED
       - endpoint-id: USER_AUTH.ADMIN
         service-id: user-auth
         route-id: user-auth
+        status: ENABLED
         matchers:
           - { http-method: POST, path-pattern: /admin/user-auth/** }
           - { http-method: PUT, path-pattern: /admin/user-auth/** }
+        access:
+          client-verification-requirement: OPTIONAL
+          subject-authentication-requirement: REQUIRED
+          required-scopes: [admin]
+          required-audiences: [gateway-admin]
       - endpoint-id: USER_AUTH.OAUTH2_PROTOCOL
         service-id: user-auth
         route-id: user-auth
+        status: ENABLED
         matchers:
           - { http-method: GET, path-pattern: /oauth2/** }
           - { http-method: POST, path-pattern: /oauth2/** }
           - { http-method: GET, path-pattern: /.well-known/** }
+        access:
+          client-verification-requirement: OPTIONAL
+          subject-authentication-requirement: ANONYMOUS
     apps:
       mini-program:
         status: ENABLED
@@ -111,58 +152,30 @@ gateway:
             expires-at: 2030-01-01T00:00:00Z
             signature-contract: LEGACY_SECRET_TIMESTAMP_BODY_HMAC_SHA256
             secret-ref: partner-a
-    routes:
-      "[GATEWAY.ADMIN]":
-        client-credential-requirement: IGNORE
-        client-requirement: FORBIDDEN
-        subject-requirement: HOST_SESSION_REQUIRED
-        required-scopes: [admin]
-        required-audiences: [gateway]
-      "[USER_AUTH.LOGIN_PUBLIC]":
-        client-credential-requirement: IGNORE
-        client-requirement: REQUIRED
-        subject-requirement: IGNORE
-      "[USER_AUTH.LOGIN_PARTNER_TRUSTED_MOBILE]":
-        client-credential-requirement: REQUEST_SIGNATURE
-        client-requirement: REQUIRED
-        subject-requirement: IGNORE
-      "[USER_AUTH.AUTHENTICATED_API]":
-        client-credential-requirement: IGNORE
-        client-requirement: REQUIRED
-        subject-requirement: HOST_SESSION_REQUIRED
-        required-audiences: [cloud-api]
-      "[USER_AUTH.HANDOFF_EXCHANGE]":
-        client-credential-requirement: IGNORE
-        client-requirement: REQUIRED
-        subject-requirement: IGNORE
-      "[USER_AUTH.BROWSER_SESSION_API]":
-        client-credential-requirement: IGNORE
-        client-requirement: REQUIRED
-        subject-requirement: BROWSER_SESSION_REQUIRED
-        credential-forwarding:
-          cookies: ALLOW_LIST
-          allowed-cookie-names: [BROWSER_SESSION]
-      "[USER_AUTH.ADMIN]":
-        client-credential-requirement: IGNORE
-        client-requirement: FORBIDDEN
-        subject-requirement: HOST_SESSION_REQUIRED
-        required-scopes: [admin]
-        required-audiences: [gateway-admin]
-      "[USER_AUTH.OAUTH2_PROTOCOL]":
-        client-credential-requirement: IGNORE
-        client-requirement: FORBIDDEN
-        subject-requirement: IGNORE
-        credential-forwarding:
-          authorization-header: PRESERVE
-          cookies: STRIP_ALL
     policies:
       bundles:
         standard:
           bundle-id: standard
           timeout: { connect: 1s, read: 3s, total: 5s }
+        browser-session:
+          bundle-id: browser-session
+          headers:
+            trusted-headers: [APP_ID, CLIENT_ID, USER_ID, SESSION_ID, SUBJECT_TYPE]
+            credential-forwarding:
+              authorization-header: STRIP
+              cookies: ALLOW_LIST
+              allowed-cookie-names: [BROWSER_SESSION]
+        oauth2-protocol:
+          bundle-id: oauth2-protocol
+          headers:
+            trusted-headers: [APP_ID, CLIENT_ID]
+            credential-forwarding:
+              authorization-header: PRESERVE
+              cookies: STRIP_ALL
       bindings:
-        - binding-id: standard-default
-          bundle-id: standard
+        - { binding-id: standard-default, bundle-id: standard }
+        - { binding-id: browser-session, bundle-id: browser-session, endpoint-id: USER_AUTH.BROWSER_SESSION_API }
+        - { binding-id: oauth2-protocol, bundle-id: oauth2-protocol, endpoint-id: USER_AUTH.OAUTH2_PROTOCOL }
   security:
     admin-audience: gateway
     access-token:

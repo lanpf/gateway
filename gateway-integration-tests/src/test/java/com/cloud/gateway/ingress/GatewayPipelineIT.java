@@ -1,33 +1,43 @@
 package com.cloud.gateway.ingress;
 
-import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
-import com.cloud.gateway.application.access.publication.VersionedAccessSnapshot;
+import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
+import com.cloud.gateway.application.configuration.publication.RevisionedAccessSnapshot;
+import com.cloud.gateway.application.quota.QuotaCommandService;
+import com.cloud.gateway.application.quota.QuotaObserver;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
-import com.cloud.gateway.domain.access.IngressAccessContent;
-import com.cloud.gateway.domain.access.IngressAccessSnapshot;
-import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
+import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
+import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
+import com.cloud.gateway.domain.ingress.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.app.App;
+import com.cloud.gateway.domain.app.AppAccess;
+import com.cloud.gateway.domain.app.AppRegistry;
+import com.cloud.gateway.domain.app.AppStatus;
+import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
+import com.cloud.gateway.domain.endpoint.RouteId;
+import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.policy.bundle.*;
 import com.cloud.gateway.domain.policy.capability.*;
-import com.cloud.gateway.domain.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.policy.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.policy.header.*;
-import com.cloud.gateway.infrastructure.governance.config.GovernanceAutoConfiguration;
 import com.cloud.gateway.interfaces.config.GatewayIngressWebFluxBeans;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -62,13 +72,18 @@ import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.server.HttpServer;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Isolated HTTP smoke: production gateway filters and governance, no external user-auth or Nacos. */
+/**
+ * Isolated HTTP smoke for the v1 ingress chain: production prepare/access/admit filters plus the
+ * security-required header apply, no external user-auth, Nacos or stage-two downstream governance.
+ * Stage two (cache, circuit breaker, timeout) is not part of the v1 request path, so these tests
+ * assert only that an admitted request is forwarded with the header plan applied.
+ */
 class GatewayPipelineIT {
     private static final AppId APP = new AppId("public-app");
     private static final String ROUTE = "pipeline-route";
     private static final String SERVICE = "pipeline-downstream";
     private static final String OBSERVE_SECONDS = "gateway.it.manual-observation-seconds";
-    private final AtomicReference<com.cloud.gateway.application.access.publication.VersionedAccessSnapshot> snapshots = new AtomicReference<>();
+    private final AtomicReference<RevisionedAccessSnapshot> snapshots = new AtomicReference<>();
     private final AtomicInteger downstreamCalls = new AtomicInteger();
     private DisposableServer downstream;
     private ReactiveWebServerApplicationContext gateway;
@@ -80,7 +95,10 @@ class GatewayPipelineIT {
         downstream = HttpServer.create().host("127.0.0.1").port(0).handle((request, response) -> {
             downstreamCalls.incrementAndGet();
             if (request.uri().startsWith("/public/slow")) {
-                return Mono.delay(Duration.ofSeconds(2)).then(response.sendString(Mono.just("late")).then());
+                return Mono.delay(Duration.ofSeconds(2))
+                        .then(response.header("Content-Type", "text/plain")
+                                .sendString(Mono.just("late;app=" + request.requestHeaders().get("X-App-Id")))
+                                .then());
             }
             String body = "app=" + request.requestHeaders().get("X-App-Id")
                     + ";platform=" + request.requestHeaders().get("X-App-Platform")
@@ -97,7 +115,7 @@ class GatewayPipelineIT {
         gateway = (ReactiveWebServerApplicationContext) new SpringApplicationBuilder(PipelineApplication.class)
                 .web(WebApplicationType.REACTIVE)
                 .initializers(context -> context.getBeanFactory().registerSingleton(
-                        "policySnapshotProvider", (com.cloud.gateway.application.access.publication.AccessSnapshotProvider) snapshots::get))
+                        "policySnapshotProvider", (AccessSnapshotCapturer) snapshots::get))
                 .properties(Map.of(
                         "server.port", "0",
                         "spring.application.name", "gateway-pipeline-it",
@@ -136,15 +154,15 @@ class GatewayPipelineIT {
     }
 
     @Test
-    void shouldServeCacheButStillEnforceNewAppAccessPolicy() {
+    void shouldForwardEveryRequestAndEnforceCurrentAppAccessPolicy() {
         Reply first = get("/public/cache", Map.of("X-App-Id", APP.value()));
         Reply second = get("/public/cache", Map.of("X-App-Id", APP.value()));
         assertEquals(200, first.status());
-        assertEquals(first.body(), second.body());
-        assertEquals(1, downstreamCalls.get(), "Second request should be served without calling downstream");
+        assertEquals(200, second.status());
+        assertEquals(2, downstreamCalls.get(), "v1 has no response cache: every admitted request is forwarded");
         snapshots.set(snapshot(2, false, defaultHeaders(), ordinaryTimeout()));
-        assertEquals(403, get("/public/cache", Map.of("X-App-Id", APP.value())).status());
-        assertEquals(1, downstreamCalls.get(), "Cached content must not bypass current access policy");
+        assertEquals(400, get("/public/cache", Map.of("X-App-Id", APP.value())).status());
+        assertEquals(2, downstreamCalls.get(), "A rejected request must never reach the downstream");
     }
 
     @Test
@@ -165,12 +183,23 @@ class GatewayPipelineIT {
         }
     }
 
+    /** Stage two was removed from v1: a slow downstream is forwarded, never answered by a gateway timeout. */
     @Test
-    void shouldReturnGatewayTimeoutForSlowDownstream() {
+    void shouldForwardSlowDownstreamWithoutGatewayTimeoutStage() {
         snapshots.set(snapshot(2, true, defaultHeaders(), new TimeoutPolicy(
                 Duration.ofSeconds(1), Duration.ofMillis(100), Duration.ofMillis(500))));
-        assertEquals(504, get("/public/slow", Map.of("X-App-Id", APP.value())).status());
+        Reply slow = get("/public/slow", Map.of("X-App-Id", APP.value()));
+        assertEquals(200, slow.status());
+        assertTrue(slow.body().contains("late;app=public-app"),
+                () -> "Expected the forwarded header plan, got: " + slow.body());
         assertEquals(1, downstreamCalls.get());
+    }
+
+    @Test
+    void shouldRejectEndpointWhoseRouteIdDoesNotMatchTheDeliveredScgRoute() {
+        snapshots.set(snapshot(2, true, defaultHeaders(), ordinaryTimeout(), "another-route"));
+        assertEquals(404, get("/public/echo", Map.of("X-App-Id", APP.value())).status());
+        assertEquals(0, downstreamCalls.get());
     }
 
     @Test
@@ -188,32 +217,38 @@ class GatewayPipelineIT {
                 .block(Duration.ofSeconds(10));
     }
 
-    private static com.cloud.gateway.application.access.publication.VersionedAccessSnapshot snapshot(long version, boolean appEnabled,
+    private static RevisionedAccessSnapshot snapshot(long version, boolean appEnabled,
                                                      HeaderPolicy headers, TimeoutPolicy timeout) {
-        var definitions = new java.util.ArrayList<Endpoint>();
-        var accesses = new java.util.HashMap<EndpointId, EndpointAccess>();
+        return snapshot(version, appEnabled, headers, timeout, ROUTE);
+    }
+
+    private static RevisionedAccessSnapshot snapshot(long version, boolean appEnabled,
+                                                     HeaderPolicy headers, TimeoutPolicy timeout,
+                                                     String endpointRouteId) {
+        var endpoints = new ArrayList<Endpoint>();
         for (String name : List.of("echo", "cache", "slow")) {
-            var id = new EndpointId("PUBLIC." + name.toUpperCase(java.util.Locale.ROOT));
-            definitions.add(new Endpoint(id, SERVICE,
-                    List.of(new EndpointMatcher("GET", "/public/" + name)), ROUTE, Set.of("public-read")));
-            accesses.put(id, new EndpointAccess(id, ClientVerificationRequirement.OPTIONAL,
-                    ClientVerificationMode.IGNORE, SubjectAuthenticationRequirement.IGNORE, Set.of(), Set.of(),
-                    CredentialForwarding.stripAll(), EndpointStatus.ENABLED));
+            endpoints.add(new Endpoint(
+                    new EndpointId("PUBLIC." + name.toUpperCase(Locale.ROOT)),
+                    new ServiceId(SERVICE),
+                    new RouteId(endpointRouteId),
+                    List.of(new EndpointMatcher("GET", "/public/" + name)),
+                    Set.of("public-read"),
+                    EndpointStatus.ENABLED,
+                    new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
+                            SubjectAuthenticationRequirement.ANONYMOUS, Set.of(), Set.of())));
         }
-        var baseId = new PolicyBundleId("base");
-        var cacheId = new PolicyBundleId("cache");
-        var base = new PolicyBundle(baseId, null, timeout, null, null, headers);
-        var cache = new PolicyBundle(cacheId, null, null, null,
-                new CachePolicy(Duration.ofSeconds(30), Duration.ZERO, 16384, Set.of()), null);
-        var policies = new PolicyConfig(Map.of(baseId, base, cacheId, cache), List.of(
-                new PolicyBinding(new PolicyBindingId("base"), baseId, SERVICE, null, Set.of(), null, null, null),
-                new PolicyBinding(new PolicyBindingId("cache"), cacheId, null,
-                        new EndpointId("PUBLIC.CACHE"), Set.of(), null, null, null)));
-        var app = new AppAccess(APP,"browser", Set.of(), appEnabled ? PolicyStatus.ENABLED : PolicyStatus.DISABLED);
-        var content = new IngressAccessContent(new EndpointRegistry(definitions),
-                Map.of(APP, app), Map.of(), accesses, policies);
-        return new com.cloud.gateway.application.access.publication.VersionedAccessSnapshot(new IngressAccessSnapshot(version, content,
-                "pipeline-" + version, Instant.now()), Long.toString(version));
+        var baseId = new CapabilityBundleId("base");
+        var base = new CapabilityBundle(baseId, null, timeout, null, null, headers);
+        var policies = new CapabilityComposition(Map.of(baseId, base), List.of(
+                new CapabilityBinding(new CapabilityBindingId("base"), baseId, new ServiceId(SERVICE),
+                        null, Set.of(), null, null, null)));
+        var appRegistry = new AppRegistry(List.of(new App(APP, "browser",
+                appEnabled ? AppStatus.ENABLED : AppStatus.DISABLED, new AppAccess(Set.of()))));
+        var content = new IngressContent(appRegistry, new ClientRegistry(List.of()),
+                new EndpointRegistry(endpoints), policies);
+        return new RevisionedAccessSnapshot(new IngressSnapshot(
+                new SnapshotVersion(version), content, "pipeline-" + version, Instant.now()),
+                new com.cloud.gateway.domain.ingress.snapshot.Revision(Long.toString(version)));
     }
 
     private static HeaderPolicy defaultHeaders() {
@@ -231,14 +266,18 @@ class GatewayPipelineIT {
             CodecsAutoConfiguration.class, ReactorAutoConfiguration.class, SslAutoConfiguration.class,
             ReactiveWebServerFactoryAutoConfiguration.class, HttpHandlerAutoConfiguration.class,
             WebFluxAutoConfiguration.class, GatewayAutoConfiguration.class})
-    @Import({GatewayIngressWebFluxBeans.class, GovernanceAutoConfiguration.class})
+    @Import(GatewayIngressWebFluxBeans.class)
     static class PipelineApplication {
         @Bean Clock clock() { return Clock.systemUTC(); }
         @Bean RateLimitQuota rateLimitQuota() {
             return (rule, value) -> RateLimitDecision.allowed(rule.dimension(), value, 1);
         }
+        @Bean QuotaCommandService quotaCommandService(RateLimitQuota quota) {
+            return new QuotaCommandService(quota, quota::tryAcquire, QuotaObserver.noop());
+        }
         @Bean ClientCredentialAuthenticator clientCredentialAuthenticator() {
-            return (policy, evidence, now) -> CompletableFuture.completedFuture(ClientVerificationOutcome.rejected());
+            return (credentials, clientId, evidence, now) ->
+                    CompletableFuture.completedFuture(ClientVerificationOutcome.rejected());
         }
         @Bean BrowserSessionVerifier browserSessionVerifier() {
             return token -> CompletableFuture.completedFuture(BrowserSessionVerificationOutcome.invalid());

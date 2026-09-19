@@ -1,2 +1,5 @@
 ---
-admin: { status: ENABLED, platform: WEB, allowedOrigins: [] }
+admin:
+  status: "ENABLED"
+  platform: "WEB"
+  allowedOrigins: []

@@ -1,11 +1,11 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.framework.core.SubjectType;
-import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.subject.SessionId;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationRejectReason;
-import com.cloud.gateway.domain.access.subject.SubjectId;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationOutcome;
+import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.ingress.access.subject.SessionId;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationRejectReason;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectId;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationOutcome;
 
 import java.time.Instant;
 import java.util.Collection;

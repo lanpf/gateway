@@ -21,7 +21,7 @@ class GatewayObservationWebFilterTest {
                 request.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
                 return request.getResponse().setComplete();
             }).block();
-            Timer timer = registry.get("gateway.ingress.requests").tags("outcome", "completed", "status_class", "4xx").timer();
+            Timer timer = registry.get("gateway.ingress.requests").tags("decision", "completed", "status_class", "4xx").timer();
             assertEquals(1, timer.count());
             assertEquals(2, timer.getId().getTags().size());
         } finally {
@@ -37,7 +37,7 @@ class GatewayObservationWebFilterTest {
             assertThrows(IllegalStateException.class, () -> new GatewayObservationWebFilter(registry)
                     .filter(exchange, request -> Mono.error(new IllegalStateException("sensitive message"))).block());
             assertEquals(1, registry.get("gateway.ingress.requests")
-                    .tags("outcome", "error", "status_class", "5xx").timer().count());
+                    .tags("decision", "error", "status_class", "5xx").timer().count());
         } finally {
             registry.close();
         }

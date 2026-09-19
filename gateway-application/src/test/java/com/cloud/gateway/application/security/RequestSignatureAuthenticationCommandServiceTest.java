@@ -3,7 +3,7 @@ package com.cloud.gateway.application.security;
 import com.cloud.gateway.domain.client.Credential;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.ingress.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.client.SignatureContract;
 import com.cloud.gateway.domain.security.signature.*;

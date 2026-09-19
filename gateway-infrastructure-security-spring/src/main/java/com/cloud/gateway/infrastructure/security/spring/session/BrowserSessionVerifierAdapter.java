@@ -1,10 +1,13 @@
 package com.cloud.gateway.infrastructure.security.spring.session;
 
 import com.cloud.framework.core.Result;
+import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
-import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationFailReason;
+import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.ingress.access.subject.SessionId;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationFailReason;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectId;
 import com.cloud.userauth.api.authentication.VerifyBrowserSessionApiCommand;
 import com.cloud.userauth.api.authentication.VerifyBrowserSessionApiCommandOutput;
 import com.cloud.userauth.api.constants.UserAuthPathApiConstants;
@@ -84,8 +87,8 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
         Duration remainingIdleTtl = Duration.ofSeconds(data.remainingIdleTtlSeconds());
         return BrowserSessionVerificationOutcome.verified(new AuthenticatedSubject(
                 SubjectType.BROWSER_SESSION,
-                String.valueOf(data.userId()),
-                data.sessionId(),
+                new SubjectId(String.valueOf(data.userId())),
+                new SessionId(data.sessionId()),
                 null,
                 Set.of(),
                 Set.of(),
@@ -100,7 +103,7 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
             log.warn("Browser Session verification dependency returned status={}",
                     exception.getStatusCode().value());
             return BrowserSessionVerificationOutcome.unavailable(
-                    SubjectAuthenticationFailReason.);
+                    SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE);
         }
         return unavailableInvalidResponse("unexpected HTTP status " + exception.getStatusCode().value());
     }

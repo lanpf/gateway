@@ -1,28 +1,33 @@
 package com.cloud.gateway.interfaces.config;
 
-import com.cloud.gateway.api.facade.admin.definition.IngressAccessDefinitionCommandFacade;
-import com.cloud.gateway.api.facade.admin.definition.IngressAccessDefinitionQueryFacade;
-import com.cloud.gateway.api.facade.admin.snapshot.IngressAccessSnapshotCommandFacade;
-import com.cloud.gateway.api.facade.admin.snapshot.IngressAccessSnapshotQueryFacade;
-import com.cloud.gateway.application.access.definition.AccessDefinitionReader;
-import com.cloud.gateway.application.access.publication.AccessSnapshotCommandService;
-import com.cloud.gateway.application.access.publication.AccessSnapshotProvider;
-import com.cloud.gateway.application.access.editing.AppAccessCommandService;
-import com.cloud.gateway.application.access.definition.AppAccessDefinitionRepository;
-import com.cloud.gateway.application.access.definition.ClientAccessDefinitionRepository;
-import com.cloud.gateway.application.access.editing.ClientAccessCommandService;
-import com.cloud.gateway.application.access.editing.ClientCredentialCommandService;
-import com.cloud.gateway.application.access.editing.EndpointAccessCommandService;
-import com.cloud.gateway.application.access.definition.EndpointAccessDefinitionRepository;
-import com.cloud.gateway.interfaces.facade.admin.definition.DefaultIngressAccessDefinitionCommandFacade;
-import com.cloud.gateway.interfaces.facade.admin.definition.DefaultIngressAccessDefinitionQueryFacade;
-import com.cloud.gateway.interfaces.facade.admin.snapshot.DefaultIngressAccessSnapshotCommandFacade;
-import com.cloud.gateway.interfaces.facade.admin.snapshot.DefaultIngressAccessSnapshotQueryFacade;
+import com.cloud.gateway.api.facade.admin.definition.AccessDefinitionCommandFacade;
+import com.cloud.gateway.api.facade.admin.definition.AccessDefinitionQueryFacade;
+import com.cloud.gateway.api.facade.admin.snapshot.AccessSnapshotCommandFacade;
+import com.cloud.gateway.api.facade.admin.snapshot.AccessSnapshotQueryFacade;
+import com.cloud.gateway.application.configuration.definition.AccessDefinitionReader;
+import com.cloud.gateway.application.configuration.definition.AppAccessDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.CapabilityCompositionDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.ClientAccessDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.EndpointAccessDefinitionRepository;
+import com.cloud.gateway.application.configuration.editing.AppAccessCommandService;
+import com.cloud.gateway.application.configuration.editing.ClientAccessCommandService;
+import com.cloud.gateway.application.configuration.editing.ClientCredentialCommandService;
+import com.cloud.gateway.application.configuration.editing.EndpointAccessCommandService;
+import com.cloud.gateway.interfaces.facade.admin.definition.DefaultAccessDefinitionCommandFacade;
+import com.cloud.gateway.interfaces.facade.admin.definition.DefaultAccessDefinitionQueryFacade;
+import com.cloud.gateway.interfaces.facade.admin.snapshot.DefaultAccessSnapshotCommandFacade;
+import com.cloud.gateway.interfaces.facade.admin.snapshot.DefaultAccessSnapshotQueryFacade;
 import com.cloud.gateway.interfaces.rest.GatewayAccessDefinitionCommandController;
 import com.cloud.gateway.interfaces.rest.GatewayAccessDefinitionQueryController;
 import com.cloud.gateway.interfaces.rest.GatewayAccessSnapshotCommandController;
 import com.cloud.gateway.interfaces.rest.GatewayAccessSnapshotQueryController;
 import com.cloud.gateway.interfaces.rest.GatewayPolicyAdminRestMapper;
+import com.cloud.gateway.interfaces.rest.mapstruct.GatewayPolicyAdminRestMapStructMapper;
+import com.cloud.gateway.interfaces.facade.admin.definition.AccessDefinitionApiMapper;
+import com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.AccessDefinitionApiMapStructMapper;
+import com.cloud.gateway.interfaces.facade.admin.snapshot.AccessSnapshotApiMapper;
+import com.cloud.gateway.interfaces.facade.admin.snapshot.mapstruct.AccessSnapshotApiMapStructMapper;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -33,76 +38,77 @@ import org.springframework.context.annotation.Bean;
  * a writable definition store is present (read-only deployments expose the queries alone).
  */
 @AutoConfiguration(afterName = "com.cloud.gateway.infrastructure.policy.config.PolicyInfrastructureAutoConfiguration")
+@ComponentScan(basePackageClasses = {GatewayPolicyAdminRestMapStructMapper.class,
+        AccessDefinitionApiMapStructMapper.class, AccessSnapshotApiMapStructMapper.class})
 public class GatewayPolicyAdminAutoConfiguration {
 
-    @Bean @ConditionalOnMissingBean(GatewayPolicyAdminRestMapper.class)
-    GatewayPolicyAdminRestMapper gatewayPolicyAdminRestMapper() {
-        return new GatewayPolicyAdminRestMapper() { };
+    @Bean @ConditionalOnMissingBean(AccessDefinitionReader.class)
+    AccessDefinitionReader accessDefinitionReader(
+            EndpointAccessDefinitionRepository endpoints,
+            AppAccessDefinitionRepository apps,
+            ClientAccessDefinitionRepository clients,
+            CapabilityCompositionDefinitionRepository capabilities) {
+        return new AccessDefinitionReader(endpoints, apps, clients, capabilities);
     }
 
-    @Bean @ConditionalOnMissingBean(com.cloud.gateway.application.access.definition.AccessDefinitionReader.class)
-    com.cloud.gateway.application.access.definition.AccessDefinitionReader accessDefinitionReader(
-            com.cloud.gateway.application.access.definition.EndpointAccessDefinitionRepository endpoints,
-            com.cloud.gateway.application.access.definition.AppAccessDefinitionRepository apps,
-            com.cloud.gateway.application.access.definition.ClientAccessDefinitionRepository clients,
-            com.cloud.gateway.application.access.definition.PolicyConfigDefinitionRepository policies) {
-        return new com.cloud.gateway.application.access.definition.AccessDefinitionReader(endpoints, apps, clients, policies);
+    @Bean @ConditionalOnMissingBean(AccessDefinitionQueryFacade.class)
+    AccessDefinitionQueryFacade ingressAccessDefinitionQueryFacade(AccessDefinitionReader reader,
+            AccessDefinitionApiMapper mapper) {
+        return new DefaultAccessDefinitionQueryFacade(reader, mapper);
     }
 
-    @Bean @ConditionalOnMissingBean(IngressAccessDefinitionQueryFacade.class)
-    IngressAccessDefinitionQueryFacade ingressAccessDefinitionQueryFacade(com.cloud.gateway.application.access.definition.AccessDefinitionReader reader) {
-        return new DefaultIngressAccessDefinitionQueryFacade(reader);
-    }
-
-    @Bean @ConditionalOnMissingBean(IngressAccessSnapshotQueryFacade.class)
-    IngressAccessSnapshotQueryFacade ingressAccessSnapshotQueryFacade(com.cloud.gateway.application.access.publication.AccessSnapshotProvider provider) {
-        return new DefaultIngressAccessSnapshotQueryFacade(provider);
+    @Bean @ConditionalOnMissingBean(AccessSnapshotQueryFacade.class)
+    AccessSnapshotQueryFacade ingressAccessSnapshotQueryFacade(com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer provider,
+            AccessSnapshotApiMapper mapper) {
+        return new DefaultAccessSnapshotQueryFacade(provider, mapper);
     }
 
     @Bean
-    @ConditionalOnBean({com.cloud.gateway.application.access.editing.AppAccessCommandService.class, com.cloud.gateway.application.access.editing.ClientAccessCommandService.class,
-            com.cloud.gateway.application.access.editing.ClientCredentialCommandService.class, com.cloud.gateway.application.access.editing.EndpointAccessCommandService.class})
-    @ConditionalOnMissingBean(IngressAccessDefinitionCommandFacade.class)
-    IngressAccessDefinitionCommandFacade ingressAccessDefinitionCommandFacade(
-            com.cloud.gateway.application.access.editing.AppAccessCommandService appService,
-            com.cloud.gateway.application.access.editing.ClientAccessCommandService clientAccessService,
-            com.cloud.gateway.application.access.editing.ClientCredentialCommandService clientCredentialService,
-            com.cloud.gateway.application.access.editing.EndpointAccessCommandService endpointAccessService) {
-        return new DefaultIngressAccessDefinitionCommandFacade(appService, clientAccessService,
-                clientCredentialService, endpointAccessService);
+    @ConditionalOnBean({AppAccessCommandService.class, ClientAccessCommandService.class,
+            ClientCredentialCommandService.class, EndpointAccessCommandService.class})
+    @ConditionalOnMissingBean(AccessDefinitionCommandFacade.class)
+    AccessDefinitionCommandFacade ingressAccessDefinitionCommandFacade(
+            AppAccessCommandService appService,
+            ClientAccessCommandService clientAccessService,
+            ClientCredentialCommandService clientCredentialService,
+            EndpointAccessCommandService endpointAccessService,
+            AccessDefinitionApiMapper mapper) {
+        return new DefaultAccessDefinitionCommandFacade(appService, clientAccessService,
+                clientCredentialService, endpointAccessService, mapper);
     }
 
     @Bean
-    @ConditionalOnBean(com.cloud.gateway.application.access.publication.AccessSnapshotCommandService.class)
-    @ConditionalOnMissingBean(IngressAccessSnapshotCommandFacade.class)
-    IngressAccessSnapshotCommandFacade ingressAccessSnapshotCommandFacade(
-            com.cloud.gateway.application.access.publication.AccessSnapshotCommandService snapshotService) {
-        return new DefaultIngressAccessSnapshotCommandFacade(snapshotService);
+    @ConditionalOnBean(com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService.class)
+    @ConditionalOnMissingBean(AccessSnapshotCommandFacade.class)
+    AccessSnapshotCommandFacade ingressAccessSnapshotCommandFacade(
+            com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService snapshotService,
+            AccessSnapshotApiMapper mapper) {
+        return new DefaultAccessSnapshotCommandFacade(snapshotService, mapper);
     }
 
     @Bean
-    @ConditionalOnBean(IngressAccessDefinitionCommandFacade.class)
+    @ConditionalOnBean(AccessDefinitionCommandFacade.class)
     GatewayAccessDefinitionCommandController gatewayAccessDefinitionCommandController(
-            IngressAccessDefinitionCommandFacade facade, GatewayPolicyAdminRestMapper mapper) {
+            AccessDefinitionCommandFacade facade, GatewayPolicyAdminRestMapper mapper) {
         return new GatewayAccessDefinitionCommandController(facade, mapper);
     }
 
     @Bean
     GatewayAccessDefinitionQueryController gatewayAccessDefinitionQueryController(
-            IngressAccessDefinitionQueryFacade queryFacade) {
+            AccessDefinitionQueryFacade queryFacade) {
         return new GatewayAccessDefinitionQueryController(queryFacade);
     }
 
     @Bean
-    @ConditionalOnBean(IngressAccessSnapshotCommandFacade.class)
+    @ConditionalOnBean(AccessSnapshotCommandFacade.class)
     GatewayAccessSnapshotCommandController gatewayAccessSnapshotCommandController(
-            IngressAccessSnapshotCommandFacade facade, GatewayPolicyAdminRestMapper mapper) {
+            AccessSnapshotCommandFacade facade, GatewayPolicyAdminRestMapper mapper) {
         return new GatewayAccessSnapshotCommandController(facade, mapper);
     }
 
     @Bean
     GatewayAccessSnapshotQueryController gatewayAccessSnapshotQueryController(
-            IngressAccessSnapshotQueryFacade queryFacade) {
+            AccessSnapshotQueryFacade queryFacade) {
         return new GatewayAccessSnapshotQueryController(queryFacade);
     }
 }

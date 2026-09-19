@@ -50,6 +50,6 @@ class EndpointRegistrySelectionTest {
 
     private static EndpointAccess policy() {
         return new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
-                SubjectAuthenticationRequirement.OPTIONAL, Set.of(), Set.of());
+                SubjectAuthenticationRequirement.ANONYMOUS, Set.of(), Set.of());
     }
 }

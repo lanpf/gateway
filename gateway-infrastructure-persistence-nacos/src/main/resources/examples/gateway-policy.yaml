@@ -1,56 +1,81 @@
 ---
 snapshotVersion: 1
 endpoints:
-  - endpointId: "USER_AUTH.LOGIN"
-    serviceId: "user-auth"
-    matchers:
-    - httpMethod: "POST"
-      pathPattern: "/api/user-auth/login"
-    routeId: "user-auth"
-  - endpointId: GATEWAY.ADMIN
-    serviceId: gateway
-    routeId: gateway-admin
-    tags: [admin]
-    matchers:
-    - { httpMethod: PUT, pathPattern: /admin/gateway/policies/app }
-    - { httpMethod: PUT, pathPattern: /admin/gateway/policies/client-access }
-    - { httpMethod: PUT, pathPattern: /admin/gateway/policies/client-client }
-    - { httpMethod: PUT, pathPattern: /admin/gateway/policies/endpoint-access }
-    - { httpMethod: PUT, pathPattern: /admin/gateway/policies/configuration }
-    - { httpMethod: POST, pathPattern: /admin/gateway/snapshot/publish }
-    - { httpMethod: POST, pathPattern: /admin/gateway/snapshot/rollback }
-apps:
-  admin: { status: ENABLED, platform: WEB, allowedOrigins: [] }
-clients:
-  {}
-routes:
-  USER_AUTH.LOGIN:
-    clientCredentialRequirement: "IGNORE"
-    clientRequirement: "FORBIDDEN"
-    subjectRequirement: "IGNORE"
+- endpointId: "GATEWAY.ADMIN"
+  serviceId: "gateway"
+  routeId: "gateway-admin"
+  matchers:
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/app"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/client-access"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/client-credential"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/endpoint-access"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/configuration"
+  - httpMethod: "POST"
+    pathPattern: "/admin/gateway/snapshot/publish"
+  - httpMethod: "POST"
+    pathPattern: "/admin/gateway/snapshot/rollback"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/app"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/client-access"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/endpoint-access"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/snapshot"
+  tags:
+  - "admin"
+  status: "ENABLED"
+  access:
+    clientVerificationRequirement: "OPTIONAL"
+    subjectAuthenticationRequirement: "REQUIRED"
+    requiredScopes:
+    - "admin"
+    requiredAudiences:
+    - "gateway"
+- endpointId: "USER_AUTH.LOGIN"
+  serviceId: "user-auth"
+  routeId: "user-auth"
+  matchers:
+  - httpMethod: "POST"
+    pathPattern: "/api/user-auth/login"
+  tags: []
+  status: "ENABLED"
+  access:
+    clientVerificationRequirement: "OPTIONAL"
+    subjectAuthenticationRequirement: "ANONYMOUS"
     requiredScopes: []
     requiredAudiences: []
-    credentialForwarding:
-      authorizationHeader: "STRIP"
-      cookies: "STRIP_ALL"
-      allowedCookieNames: []
-    status: ENABLED
-  GATEWAY.ADMIN:
-    clientCredentialRequirement: IGNORE
-    clientRequirement: FORBIDDEN
-    subjectRequirement: HOST_SESSION_REQUIRED
-    requiredScopes: [admin]
-    requiredAudiences: [gateway]
-    credentialForwarding: { authorizationHeader: STRIP, cookies: STRIP_ALL, allowedCookieNames: [] }
-    status: ENABLED
+apps:
+  admin:
+    status: "ENABLED"
+    platform: "WEB"
+    allowedOrigins: []
+clients: {}
 policies:
   bundles:
     standard:
-      bundleId: standard
-      timeout: { connect: PT1S, read: PT3S, total: PT5S }
+      bundleId: "standard"
+      rateLimit: null
+      timeout:
+        connect: "PT1S"
+        read: "PT3S"
+        total: "PT5S"
+      circuitBreaker: null
+      cache: null
+      headers: null
   bindings:
-  - bindingId: standard-default
-    bundleId: standard
+  - bindingId: "standard-default"
+    bundleId: "standard"
+    serviceId: null
+    endpointId: null
     tags: []
-contentHash: "7aa5c7488c3e952e435d501549690e0be1c254ec3c0c1da4669cebff4675adb0"
-publishedAt: "2026-09-08T00:00:00Z"
+    appId: null
+    verifiedClientId: null
+    subjectType: null
+contentHash: "f10716f0b79522fbb277e9961c8bb42d6cbcb958525c92f07176d6ee700aa47c"
+publishedAt: "2026-08-26T00:00:00Z"

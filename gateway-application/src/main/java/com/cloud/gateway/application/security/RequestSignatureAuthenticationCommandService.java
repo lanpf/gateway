@@ -1,8 +1,8 @@
 package com.cloud.gateway.application.security;
 
-import com.cloud.gateway.domain.access.client.ClientVerificationMode;
-import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
-import com.cloud.gateway.domain.access.client.VerifiedClient;
+import com.cloud.gateway.domain.ingress.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.ingress.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.ingress.access.client.VerifiedClient;
 import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.Credential;
 import com.cloud.gateway.domain.client.Credentials;

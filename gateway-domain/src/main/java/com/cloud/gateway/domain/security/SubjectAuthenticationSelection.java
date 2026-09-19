@@ -9,7 +9,7 @@ public enum SubjectAuthenticationSelection {
     public static SubjectAuthenticationSelection from(SubjectAuthenticationRequirement requirement) {
         // v1 authenticates only the host session family; endpoint requirements no longer carry session type.
         return switch (requirement) {
-            case REQUIRED, OPTIONAL -> HOST;
+            case REQUIRED, ANONYMOUS -> HOST;
         };
     }
 }

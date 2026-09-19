@@ -1,15 +1,11 @@
 package com.cloud.gateway.interfaces.webflux;
 
-import com.cloud.gateway.application.quota.QuotaCommand;
+import com.cloud.gateway.application.quota.PlannedQuotaCommand;
+import com.cloud.gateway.domain.policy.capability.ApplicableQuota;
 import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.application.quota.RequestQuotaExecutor;
 import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitDimension;
-import com.cloud.gateway.domain.policy.capability.RateLimitRuleId;
-import com.cloud.gateway.domain.policy.capability.RateLimitRules;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -21,13 +17,12 @@ import reactor.core.scheduler.Schedulers;
 /** Blocking-capable asynchronous bridge and HTTP projection, without quota rules. */
 @RequiredArgsConstructor
 public final class RequestQuotaGuard implements RequestQuotaExecutor {
-    private final QuotaCommandService quotas;
+    private final QuotaCommandService quotaCommandService;
 
     @Override
-    public CompletionStage<RateLimitDecision> acquire(List<RateLimitRules> groups,
-            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<RateLimitRuleId> applied) {
-        QuotaCommand command = new QuotaCommand(groups, dimensions, ipOnly);
-        return Mono.fromCallable(() -> quotas.acquire(command, applied))
+    public CompletionStage<RateLimitDecision> acquire(List<ApplicableQuota> quotas) {
+        PlannedQuotaCommand command = new PlannedQuotaCommand(quotas);
+        return Mono.fromCallable(() -> quotaCommandService.acquire(command))
                 .subscribeOn(Schedulers.boundedElastic()).toFuture();
     }
 
@@ -50,9 +45,4 @@ public final class RequestQuotaGuard implements RequestQuotaExecutor {
         });
     }
 
-    public Mono<Boolean> allow(ServerWebExchange exchange, List<RateLimitRules> groups,
-            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<RateLimitRuleId> applied) {
-        return Mono.fromCompletionStage(() -> acquire(groups, dimensions, ipOnly, applied))
-                .flatMap(decision -> respond(exchange, decision));
-    }
 }

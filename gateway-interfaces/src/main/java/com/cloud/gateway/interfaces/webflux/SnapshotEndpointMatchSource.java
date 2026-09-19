@@ -8,7 +8,8 @@ import org.springframework.web.util.pattern.PathPatternParser;
 
 import java.util.List;
 
-final class SnapshotEndpointMatchSource implements EndpointMatchSource {
+/** WebFlux path syntax adapter, exposed for runtime assembly of the preparation stage. */
+public final class SnapshotEndpointMatchSource implements EndpointMatchSource {
     private final PathPatternParser parser = new PathPatternParser();
 
     @Override

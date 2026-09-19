@@ -54,6 +54,6 @@ class EndpointMatchTest {
         return new Endpoint(new EndpointId(id), new ServiceId("service"), new RouteId("route"),
                 List.of(new EndpointMatcher("GET", path)), java.util.Set.of(), EndpointStatus.ENABLED,
                 new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
-                        SubjectAuthenticationRequirement.OPTIONAL, java.util.Set.of(), java.util.Set.of()));
+                        SubjectAuthenticationRequirement.ANONYMOUS, java.util.Set.of(), java.util.Set.of()));
     }
 }

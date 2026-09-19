@@ -3,7 +3,7 @@ package com.cloud.gateway.domain.policy.header;
 import com.cloud.framework.core.RequestHeader;
 import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.gateway.domain.policy.bundle.PolicyConfig;
+import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
 
 import java.util.HashSet;
 import java.util.Locale;
@@ -42,7 +42,7 @@ public record HeaderRules(
         return new HeaderRules(Set.of(), Set.of(), Set.of());
     }
 
-    public void validate(PolicyConfig configuration) {
+    public void validate(CapabilityComposition configuration) {
         configuration.bundles().values().forEach(bundle -> {
             if (bundle.headers() != null) {
                 validate(bundle.headers());

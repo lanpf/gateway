@@ -44,10 +44,10 @@ class GatewaySecurityPropertiesTest {
                 GatewaySecurityProperties.ACCESS_TOKEN_PREFIX + ".issuer", "https://issuer.example",
                 GatewaySecurityProperties.ACCESS_TOKEN_PREFIX + ".reference.introspection-uri",
                 "https://issuer.example/introspect",
-                GatewaySecurityProperties.ACCESS_TOKEN_PREFIX + ".reference.client-endpointId", "gateway-client",
+                GatewaySecurityProperties.ACCESS_TOKEN_PREFIX + ".reference.client-id", "gateway-client",
                 GatewaySecurityProperties.ACCESS_TOKEN_PREFIX + ".reference.client-secret", "secret",
                 GatewaySecurityProperties.PREFIX + ".request-signature.max-clock-skew", "5m",
-                GatewaySecurityProperties.PREFIX + ".browser-session.service-endpointId", "identity-service")));
+                GatewaySecurityProperties.PREFIX + ".browser-session.service-id", "identity-service")));
 
         GatewaySecurityProperties properties = binder.bind(
                 GatewaySecurityProperties.PREFIX, Bindable.of(GatewaySecurityProperties.class))

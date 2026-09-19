@@ -1,10 +1,8 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
-import com.cloud.gateway.domain.access.client.ClientVerificationMode;
+import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.client.ClientStatus;
-import com.cloud.gateway.domain.policy.CookieForwardingMode;
 import com.cloud.gateway.domain.client.SignatureContract;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
@@ -17,21 +15,18 @@ import java.util.Map;
         "clients",
         "appPolicies",
         "endpointRegistry",
-        "endpointPolicies",
-        "policies"
+        "capabilityComposition"
 })
 public record CanonicalPolicyContent(
         List<Endpoint> endpointRegistry,
         Map<String, Client> clientPolicies,
         Map<String, App> appPolicies,
-        Map<String, EndpointAccess> endpointPolicies,
-        StoredPolicyConfig policies
+        StoredCapabilityComposition policies
 ) {
     public CanonicalPolicyContent {
         endpointRegistry = List.copyOf(endpointRegistry);
         clientPolicies = Map.copyOf(clientPolicies);
         appPolicies = Map.copyOf(appPolicies);
-        endpointPolicies = Map.copyOf(endpointPolicies);
     }
 
     @JsonPropertyOrder({
@@ -39,18 +34,40 @@ public record CanonicalPolicyContent(
             "id",
             "matchers",
             "serviceId",
-            "tags"
+            "status",
+            "tags",
+            "access"
     })
     public record Endpoint(
             String routeId,
             String endpointId,
             List<String> matchers,
             String serviceId,
-            List<String> tags
+            List<String> tags,
+            EndpointStatus status,
+            EndpointAccess access
     ) {
         public Endpoint {
             tags = List.copyOf(tags);
             matchers = List.copyOf(matchers);
+        }
+    }
+
+    @JsonPropertyOrder({
+            "clientVerificationRequirement",
+            "requiredAudiences",
+            "requiredScopes",
+            "subjectAuthenticationRequirement"
+    })
+    public record EndpointAccess(
+            ClientVerificationRequirement clientVerificationRequirement,
+            SubjectAuthenticationRequirement subjectAuthenticationRequirement,
+            List<String> requiredScopes,
+            List<String> requiredAudiences
+    ) {
+        public EndpointAccess {
+            requiredScopes = List.copyOf(requiredScopes);
+            requiredAudiences = List.copyOf(requiredAudiences);
         }
     }
 
@@ -62,7 +79,7 @@ public record CanonicalPolicyContent(
     })
     public record App(
             String appId,
-            PolicyStatus status,
+            AppStatus status,
             String platform,
             @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> allowedOrigins
     ) {
@@ -107,45 +124,4 @@ public record CanonicalPolicyContent(
             SignatureContract signatureContract,
             String validFrom
     ) { }
-
-    @JsonPropertyOrder({
-            "clientCredentialRequirement",
-            "clientRequirement",
-            "credentialForwarding",
-            "status",
-            "id",
-            "requiredAudiences",
-            "requiredScopes",
-            "subjectRequirement"
-    })
-    public record EndpointAccess(
-            ClientVerificationMode clientVerificationMode,
-            ClientVerificationRequirement clientVerificationRequirement,
-            Forwarding credentialForwarding,
-            EndpointStatus status,
-            String endpointId,
-            List<String> requiredAudiences,
-            List<String> requiredScopes,
-            SubjectAuthenticationRequirement subjectAuthencationRequirement
-    ) {
-        public EndpointAccess {
-            requiredAudiences = List.copyOf(requiredAudiences);
-            requiredScopes = List.copyOf(requiredScopes);
-        }
-    }
-
-    @JsonPropertyOrder({
-            "allowedCookieNames",
-            "authorizationHeader",
-            "cookies"
-    })
-    public record Forwarding(
-            List<String> allowedCookieNames,
-            AuthorizationHeaderForwardingMode authorizationHeader,
-            CookieForwardingMode cookies
-    ) {
-        public Forwarding {
-            allowedCookieNames = List.copyOf(allowedCookieNames);
-        }
-    }
 }

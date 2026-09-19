@@ -18,12 +18,12 @@ import java.time.Instant;
 public record SaveClientCredentialApiCommand(
         String expectedSourceRevision,
         @NotBlank String clientId,
-        @NotNull @Valid Credential activeCredential,
-        @Valid Credential graceCredential
+        @NotNull @Valid CredentialApiCommand activeCredential,
+        @Valid CredentialApiCommand graceCredential
 ) implements Request {
 
     /** One signing credential; the secret itself is resolved from secretRef and never transported. */
-    public record Credential(
+    public record CredentialApiCommand(
             @NotBlank String credentialId,
             @NotBlank String secretRef,
             @NotNull SignatureContractApiEnum signatureContract,

@@ -7,7 +7,7 @@ import java.util.Map;
 import org.mapstruct.Mapper;
 
 @Mapper(config = PolicyStorageMapperConfig.class)
-public interface ClientPropertiesMapStructMapper extends ClientPropertiesMapper {
+public abstract class ClientPropertiesMapStructMapper implements ClientPropertiesMapper {
     @Override
-    Map<String, StoredAccessSnapshot.Client> toStored(Map<String, GatewayPolicyDefinitionProperties.Client> source);
+    public abstract Map<String, StoredAccessSnapshot.Client> toStored(Map<String, GatewayPolicyDefinitionProperties.Client> source);
 }

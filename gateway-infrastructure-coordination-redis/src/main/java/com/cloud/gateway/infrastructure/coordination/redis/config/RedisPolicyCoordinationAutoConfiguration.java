@@ -2,7 +2,7 @@ package com.cloud.gateway.infrastructure.coordination.redis.config;
 
 import com.cloud.framework.core.naming.NamespaceResolver;
 import com.cloud.framework.core.naming.NamespacedResourceNameResolver;
-import com.cloud.gateway.application.access.publication.AccessRollbackState;
+import com.cloud.gateway.application.configuration.publication.AccessRollbackState;
 import com.cloud.gateway.infrastructure.coordination.redis.AccessRollbackStateKeyResolver;
 import com.cloud.gateway.infrastructure.coordination.redis.RedisAccessRollbackState;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -26,7 +26,7 @@ public class RedisPolicyCoordinationAutoConfiguration {
     }
 
     @Bean
-    com.cloud.gateway.application.access.publication.AccessRollbackState policyRollbackState(
+    com.cloud.gateway.application.configuration.publication.AccessRollbackState policyRollbackState(
             StringRedisTemplate redisTemplate,
             AccessRollbackStateKeyResolver keyResolver
     ) {

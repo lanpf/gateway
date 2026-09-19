@@ -7,7 +7,7 @@ import com.cloud.gateway.application.security.RequestSignatureAuthenticationComm
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.security.signature.*;
 import com.cloud.gateway.application.security.ReplayGuard;
-import com.cloud.gateway.domain.access.client.ClientVerificationOutcome;
+import com.cloud.gateway.domain.ingress.access.client.ClientVerificationOutcome;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -30,6 +30,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
     private static final Instant NOW = Instant.parse("2026-08-24T00:00:00Z");
     private static final Duration SKEW = Duration.ofMinutes(5);
     private static final String NONCE = "abcdefghijklmnopqrstuv";
+    private static final ClientId CLIENT_ID = new ClientId("client-a");
 
     @Test
     void shouldSelectExactActiveAndGraceCredentialWithoutFallback() {
@@ -39,11 +40,11 @@ class HttpRequestSignatureV1AuthenticatorTest {
             return ref;
         }, (key, expiry) -> CompletableFuture.completedFuture(true), registry(), new RequestSignatureCryptography(), new SignatureAuthenticationRules(SKEW));
         Credentials policy = policy();
-        ClientVerificationOutcome active = authenticator.authenticate(policy, evidence("active", "active", NOW, NONCE), NOW)
+        ClientVerificationOutcome active = authenticator.authenticate(policy, CLIENT_ID, evidence("active", "active", NOW, NONCE), NOW)
                 .toCompletableFuture().join();
         assertEquals("active", assertInstanceOf(ClientVerificationOutcome.Verified.class, active)
                 .client().credentialId().value());
-        ClientVerificationOutcome grace = authenticator.authenticate(policy, evidence("grace", "grace", NOW, NONCE), NOW)
+        ClientVerificationOutcome grace = authenticator.authenticate(policy, CLIENT_ID, evidence("grace", "grace", NOW, NONCE), NOW)
                 .toCompletableFuture().join();
         assertEquals("grace", assertInstanceOf(ClientVerificationOutcome.Verified.class, grace)
                 .client().credentialId().value());
@@ -61,7 +62,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
         RequestSignatureAuthenticationCommandService first = authenticator(guard);
         RequestSignatureAuthenticationCommandService second = authenticator(guard);
         List<CompletableFuture<ClientVerificationOutcome>> outcomes = IntStream.range(0, 32).mapToObj(index -> CompletableFuture.supplyAsync(() ->
-                (index % 2 == 0 ? first : second).authenticate(policy(),
+                (index % 2 == 0 ? first : second).authenticate(policy(), CLIENT_ID,
                         evidence(index % 2 == 0 ? "active" : "grace",
                                 index % 2 == 0 ? "active" : "grace", NOW.plusMillis(index), NONCE), NOW)
                         .toCompletableFuture().join())).toList();
@@ -79,7 +80,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
             return CompletableFuture.completedFuture(true);
         });
         Instant future = NOW.plus(SKEW);
-        authenticator.authenticate(policy(), evidence("active", "active", future, NONCE), NOW)
+        authenticator.authenticate(policy(), CLIENT_ID, evidence("active", "active", future, NONCE), NOW)
                 .toCompletableFuture().join();
         assertEquals(future.plus(SKEW).plusMillis(1), expiry.get());
         assertRejected(authenticator, policy(), evidence("active", "active", future.plusMillis(1), NONCE), NOW);
@@ -106,7 +107,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
     @Test
     void shouldNotAuthenticateWhenReplayDependencyFailsOrRefusesRegistration() {
         RequestSignatureAuthenticationCommandService unavailable = authenticator((key, expiry) -> CompletableFuture.failedFuture(new IllegalStateException("offline")));
-        assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(),
+        assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(), CLIENT_ID,
                 evidence("active", "active", NOW, NONCE), NOW).toCompletableFuture().join());
         assertRejected(authenticator((key, expiry) -> CompletableFuture.completedFuture(false)),
                 policy(), evidence("active", "active", NOW, NONCE), NOW);
@@ -115,7 +116,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
     @Test
     void shouldReportSynchronousReplayFailureAsUnavailable() {
         RequestSignatureAuthenticationCommandService unavailable = authenticator((key, expiry) -> { throw new IllegalStateException("offline"); });
-        assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(),
+        assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(), CLIENT_ID,
                 evidence("active", "active", NOW, NONCE), NOW).toCompletableFuture().join());
     }
 
@@ -129,7 +130,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
             fail("must not register unverified evidence");
             return CompletableFuture.completedFuture(true);
         }, registry(), new RequestSignatureCryptography(), new SignatureAuthenticationRules(SKEW));
-        assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(),
+        assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(), CLIENT_ID,
                 evidence("active", "active", NOW, NONCE), NOW).toCompletableFuture().join());
         assertEquals(1, resolutions.get());
         assertRejected(unavailable, policy(), new ClientSignatureEvidence(new byte[0],
@@ -148,11 +149,11 @@ class HttpRequestSignatureV1AuthenticatorTest {
         for (String secret : new String[]{null, "", " "}) {
             RequestSignatureAuthenticationCommandService unavailable = new RequestSignatureAuthenticationCommandService(ref -> secret,
                     (key, expiry) -> { throw new AssertionError("must not reach replay"); }, registry(), new RequestSignatureCryptography(), new SignatureAuthenticationRules(SKEW));
-            assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(),
+            assertInstanceOf(ClientVerificationOutcome.Failed.class, unavailable.authenticate(policy(), CLIENT_ID,
                     evidence("active", "active", NOW, NONCE), NOW).toCompletableFuture().join());
         }
         assertInstanceOf(ClientVerificationOutcome.Failed.class,
-                authenticator((key, expiry) -> CompletableFuture.completedFuture(null)).authenticate(policy(),
+                authenticator((key, expiry) -> CompletableFuture.completedFuture(null)).authenticate(policy(), CLIENT_ID,
                         evidence("active", "active", NOW, NONCE), NOW).toCompletableFuture().join());
     }
 
@@ -172,7 +173,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
                 new SecretTimestampBodyHmacSha256SignatureVerifier(new RequestSignatureCryptography()), brokenVerifier));
         RequestSignatureAuthenticationCommandService authenticator = new RequestSignatureAuthenticationCommandService(ref -> ref,
                 (key, expiry) -> { throw new AssertionError("must not reach replay"); }, brokenRegistry, new RequestSignatureCryptography(), new SignatureAuthenticationRules(SKEW));
-        assertThrows(IllegalStateException.class, () -> authenticator.authenticate(policy(),
+        assertThrows(IllegalStateException.class, () -> authenticator.authenticate(policy(), CLIENT_ID,
                 evidence("active", "active", NOW, NONCE), NOW));
     }
 
@@ -187,7 +188,7 @@ class HttpRequestSignatureV1AuthenticatorTest {
     private static void assertRejected(RequestSignatureAuthenticationCommandService authenticator,
                                        Credentials policy, ClientSignatureEvidence evidence, Instant now) {
         assertInstanceOf(ClientVerificationOutcome.Rejected.class,
-                authenticator.authenticate(policy, evidence, now).toCompletableFuture().join());
+                authenticator.authenticate(policy, CLIENT_ID, evidence, now).toCompletableFuture().join());
     }
 
     private static RequestSignatureAuthenticationCommandService authenticator(ReplayGuard guard) {
@@ -199,8 +200,8 @@ class HttpRequestSignatureV1AuthenticatorTest {
     }
 
     private static Credential credential(String id) {
-        return new Credential(new CredentialId(id), new ClientId("client-a"),
-                SignatureContract.HTTP_REQUEST_SIGNATURE_V1, id,
+        return new Credential(new CredentialId(id), id,
+                SignatureContract.HTTP_REQUEST_SIGNATURE_V1,
                 NOW.minusSeconds(600), NOW.plusSeconds(600));
     }
 

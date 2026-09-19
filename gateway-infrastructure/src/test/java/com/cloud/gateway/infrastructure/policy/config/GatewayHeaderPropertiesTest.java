@@ -25,7 +25,7 @@ class GatewayHeaderPropertiesTest {
         assertDoesNotThrow(() -> rules.validate(new HeaderPolicy(Set.of(), Map.of(), Set.of("X-Deployment"), null)));
         assertThrows(DomainException.class, () -> rules.validate(new HeaderPolicy(Set.of(),
                 Map.of(), Set.of("X-Gateway-Audit"), null)));
-        properties.getAllowedHeaders().add("X-Later");
+        properties.getExtraHeaders().add("X-Later");
         assertFalse(rules.extraHeaders().contains("x-later"));
     }
 }

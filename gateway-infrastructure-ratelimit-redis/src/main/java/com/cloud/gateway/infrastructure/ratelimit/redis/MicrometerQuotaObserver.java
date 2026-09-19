@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 final class MicrometerQuotaObserver implements QuotaObserver {
     private static final String DECISIONS = "gateway.quota.decisions";
     private static final String DIMENSION_TAG = "dimension";
-    private static final String OUTCOME_TAG = "outcome";
+    private static final String OUTCOME_TAG = "decision";
     private enum Outcome { ALLOWED, UNAVAILABLE, DENIED }
     private final MeterRegistry registry;
 

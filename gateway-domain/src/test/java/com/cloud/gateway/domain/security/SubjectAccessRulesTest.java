@@ -12,7 +12,7 @@ class SubjectAccessRulesTest {
         assertEquals(SubjectAuthenticationSelection.HOST,
                 SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.REQUIRED));
         assertEquals(SubjectAuthenticationSelection.HOST,
-                SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.OPTIONAL));
+                SubjectAuthenticationSelection.from(SubjectAuthenticationRequirement.ANONYMOUS));
     }
 
     @Test

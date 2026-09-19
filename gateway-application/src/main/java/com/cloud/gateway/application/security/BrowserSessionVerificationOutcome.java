@@ -1,7 +1,7 @@
 package com.cloud.gateway.application.security;
 
-import com.cloud.gateway.domain.access.subject.AuthenticatedSubject;
-import com.cloud.gateway.domain.access.subject.SubjectAuthenticationFailReason;
+import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
+import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationFailReason;
 import java.util.Objects;
 
 /** Browser Session 在线验证结局；区分凭据无效与验证依赖不可用。 */
