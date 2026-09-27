@@ -79,7 +79,7 @@ public final class NacosAccessSnapshotStore
                     properties.getDataId(), properties.getGroup(), content, expectedSourceRevision.value());
         } catch (NacosException exception) {
             throw new InfrastructureException(
-                    InfrastructureError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
+                    PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
         }
         if (!published) {
             return false;
@@ -124,7 +124,7 @@ public final class NacosAccessSnapshotStore
             accept(content);
         } catch (NacosException exception) {
             throw new InfrastructureException(
-                    InfrastructureError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
+                    PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
         }
     }
 

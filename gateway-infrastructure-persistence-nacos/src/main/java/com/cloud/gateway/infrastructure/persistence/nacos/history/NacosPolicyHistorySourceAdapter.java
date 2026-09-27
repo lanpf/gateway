@@ -1,6 +1,7 @@
 package com.cloud.gateway.infrastructure.persistence.nacos.history;
 
 import com.alibaba.cloud.nacos.NacosConfigProperties;
+import com.cloud.gateway.infrastructure.persistence.nacos.PersistenceNacosError;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyHistoryProperties;
@@ -50,7 +51,7 @@ public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistory
         try {
             return findFirstAvailable(contentPredicate);
         } catch (RestClientException exception) {
-            throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
+            throw new InfrastructureException(PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
         }
     }
 
@@ -160,7 +161,7 @@ public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistory
             throw invalidContent();
         }
         if (response.code() != 0) {
-            throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE);
+            throw new InfrastructureException(PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE);
         }
         if (response.data() == null) {
             throw invalidContent();

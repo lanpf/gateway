@@ -1,8 +1,8 @@
 package com.cloud.gateway.infrastructure.coordination.redis;
 
 import com.cloud.gateway.application.configuration.publication.AccessRollbackState;
-import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
+import com.cloud.gateway.infrastructure.coordination.redis.CoordinationRedisError;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -52,10 +52,10 @@ public final class RedisAccessRollbackState implements com.cloud.gateway.applica
     }
 
     private static InfrastructureException unavailable() {
-        return new InfrastructureException(InfrastructureError.INFRA_TECH_POLICY_ROLLBACK_STATE_FAILED);
+        return new InfrastructureException(CoordinationRedisError.INFRA_TECH_POLICY_ROLLBACK_STATE_FAILED);
     }
 
     private static InfrastructureException unavailable(Throwable cause) {
-        return new InfrastructureException(InfrastructureError.INFRA_TECH_POLICY_ROLLBACK_STATE_FAILED, cause);
+        return new InfrastructureException(CoordinationRedisError.INFRA_TECH_POLICY_ROLLBACK_STATE_FAILED, cause);
     }
 }

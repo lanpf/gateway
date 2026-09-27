@@ -42,7 +42,7 @@ abstract class AbstractNacosAccessDefinitionRepository<T> implements com.cloud.g
                 throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID, exception);
             }
         } catch (NacosException exception) {
-            throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
+            throw new InfrastructureException(PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
         }
     }
 
@@ -56,7 +56,7 @@ abstract class AbstractNacosAccessDefinitionRepository<T> implements com.cloud.g
             }
             return new Revision(NacosAccessSnapshotStore.sourceRevision(content));
         } catch (NacosException exception) {
-            throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
+            throw new InfrastructureException(PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
         }
     }
 }
