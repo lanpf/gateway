@@ -47,6 +47,14 @@ PREALLOCATED、动态插件、任意脚本、业务权限判定、全局瞬时�
 
 当前模型以以上交付状态及 DOMAIN §5.3 为准；下方按日期保留的演进记录只描述当时实现，不定义当前执行点、事实或框架选型。
 
+### 通用领域错误码退役与错误码归属迁移（2026-09-28）
+
+按已确认的重构计划（3.1.7+3.1.8 累积 consumer 变更）执行五项条目。共享领域错误码仅保留 000（实体 ID 非法）；历史编号 1/2/3（DOMAIN_OBJECT_REQUIRED／DOMAIN_OBJECT_INVALID／DOMAIN_OBJECT_abnormal）退役且编号空置不复用，DomainException 仅保留 invalidEntityId()。技术性前置条件统一改用 Require 默认重载并抛出 FrameworkException（197 处供应器 + 36 处直接工厂调用，覆盖 66 个文件）；保留的聚合专属码包括 SIGNATURE_VERIFIER_NOT_FOUND、APP/CLIENT/ENDPOINT 的 NOT_FOUND 与 AMBIGUOUS 系列、ACCESS_SNAPSHOT_INVALID。AggregateRootRegistry.ambiguous() 改为抽象方法，三个子类均持有专属码。管理面原以 800001/800002 返回的错误现为框架技术错误码；边缘入口对畸形证据仍返回 400（IngressPreparationWebFilter 改为按 BaseException 拒绝）。
+
+基础设施错误码按"拥有语义的 module"迁移：702 归 security-spring（SecuritySpringError）、705 归 coordination-redis（CoordinationRedisError）、802 归 persistence-nacos（PersistenceNacosError），编号、消息、语义不变；803 留在基础 infrastructure（共享存储编解码归属），死码 800/801 不动；全库错误码唯一性测试迁至 gateway-boot（唯一可见全部错误枚举的模块）。BrowserSessionVerifierAdapter 对 user-auth 依赖不可用／5xx 的逐请求 WARN 改为状态迁移门控（进入故障态 WARN 一次、恢复 INFO 一次，不落 key 原文）。集成场景文档拆分为 docs/RateLimitIT.md 等七份逐场景文档，README 保留索引与统一执行说明；测试内 Mappers.getMapper 用法与 componentModel=spring 收口一致。
+
+验证（离线构建）：`mvn -o -B clean test -q`：403 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 通过；`git diff --check` 通过。条目 2、5、3、4 及本记录按 pathspec 分别提交；条目 1 因触碰在途未跟踪的能力域文件整体保留在工作区未提交。本轮未运行真实中间件冒烟（Docker 未使用），BrowserSessionIngressIT 协作验收状态不变。
+
 ### Composer 接口与配置校验分离（2026-09-28）
 
 CapabilityPolicyComposer 仅保留 capabilityId、configType、policyType、compose；移除 conflictsAtSamePriority、validateConfigurations、checked。删除 EffectiveCapabilityKey，策略容器改用同一注册 Composer 实例读取并检查 policyType，保留标识冒用与错误类型拒绝。本轮优先完成接口定义，CapabilityConfigRegistry 仍保留，未同时合并到 Assembler。
