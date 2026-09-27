@@ -156,27 +156,22 @@ Surefire 报告位于各模块 target/surefire-reports；Failsafe 报告位于 g
 
 本轮验证结果、历史冒烟结果及暂缓的下游迁移状态统一见 [职责及交付状态](docs/RESPONSIBILITIES.md)；历史通过数不代表当前工作区已通过相同验收。
 
-### RateLimitIT 观察
+## 集成场景索引
 
-使用官方 `redis:8.4.4`（已验证 amd64/arm64 支持），复用既有 smoke 镜像，作为轻量镜像偏好的明确例外。覆盖两个独立 Spring 上下文共享额度、24 个竞争请求分享 7 个令牌、拒绝保留分数令牌、Redis TIME 补充、热更新先按旧速率结算且不重新满额、同维度全规则与最大 Retry-After、命名空间隔离、真实 WRONGTYPE 故障下 CLOSED 与有界本地降级。
+各场景的目的、运行命令、前置条件与观察说明见逐场景文档：
 
-手动观察可指定 `-Dit.test=RateLimitIT#shouldShareExactCapacityAcrossIndependentGatewayInstances -Dgateway.it.manual-observation-seconds=30`（此场景最大 60 秒）。测试输出隔离容器的 `redis-cli HGETALL` / `PTTL` 命令；预期 tokens=0、capacity=7、refill=1、TTL 为正。到期自动清理上下文、键与容器。以测试报告实际结果为准。
-
-### 其他既有场景
-
-可将上述命令的 `-Dit.test` 替换为以下测试类。单独运行 BrowserSessionIngressIT 前必须先执行 `mvn -pl gateway-boot -am package -DskipTests`，完整 smoke 则使用根目录 `mvn verify`，避免拿缺失或旧的启动 Jar 验证。Nacos 使用 3.0.3，需要允许临时绑定 API、Console、gRPC 端口族；测试创建隔离容器和配置，完成后自动清理。
-
-| 场景 | 自动断言及观察目标 |
+| 场景 | 逐场景文档 |
 | --- | --- |
-| NacosPolicyAdministrationIT | 四份 Definition 与 Snapshot 共五个 dataId；接入与凭据共用 revision，旧接入写入被拒绝，嵌套凭据随快照发布；两次发布产生版本 1/2，History 保留版本 1，hash 改变。 |
-| AccessSnapshotPropagationIT | MD5 CAS、多实例监听收敛；旧请求引用完整保留版本 1，新读取观察版本 2，无混用。 |
-| RedisPolicyCoordinationIT | 跨连接锁互斥、异常释放、租约恢复；rollbackState 跨实例可见、TTL=-1、幂等清除、namespace 隔离。锁资源 ingress-policy 保留，不随模型改名迁移。 |
-| RedisReplayGuardIT | 两个连接工厂 10 个并发登记恰好一次成功；TTL 到期可重新登记，过期证据不写入，namespace 隔离。 |
-| GatewayPipelineIT | 随机端口真实 SCG 与 Reactor Netty 下游；身份/凭据清除、完整快照切换后 Header 刷新、未知端点及缺失 App 提前拒绝、实际路由与端点 routeId 不一致拒绝。快照为内存源，Redis 精确性由 RateLimitIT 单独覆盖。 |
-| BrowserSessionIngressIT | 双应用真实 Nacos/MySQL/Redis；有效 Cookie 及允许 Origin 放行并结束会话，无效 Cookie 401、非法 Origin 403；需同级 user-auth/config/db/schema.sql 及兼容的开发构件，不能用单元测试代替协作验收。 |
+| RateLimitIT | [docs/RateLimitIT.md](docs/RateLimitIT.md) |
+| NacosPolicyAdministrationIT | [docs/NacosPolicyAdministrationIT.md](docs/NacosPolicyAdministrationIT.md) |
+| AccessSnapshotPropagationIT | [docs/AccessSnapshotPropagationIT.md](docs/AccessSnapshotPropagationIT.md) |
+| RedisPolicyCoordinationIT | [docs/RedisPolicyCoordinationIT.md](docs/RedisPolicyCoordinationIT.md) |
+| RedisReplayGuardIT | [docs/RedisReplayGuardIT.md](docs/RedisReplayGuardIT.md) |
+| GatewayPipelineIT | [docs/GatewayPipelineIT.md](docs/GatewayPipelineIT.md) |
+| BrowserSessionIngressIT | [docs/BrowserSessionIngressIT.md](docs/BrowserSessionIngressIT.md) |
 
-Nacos、协调与快照场景可在 `manualObservationPoint()` 设置断点（`RedisPolicyCoordinationIT`、`AccessSnapshotPropagationIT`、`NacosPolicyAdministrationIT`、`RedisReplayGuardIT` 四个场景提供该方法）；`RateLimitIT`、`GatewayPipelineIT` 与 Browser 场景改用 `-Dgateway.it.manual-observation-seconds=30`，Browser 场景为其自身的观察断点。Nacos 测试输出实际控制台地址（映射容器 8080 的根路径，不是 8848/nacos）；Redis 测试输出连接命令及 namespace。只在输出的隔离测试资源中检查键和 TTL；若输出 marker，可删除该具体 marker 提前结束观察。未配置观察参数时不等待，恢复测试或窗口到期后自动清理。报告位于前述 Failsafe 目录，容器日志用于定位启动失败。
+统一执行说明：将上述命令的 `-Dit.test` 替换为目标测试类。单独运行 BrowserSessionIngressIT 前必须先执行 `mvn -pl gateway-boot -am package -DskipTests`，完整 smoke 则使用根目录 `mvn verify`，避免拿缺失或旧的启动 Jar 验证。Nacos 使用 3.0.3，需要允许临时绑定 API、Console、gRPC 端口族；测试创建隔离容器和配置，完成后自动清理。
 
-GatewayPipelineIT 的 Header 动态更新观察入口为 `-Dit.test=GatewayPipelineIT#shouldApplyHeaderSelectionFromNewSnapshotWithoutRestart -Dgateway.it.manual-observation-seconds=30`（最多 60 秒），按测试打印的 curl 地址请求；预期未选择的 App 输出被撤销、外部伪造 X-Gateway-App 被清除、普通配置 X-Gateway-Version 为 v2，无需重启。可信字段不能映射为自定义名称。
+Nacos、协调与快照场景可在 `manualObservationPoint()` 设置断点（`RedisPolicyCoordinationIT`、`AccessSnapshotPropagationIT`、`NacosPolicyAdministrationIT`、`RedisReplayGuardIT` 四个场景提供该方法）；`RateLimitIT`、`GatewayPipelineIT` 与 Browser 场景改用 `-Dgateway.it.manual-observation-seconds=30`，Browser 场景为其自身的观察断点。只在输出的隔离测试资源中检查键和 TTL；若输出 marker，可删除该具体 marker 提前结束观察。未配置观察参数时不等待，恢复测试或窗口到期后自动清理。
 
-为遵循本项目三份文档上限，集成场景目的、运行命令与观察说明合并在本节，不再新增逐场景 Markdown。
+工程类型要求的必备文档是下限而非上限：集成场景的逐场景文档（`docs/<TestClass>.md`）随场景一并交付并保持更新，本 README 保留索引与统一执行说明，不再以固定文档数量上限合并场景说明。
