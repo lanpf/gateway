@@ -1,7 +1,7 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.capability.configuration.CapabilityResolver;
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityConfig;
+import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
+import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,14 +24,14 @@ import org.apache.commons.lang3.Validate;
 
 /** Owns resolve -> plan -> execute for each slot, including denial and cancellation. */
 public final class CapabilityExecutionCommandService {
-    private final CapabilityResolver resolver;
+    private final CapabilityPolicyAssembler assembler;
     private final CapabilityPlanner planner = new CapabilityPlanner();
     private final List<CapabilityRegistration<?>> registrations;
     private final Map<String, CapabilityExecutor<?>> executors;
 
-    public CapabilityExecutionCommandService(CapabilityResolver resolver, List<CapabilityRegistration<?>> registrations,
+    public CapabilityExecutionCommandService(CapabilityPolicyAssembler assembler, List<CapabilityRegistration<?>> registrations,
             List<CapabilityExecutor<?>> executors) {
-        this.resolver = Objects.requireNonNull(resolver, "resolver");
+        this.assembler = Objects.requireNonNull(assembler, "assembler");
         this.registrations = List.copyOf(Objects.requireNonNull(registrations, "registrations"));
         CapabilityRegistration.validate(this.registrations, executors);
         Objects.requireNonNull(executors, "executors");
@@ -47,7 +47,7 @@ public final class CapabilityExecutionCommandService {
     /** Resolve against this slot's facts, then plan and execute. */
     public CompletionStage<CapabilityExecutionOutput> execute(CapabilityExecutionCommand command) {
         Objects.requireNonNull(command, "command");
-        return executeAgainst(resolver.resolve(command.composition(), command.context().endpoint(),
+        return executeAgainst(assembler.assemble(command.composition(), command.context().endpoint(),
                 command.context().granted()), command.context(),
                 command.executed());
     }
@@ -63,7 +63,7 @@ public final class CapabilityExecutionCommandService {
      * facts <em>did</em> change (the pre-authentication slot has no granted identity at all) must still
      * call {@link #execute}.
      */
-    public CompletionStage<CapabilityExecutionOutput> executeAgainst(EffectiveCapabilityConfig resolved,
+    public CompletionStage<CapabilityExecutionOutput> executeAgainst(EffectiveCapabilityPolicies resolved,
             CapabilityContext context, Set<CapabilityExecutionKey> executed) {
         IngressTask<CapabilityExecutionOutput> task = new IngressTask<>();
         try {

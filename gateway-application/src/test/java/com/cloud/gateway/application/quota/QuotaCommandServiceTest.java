@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRuleId;
@@ -110,7 +110,7 @@ class QuotaCommandServiceTest {
     void shouldPreserveRawKeysAndDefensivelyCopyCommandFacts() {
         Map<RateLimitDimension, String> dimensions = new EnumMap<>(RateLimitDimension.class);
         dimensions.put(RateLimitDimension.IP, " raw:key ");
-        List<RateLimitPolicy> groups = new ArrayList<>(command(RedisFailureMode.CLOSED).groups());
+        List<RateLimitConfig> groups = new ArrayList<>(command(RedisFailureMode.CLOSED).groups());
         QuotaCommand command = new QuotaCommand(groups, dimensions, false);
         groups.clear();
         dimensions.clear();
@@ -142,7 +142,7 @@ class QuotaCommandServiceTest {
     }
 
     private static QuotaCommand command(RedisFailureMode failure) {
-        return new QuotaCommand(List.of(new RateLimitPolicy(List.of(
+        return new QuotaCommand(List.of(new RateLimitConfig(List.of(
                 new RateLimitRule("short", RateLimitDimension.CLIENT, 100, 1, RateLimitMode.EXACT),
                 new RateLimitRule("long", RateLimitDimension.CLIENT, 900, 1, RateLimitMode.EXACT),
                 new RateLimitRule("ip", RateLimitDimension.IP, 500, 1, RateLimitMode.EXACT)), failure)),

@@ -42,7 +42,7 @@ import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
@@ -379,7 +379,7 @@ class BrowserSessionIngressIT {
 
     private CapabilityComposition browserSessionPolicies() {
         // The downstream contract uses the current identity header without compatibility aliases.
-        HeaderPolicy headers = new HeaderPolicy(Set.of(
+        HeaderConfig headers = new HeaderConfig(Set.of(
                 RequestHeader.APP_ID, RequestHeader.APP_PLATFORM, RequestHeader.SUBJECT_TYPE,
                 RequestHeader.USER_ID, RequestHeader.SESSION_ID),
                 Map.of(), Set.of(), new CredentialForwarding(

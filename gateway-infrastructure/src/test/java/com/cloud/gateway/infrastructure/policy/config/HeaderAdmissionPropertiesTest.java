@@ -1,7 +1,7 @@
 package com.cloud.gateway.infrastructure.policy.config;
 
 import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import java.util.Map;
 import java.util.Set;
@@ -20,10 +20,10 @@ class HeaderAdmissionPropertiesTest {
         HeaderAdmissionProperties properties = new Binder(source).bind("gateway.header",
                 Bindable.of(HeaderAdmissionProperties.class)).orElseThrow(() -> new AssertionError("Header properties were not bound"));
         HeaderAdmissionRules rules = properties.toRules();
-        assertThrows(DomainException.class, () -> rules.validate(new HeaderPolicy(Set.of(),
+        assertThrows(DomainException.class, () -> rules.validate(new HeaderConfig(Set.of(),
                 Map.of("x-deployment", "prod"), Set.of(), null)));
-        assertDoesNotThrow(() -> rules.validate(new HeaderPolicy(Set.of(), Map.of(), Set.of("X-Deployment"), null)));
-        assertThrows(DomainException.class, () -> rules.validate(new HeaderPolicy(Set.of(),
+        assertDoesNotThrow(() -> rules.validate(new HeaderConfig(Set.of(), Map.of(), Set.of("X-Deployment"), null)));
+        assertThrows(DomainException.class, () -> rules.validate(new HeaderConfig(Set.of(),
                 Map.of(), Set.of("X-Gateway-Audit"), null)));
         assertThrows(UnsupportedOperationException.class, () -> properties.extra().add("X-Later"));
         assertFalse(rules.extra().contains("x-later"));

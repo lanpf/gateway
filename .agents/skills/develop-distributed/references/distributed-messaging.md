@@ -13,6 +13,7 @@
 ## Consumption and delay
 
 - **MESSAGE-IDEMPOTENCY-001** **[REQUIRED][TOPIC]** — Design consumers for at-least-once delivery and deduplicate by event ID or a stable business idempotency key; never assume a broker, outbox, or listener delivers once.
+- **MESSAGE-IDEMPOTENCY-ATOMIC-001** **[REQUIRED][TOPIC]** — Atomically commit the completed-consumption deduplication record with local business writes in the same transaction; never mark a message processed before separate fallible writes. Nontransactional external effects require a recoverable idempotency protocol preventing lost processing or repeated side effects.
 - **MESSAGE-ACK-001** **[REQUIRED][TOPIC]** — Acknowledge only after business processing and the local transaction succeed; use classified bounded retry/backoff and route exhausted or non-recoverable messages to dead-letter or manual handling.
 - **MESSAGE-LISTENER-001** **[REQUIRED][TOPIC]** — Listeners deserialize, validate, enter idempotency control, and must not swallow failures before acknowledgement; their layer responsibility follows the interfaces rules.
 - **MESSAGE-DELAY-001** **[REQUIRED][TOPIC]** — Use delayed messages only for error-tolerant retry, reminder, and auxiliary workflows, never as a precise timer or sole core-business deadline guarantee; consumers recheck state and idempotency on arrival.

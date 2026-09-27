@@ -1,13 +1,13 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityConfig;
+import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
 
 import com.cloud.gateway.application.ingress.CapabilityRegistration;
 
 import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
 import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityResolver;
+import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
 
@@ -20,7 +20,7 @@ import com.cloud.gateway.domain.capability.runtime.CapabilityContext;
 import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
 import com.cloud.gateway.domain.capability.runtime.CapabilitySlot;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.capability.header.CredentialForwarding;
 import com.cloud.gateway.domain.ingress.access.*;
@@ -56,7 +56,7 @@ import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
 import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -81,7 +81,7 @@ class AccessStageCommandServiceTest {
             List.of(new EndpointMatcher("GET", "/test")), Set.of(), EndpointStatus.ENABLED,
             new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
                     SubjectAuthenticationRequirement.ANONYMOUS, Set.of(), Set.of()));
-    private static final HeaderPolicy CLIENT_HEADERS = new HeaderPolicy(Set.of(),
+    private static final HeaderConfig CLIENT_HEADERS = new HeaderConfig(Set.of(),
             Map.of("X-Gateway-Test", "verified"), Set.of(), CredentialForwarding.stripAll());
 
     @Test
@@ -92,8 +92,8 @@ class AccessStageCommandServiceTest {
         assertNull(allowed.decision().grantedContext().client());
         AdmissionStageOutput admitted = admit(allowed, Map.of(RateLimitDimension.IP, "192.0.2.1",
                 RateLimitDimension.APP, "app", RateLimitDimension.ENDPOINT, "TEST.GET"));
-        assertEquals(HeaderPolicy.defaults(CredentialForwarding.stripAll()),
-                admitted.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.KEY));
+        assertEquals(HeaderConfig.defaults(CredentialForwarding.stripAll()),
+                admitted.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).config());
     }
 
     @Test
@@ -108,7 +108,7 @@ class AccessStageCommandServiceTest {
         AdmissionStageOutput admitted = admit(allowed, Map.of(RateLimitDimension.IP, "192.0.2.1",
                 RateLimitDimension.APP, "app", RateLimitDimension.ENDPOINT, "TEST.GET",
                 RateLimitDimension.CLIENT, "client", RateLimitDimension.SUBJECT, "HOST_SESSION:user"));
-        assertEquals(CLIENT_HEADERS, admitted.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.KEY));
+        assertEquals(CLIENT_HEADERS, admitted.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).config());
     }
 
     @Test
@@ -214,11 +214,11 @@ class AccessStageCommandServiceTest {
                 java.util.Arrays.stream(RateLimitDimension.values()).map(dimension ->
                         new RateLimitRule(dimension.name(), dimension, 10, 1,
                                 RateLimitMode.EXACT)).toList();
-        java.util.List<RateLimitPolicy> rateLimits = List.of(new RateLimitPolicy(rules, null));
-        assertEquals(expectedDimensions, new RateLimitCapability().units(rateLimits, context).stream()
+        java.util.List<RateLimitConfig> rateLimits = List.of(new RateLimitConfig(rules, null));
+        assertEquals(expectedDimensions, new RateLimitCapability().units(new com.cloud.gateway.domain.capability.ratelimit.EffectiveRateLimitPolicy(rateLimits), context).stream()
                 .collect(java.util.stream.Collectors.toMap(unit -> unit.quota().rule().dimension(), unit -> unit.quota().key())));
         AdmissionStageCommandService admission = new AdmissionStageCommandService(
-                new CapabilityExecutionCommandService(new CapabilityResolver(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitConfigDefinition.KEY))),
+                new CapabilityExecutionCommandService(new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicyComposer.INSTANCE))),
                         List.of(new RateLimitCapabilityExecutor(planned -> {
                     throw new AssertionError("no configured quota");
                 }))));

@@ -17,7 +17,7 @@ import com.cloud.gateway.application.configuration.publication.RevisionedAccessS
 import com.cloud.gateway.application.common.ApplicationException;
 import com.cloud.gateway.application.common.ApplicationError;
 import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.client.Credentials;
@@ -46,7 +46,7 @@ import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.capability.configuration.*;
-import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -272,8 +272,8 @@ class AccessCommandServicesTest {
     @Test
     void shouldNotActivateRecoveryWhenTargetViolatesHeaderRules() {
         CapabilityBundleId id = new CapabilityBundleId("invalid-header");
-        HeaderPolicy headers =
-                new HeaderPolicy(Set.of(), Map.of("X-Unregistered", "value"),
+        HeaderConfig headers =
+                new HeaderConfig(Set.of(), Map.of("X-Unregistered", "value"),
                         Set.of(), null);
         CapabilityComposition policies = new CapabilityComposition(
                 Map.of(id, new CapabilityBundle(id, java.util.List.of(headers))), List.of());
@@ -535,7 +535,7 @@ class AccessCommandServicesTest {
 
     private static CapabilityComposition configuredPolicies() {
         var id = new CapabilityBundleId("standard");
-        return new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new TimeoutPolicy(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
+        return new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new TimeoutConfig(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
     }
 
     private static IngressContent withPolicies(IngressContent source, CapabilityComposition policies) {
@@ -567,7 +567,7 @@ class AccessCommandServicesTest {
 
     @Test void shouldRejectUnadmittedHeadersBeforeSavingOrPublishing() {
         var id = new CapabilityBundleId("invalid-header");
-        var headers = new HeaderPolicy(Set.of(),
+        var headers = new HeaderConfig(Set.of(),
                 Map.of("X-Unregistered", "value"), Set.of(), null);
         var policies = new CapabilityComposition(Map.of(id,
                 new CapabilityBundle(id, java.util.List.of(headers))), List.of());

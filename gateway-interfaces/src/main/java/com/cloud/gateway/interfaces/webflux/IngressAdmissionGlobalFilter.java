@@ -13,9 +13,9 @@ import com.cloud.gateway.application.ingress.CapabilityExecutionOutput;
 import com.cloud.gateway.domain.capability.runtime.CapabilityContext;
 import com.cloud.gateway.domain.capability.runtime.CapabilitySlot;
 import com.cloud.gateway.domain.capability.runtime.HeaderApplyCapability;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.capability.runtime.TimeoutCapability;
-import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import com.cloud.gateway.domain.ingress.access.AccessGrantedContext;
 import com.cloud.gateway.domain.endpoint.EndpointMatch;
 import com.cloud.gateway.application.ingress.IngressAdmissionCommandService;
@@ -161,7 +161,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
                     if (!permitted) {
                         return Mono.empty();
                     }
-                    HeaderPolicy plan = headerPlan(output);
+                    HeaderConfig plan = headerPlan(output);
                     if (plan == null) {
                         // Fail closed. Forwarding without the plan would send the caller's own protected
                         // fields downstream, so a missing plan is a defect to stop on, never to skip.
@@ -170,7 +170,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
                         return reject(exchange, HttpStatus.INTERNAL_SERVER_ERROR);
                     }
                     ServerWebExchange forwarded = headerWriter.write(exchange, granted, plan);
-                    TimeoutPolicy timeout = timeoutPolicy(output);
+                    TimeoutConfig timeout = timeoutPolicy(output);
                     if (timeout != null) {
                         // Connect and read belong to the transport, so they are published to the route
                         // metadata the client reads; the total is enforced below, around the whole call.
@@ -184,19 +184,21 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
                 }));
     }
 
-    private static HeaderPolicy headerPlan(CapabilityExecutionOutput output) {
+    private static HeaderConfig headerPlan(CapabilityExecutionOutput output) {
         return output.execution().outcomes().stream()
                 .filter(HeaderApplyCapability.Outcome.class::isInstance)
                 .map(HeaderApplyCapability.Outcome.class::cast)
                 .map(HeaderApplyCapability.Outcome::policy)
+                .map(com.cloud.gateway.domain.capability.header.EffectiveHeaderPolicy::config)
                 .findFirst().orElse(null);
     }
 
-    private static TimeoutPolicy timeoutPolicy(CapabilityExecutionOutput output) {
+    private static TimeoutConfig timeoutPolicy(CapabilityExecutionOutput output) {
         return output.execution().outcomes().stream()
                 .filter(TimeoutCapability.Outcome.class::isInstance)
                 .map(TimeoutCapability.Outcome.class::cast)
                 .map(TimeoutCapability.Outcome::policy)
+                .map(com.cloud.gateway.domain.capability.resilience.EffectiveTimeoutPolicy::config)
                 .findFirst().orElse(null);
     }
 

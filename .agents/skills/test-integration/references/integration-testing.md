@@ -3,7 +3,7 @@
 ## Phase and boundaries
 
 - **TEST-PHASE-002** **[REQUIRED][TOPIC]** — Write and execute integration tests only in the smoke-test phase to verify cross-module collaboration and real infrastructure behavior after code stabilization; development-phase testing follows the unit-test rules.
-- **TEST-INTEGRATION-001** **[REQUIRED][TOPIC]** — Treat cross-module, full auto-configuration, real database, or real middleware scenarios as integration tests; in a service, place them in the architecture-defined `<service>-integration-tests` module and keep them out of production modules.
+- **TEST-INTEGRATION-001** **[REQUIRED][TOPIC]** — Treat collaboration among real implementations from multiple modules, full auto-configuration, real databases, or real middleware as integration tests and keep them out of production modules. Merely referencing another module's interface or DTO is not sufficient; service integration tests use the architecture-defined standalone module.
 - **TEST-CONTAINERS-001** **[DEFAULT][TOPIC]** — Prefer Testcontainers for isolated and repeatable real-infrastructure scenarios.
 - **TEST-CONTAINER-IMAGE-001** **[DEFAULT][TOPIC]** — When integration tests use containers, prefer an officially maintained lightweight image variant when its functionality, version, and target architecture satisfy the test; use the standard image only when the lightweight variant lacks required tools or capabilities.
 - **TEST-CONTAINER-ARCH-001** **[REQUIRED][TOPIC]** — Confirm that each image manifest supports the target architectures of local development and CI runners.

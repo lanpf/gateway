@@ -2,7 +2,6 @@
 
 ## API and domain
 
-- **DATA-API-001** **[DEFAULT][TOPIC]** — Prefer records for API commands and queries whose contracts are complete, immutable, and independent of HTTP binding and header injection.
 - **API-RESPONSE-001** **[REQUIRED][TOPIC]** — Use records for API response payloads.
 - **DATA-API-EVENT-001** **[REQUIRED][TOPIC]** — Use a record for an API event when serialization, RPC, OpenFeign, and clients support constructor binding; use an ordinary JavaBean class when an existing consumer cannot support it.
 - **DATA-API-COMPAT-001** **[REQUIRED][TOPIC]** — For public Java APIs, evaluate the binary-constructor compatibility impact before adding a record component.

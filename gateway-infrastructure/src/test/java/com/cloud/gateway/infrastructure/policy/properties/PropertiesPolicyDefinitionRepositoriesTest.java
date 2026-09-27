@@ -40,9 +40,9 @@ class PropertiesPolicyDefinitionRepositoriesTest {
         RevisionedAccessDefinition<CapabilityComposition> second = repository.load();
         org.junit.jupiter.api.Assertions.assertNotEquals(first.sourceRevision(), second.sourceRevision());
         assertEquals(java.time.Duration.ofSeconds(4), second.value().bundles()
-                .get(new com.cloud.gateway.domain.capability.configuration.CapabilityBundleId("standard")).find(com.cloud.gateway.domain.capability.resilience.TimeoutConfigDefinition.INSTANCE).orElseThrow().total());
+                .get(new com.cloud.gateway.domain.capability.configuration.CapabilityBundleId("standard")).find(com.cloud.gateway.domain.capability.resilience.TimeoutPolicyComposer.INSTANCE).orElseThrow().total());
         assertEquals(java.time.Duration.ofSeconds(3), first.value().bundles()
-                .get(new com.cloud.gateway.domain.capability.configuration.CapabilityBundleId("standard")).find(com.cloud.gateway.domain.capability.resilience.TimeoutConfigDefinition.INSTANCE).orElseThrow().total());
+                .get(new com.cloud.gateway.domain.capability.configuration.CapabilityBundleId("standard")).find(com.cloud.gateway.domain.capability.resilience.TimeoutPolicyComposer.INSTANCE).orElseThrow().total());
     }
 
     @Test

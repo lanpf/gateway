@@ -15,8 +15,8 @@ import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
-import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
+import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
@@ -176,7 +176,7 @@ class GatewayPipelineIT {
     @Test
     void shouldApplyHeaderSelectionFromNewSnapshotWithoutRestart() throws InterruptedException {
         assertTrue(get("/public/echo", Map.of("X-App-Id", APP.value())).body().contains("app=public-app"));
-        var headers = new HeaderPolicy(Set.of(),
+        var headers = new HeaderConfig(Set.of(),
                 Map.of("X-Gateway-Version", "v2"), Set.of(), CredentialForwarding.stripAll());
         snapshots.set(snapshot(2, true, headers, ordinaryTimeout()));
         Reply changed = get("/public/echo", Map.of("X-App-Id", APP.value(), "X-Gateway-App", "forged"));
@@ -194,7 +194,7 @@ class GatewayPipelineIT {
     /** Stage two was removed from v1: a slow downstream is forwarded, never answered by a gateway timeout. */
     @Test
     void shouldForwardSlowDownstreamWithoutGatewayTimeoutStage() {
-        snapshots.set(snapshot(2, true, defaultHeaders(), new TimeoutPolicy(
+        snapshots.set(snapshot(2, true, defaultHeaders(), new TimeoutConfig(
                 Duration.ofSeconds(1), Duration.ofMillis(100), Duration.ofMillis(500))));
         Reply slow = get("/public/slow", Map.of("X-App-Id", APP.value()));
         assertEquals(200, slow.status());
@@ -226,12 +226,12 @@ class GatewayPipelineIT {
     }
 
     private static RevisionedAccessSnapshot snapshot(long version, boolean appEnabled,
-                                                     HeaderPolicy headers, TimeoutPolicy timeout) {
+                                                     HeaderConfig headers, TimeoutConfig timeout) {
         return snapshot(version, appEnabled, headers, timeout, ROUTE);
     }
 
     private static RevisionedAccessSnapshot snapshot(long version, boolean appEnabled,
-                                                     HeaderPolicy headers, TimeoutPolicy timeout,
+                                                     HeaderConfig headers, TimeoutConfig timeout,
                                                      String endpointRouteId) {
         var endpoints = new ArrayList<Endpoint>();
         for (String name : List.of("echo", "cache", "slow")) {
@@ -259,12 +259,12 @@ class GatewayPipelineIT {
                 new com.cloud.gateway.domain.ingress.snapshot.Revision(Long.toString(version)));
     }
 
-    private static HeaderPolicy defaultHeaders() {
-        return HeaderPolicy.defaults(CredentialForwarding.stripAll());
+    private static HeaderConfig defaultHeaders() {
+        return HeaderConfig.defaults(CredentialForwarding.stripAll());
     }
 
-    private static TimeoutPolicy ordinaryTimeout() {
-        return new TimeoutPolicy(Duration.ofSeconds(2), Duration.ofSeconds(3), Duration.ofSeconds(4));
+    private static TimeoutConfig ordinaryTimeout() {
+        return new TimeoutConfig(Duration.ofSeconds(2), Duration.ofSeconds(3), Duration.ofSeconds(4));
     }
 
     private record Reply(int status, String body) { }

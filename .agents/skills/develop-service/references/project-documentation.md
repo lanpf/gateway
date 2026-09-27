@@ -12,7 +12,7 @@
 - **SERVICE-DOMAIN-DOC-003** **[REQUIRED][TOPIC]** — Every business service keeps `docs/DOMAIN.md` as the authoritative bounded-context document for domain language, rules, errors, events, and API business semantics.
 - **DOCS-STRUCT-001** **[REQUIRED][TOPIC]** — Every project provides a root `README.md` and `docs/RESPONSIBILITIES.md`; every business service also provides `docs/DOMAIN.md`.
 - **DOCS-INFRA-DOMAIN-001** **[DEFAULT][TOPIC]** — An infrastructure project that owns a real domain should provide `docs/DOMAIN.md`; a pure library does not need one.
-- **DOCS-AUTH-DOC-001** **[ADVISORY][TOPIC]** — The required documents are a floor, not the full set; key infrastructure capabilities or external dependencies may have separate authoritative documents routed by the project documentation entry, and document names should stay short.
+- **DOCS-AUTH-DOC-001** **[DEFAULT][TOPIC]** — The documents required for the project type are a floor, not the full set; key infrastructure capabilities or external dependencies may have separate authoritative documents routed by the project documentation entry, with short names.
 
 ## Document boundaries
 

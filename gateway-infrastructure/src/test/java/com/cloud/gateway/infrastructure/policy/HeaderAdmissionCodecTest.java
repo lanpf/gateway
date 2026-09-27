@@ -13,7 +13,7 @@ import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +32,7 @@ class HeaderAdmissionCodecTest {
         var allowed = new HeaderAdmissionRules(Set.of("X-Deployment"), Set.of(), Set.of());
         HeaderAdmissionRules denied = HeaderAdmissionRules.registeredOnly();
         var id = new CapabilityBundleId("header");
-        var policy = new HeaderPolicy(Set.of(), Map.of("X-Deployment", "prod"), Set.of(), null);
+        var policy = new HeaderConfig(Set.of(), Map.of("X-Deployment", "prod"), Set.of(), null);
         var configuration = new CapabilityComposition(Map.of(id,
                 new CapabilityBundle(id, java.util.List.of(policy))), List.of());
         var allowedDefinitions = new StoredPolicyDefinitionCodec(mapper, json, allowed);

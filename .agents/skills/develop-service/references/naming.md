@@ -19,7 +19,7 @@
 
 - **NAME-API-001** **[REQUIRED][BASELINE]** — Use `*ApiCommand`, `*ApiOutput`, `*ApiQuery`, `*ApiView`, `*ApiEnum`, `*ApiConstants`, `*ApiEvent`, `*CommandFacade`, and `*QueryFacade` in API.
 - **NAME-DOMAIN-001** **[REQUIRED][BASELINE]** — Use `*Effect` for domain-service results, `*Repository` for repository contracts, and `*Event` for domain events.
-- **NAME-APPLICATION-001** **[REQUIRED][BASELINE]** — Use `*CommandService`, `*Command`, `*Output`, `*QueryService`, `*Query`, and `*View` in application; paged queries return `PagedList<*View>`.
+- **NAME-APPLICATION-001** **[REQUIRED][BASELINE]** — Use `*CommandService`, `*Command`, `*Output`, `*QueryService`, `*Query`, and `*View` in application; follow the application layering rules for paged return contracts.
 - **NAME-APPLICATION-RESPONSE-001** **[REQUIRED][BASELINE]** — Use `*Response` only when an application command and query return type must be reused.
 - **NAME-INFRA-001** **[REQUIRED][BASELINE]** — Use `*RepositoryAdapter`, technology-specific `*PersistenceRepository`, `*DO`, and `*PersistenceAutoConfiguration` in infrastructure.
 - **NAME-INTERFACES-001** **[REQUIRED][BASELINE]** — Place protocol-neutral Facade implementations in `interfaces.facade` as `Default*Facade`; use `*RpcAdapter` only for necessary technology-specific RPC adapters.

@@ -44,6 +44,6 @@ public final class StoredAccessSnapshotCodec extends PolicyYamlCodec {
     }
 
     private void validateHeaderAdmission(CapabilityComposition composition) {
-        composition.bundles().values().forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.INSTANCE).orElse(null)));
+        composition.bundles().values().forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).orElse(null)));
     }
 }

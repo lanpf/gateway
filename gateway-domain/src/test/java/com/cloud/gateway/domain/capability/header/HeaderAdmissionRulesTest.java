@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class HeaderAdmissionRulesTest {
     @Test void shouldAdmitConfiguredExtraNamesAndGatewayPrefixOnly() {
         var rules = new HeaderAdmissionRules(Set.of("X-Extra"), Set.of(), Set.of());
-        assertDoesNotThrow(() -> rules.validate(HeaderPolicy.defaults(null)));
+        assertDoesNotThrow(() -> rules.validate(HeaderConfig.defaults(null)));
         assertDoesNotThrow(() -> rules.validate(set("x-eXtra")));
         assertDoesNotThrow(() -> rules.validate(set("x-GW-marker")));
         assertThrows(DomainException.class, () -> rules.validate(set("X-Unknown")));
@@ -38,6 +38,6 @@ class HeaderAdmissionRulesTest {
         assertThrows(DomainException.class, () -> new HeaderAdmissionRules(Set.of("X-Extra", "x-extra"), Set.of(), Set.of()));
     }
 
-    private static HeaderPolicy set(String name) { return new HeaderPolicy(Set.of(), Map.of(name, "value"), Set.of(), null); }
-    private static HeaderPolicy remove(String name) { return new HeaderPolicy(Set.of(), Map.of(), Set.of(name), null); }
+    private static HeaderConfig set(String name) { return new HeaderConfig(Set.of(), Map.of(name, "value"), Set.of(), null); }
+    private static HeaderConfig remove(String name) { return new HeaderConfig(Set.of(), Map.of(), Set.of(name), null); }
 }

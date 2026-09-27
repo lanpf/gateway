@@ -1,15 +1,15 @@
 package com.cloud.gateway.interfaces.config;
 
 import com.cloud.gateway.domain.capability.configuration.CapabilityConfigRegistry;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfigDefinition;
-import com.cloud.gateway.domain.capability.resilience.TimeoutConfigDefinition;
-import com.cloud.gateway.domain.capability.header.HeaderConfigDefinition;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicyComposer;
+import com.cloud.gateway.domain.capability.resilience.TimeoutPolicyComposer;
+import com.cloud.gateway.domain.capability.header.HeaderPolicyComposer;
 import com.cloud.gateway.domain.capability.CapabilityId;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.util.Assert;
 
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityConfig;
+import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
 
 
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
@@ -20,7 +20,7 @@ import com.cloud.gateway.application.ingress.AdmissionStageCommandService;
 import com.cloud.gateway.application.ingress.IngressAdmissionCommandService;
 import com.cloud.gateway.application.ingress.PreparationStageCommandService;
 import com.cloud.gateway.application.ingress.PreparationObserver;
-import com.cloud.gateway.domain.capability.configuration.CapabilityResolver;
+import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
 import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
 import com.cloud.gateway.domain.capability.runtime.TimeoutCapability;
 import com.cloud.gateway.application.ingress.CapabilityExecutionCommandService;
@@ -71,16 +71,16 @@ public class IngressWebFluxConfiguration {
     }
     @Bean CapabilityExecutionCommandService capabilityExecutionCommandService(RequestQuotaGuard quotas, CapabilityConfigRegistry registry) {
         List<CapabilityRegistration<?>> registrations = List.of(
-                new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(RateLimitConfigDefinition.KEY)),
-                new CapabilityRegistration<>(new TimeoutCapability(), config -> config.get(TimeoutConfigDefinition.KEY)),
-                new CapabilityRegistration<>(new HeaderApplyCapability(), config -> config.get(HeaderConfigDefinition.KEY)));
+                new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(RateLimitPolicyComposer.INSTANCE)),
+                new CapabilityRegistration<>(new TimeoutCapability(), config -> config.get(TimeoutPolicyComposer.INSTANCE)),
+                new CapabilityRegistration<>(new HeaderApplyCapability(), config -> config.get(HeaderPolicyComposer.INSTANCE)));
         List<CapabilityExecutor<?>> executors = List.of(new RateLimitCapabilityExecutor(quotas),
                 new TimeoutCapabilityExecutor(), new HeaderApplyCapabilityExecutor());
         Set<String> configured = registry.identifiers().stream().map(CapabilityId::value).collect(Collectors.toSet());
         Set<String> planned = registrations.stream().map(registration -> registration.capability().name()).collect(Collectors.toSet());
         Assert.isTrue(configured.equals(planned), "Capability configuration and runtime registrations must match");
         // Reject missing planning entries or executors before accepting requests.
-        return new CapabilityExecutionCommandService(new CapabilityResolver(registry), registrations, executors);
+        return new CapabilityExecutionCommandService(new CapabilityPolicyAssembler(registry), registrations, executors);
     }
     @Bean CapabilityResponseWriter capabilityResponseWriter(RequestQuotaGuard quotas) {
         return new CapabilityResponseWriter(List.of(new RateLimitOutcomeWriter(quotas)));

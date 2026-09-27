@@ -4,10 +4,10 @@
 
 - **LOG-SLF4J-001** **[REQUIRED][BASELINE]** — Write log messages with SLF4J parameter placeholders rather than string concatenation, and pass the exception object as the last argument instead of embedding it in message text.
 - **LOG-LEVEL-001** **[REQUIRED][BASELINE]** — Use `ERROR` for failures that need human intervention, including exhausted retries, unrecoverable errors, and unclassified integrity failures.
-- **LOG-LEVEL-002** **[REQUIRED][BASELINE]** — Use `WARN` for exceptions that have already recovered or degraded as expected, including retried-then-succeeded operations, expected idempotent conflicts, and degraded execution.
-- **LOG-LEVEL-003** **[REQUIRED][BASELINE]** — Use `INFO` for audit points of key business actions, state changes, and external interactions; reserve `DEBUG` for development diagnosis and keep it disabled in production by default.
+- **LOG-LEVEL-002** **[REQUIRED][BASELINE]** — Choose severity by impact and handling needs rather than exception class: `WARN` denotes noteworthy abnormal contention, recovery, or degradation. A normal idempotent hit does not become `WARN` merely because exception translation was involved.
+- **LOG-LEVEL-003** **[REQUIRED][BASELINE]** — Use `INFO` for normal idempotent outcomes and audit points of key business actions, state changes, and external interactions. Use `DEBUG` for diagnosis and disable it in production by default.
 - **LOG-CONTEXT-001** **[REQUIRED][BASELINE]** — Every log statement carries locatable context such as the use-case or job name, the sanitized business key, and the scene or shard identifier; the framework injects tracing context, and business code must not hand-assemble trace fields.
-- **LOG-METRICS-001** **[REQUIRED][BASELINE]** — Do not replace metrics, alerts, or distributed tracing with logs, and do not emit one `INFO` record per occurrence for high-frequency recurring events.
+- **LOG-METRICS-001** **[REQUIRED][BASELINE]** — Do not replace metrics, alerts, or tracing with logs. Aggregate, rate-limit, or sample high-frequency recurring operational records rather than emitting `INFO` per occurrence or escalating to `WARN` to bypass controls; aggregates retain scene, time window, count, and outcome. Explicit per-event audit requirements must use a controlled audit channel without sampling or loss.
 
 ## Sensitive data and masking
 

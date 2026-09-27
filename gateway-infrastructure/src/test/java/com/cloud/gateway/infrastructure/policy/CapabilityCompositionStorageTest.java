@@ -8,12 +8,12 @@ import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
 
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
 import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
-import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
+import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
 import com.cloud.gateway.infrastructure.policy.mapstruct.AccessSnapshotDocumentMapStructMapperImpl;
 
@@ -199,8 +199,8 @@ class CapabilityCompositionStorageTest {
 
     private static CapabilityComposition configuration(boolean reverse) {
         var id = new CapabilityBundleId("standard");
-        var bundle = new CapabilityBundle(id, java.util.List.of(new RateLimitPolicy(List.of(
-                new RateLimitRule("read-quota", RateLimitDimension.ENDPOINT, 20, 10, RateLimitMode.EXACT)), RedisFailureMode.CLOSED), new TimeoutPolicy(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3)), new HeaderPolicy(new LinkedHashSet<>(reverse ? List.of(RequestHeader.CLIENT_ID, RequestHeader.APP_ID)
+        var bundle = new CapabilityBundle(id, java.util.List.of(new RateLimitConfig(List.of(
+                new RateLimitRule("read-quota", RateLimitDimension.ENDPOINT, 20, 10, RateLimitMode.EXACT)), RedisFailureMode.CLOSED), new TimeoutConfig(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3)), new HeaderConfig(new LinkedHashSet<>(reverse ? List.of(RequestHeader.CLIENT_ID, RequestHeader.APP_ID)
                         : List.of(RequestHeader.APP_ID, RequestHeader.CLIENT_ID)),
                         Map.of("X-Gateway", "v1"), new LinkedHashSet<>(reverse ? List.of("X-A", "X-B") : List.of("X-B", "X-A")),
                         new CredentialForwarding(AuthorizationHeaderForwardingMode.STRIP, CookieForwardingMode.ALLOW_LIST,

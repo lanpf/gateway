@@ -20,11 +20,11 @@
 - **ARCH-MODULE-APPLICATION-001** **[REQUIRED][TOPIC]** — `<service>-application` orchestrates write use cases and read-only queries.
 - **ARCH-MODULE-INFRA-001** **[REQUIRED][TOPIC]** — `<service>-infrastructure` contains technical adapters, persistence abstractions, and technology-neutral shared conversions, but no DOs or conversion mappers tied to a concrete persistence technology.
 - **ARCH-MODULE-TECH-001** **[REQUIRED][TOPIC]** — Concrete persistence, scheduler, and message implementations live in `<service>-infrastructure-persistence-<technology>`, `<service>-infrastructure-scheduler-<technology>`, and `<service>-infrastructure-message-<technology>` modules.
-- **ARCH-MODULE-TECH-002** **[REQUIRED][TOPIC]** — A persistence implementation module also hosts that technology stack's DOs, DO conversion mappers, persistence repositories, SQL/XML, and assembly.
+- **ARCH-MODULE-TECH-002** **[REQUIRED][TOPIC]** — A persistence implementation module owns that stack's DOs, DO conversion mappers, repositories, and SQL/XML loading, assembly, and verification; physical resource placement follows the project configuration directory rules.
 - **ARCH-MODULE-INTERFACES-001** **[REQUIRED][TOPIC]** — `<service>-interfaces` implements protocol-neutral Facades and hosts REST, RPC, and message subscription adapters.
 - **ARCH-MODULE-CLIENT-001** **[REQUIRED][TOPIC]** — `<service>-openfeign-client` provides the OpenFeign client for the service API.
 - **ARCH-MODULE-BOOT-001** **[REQUIRED][TOPIC]** — `<service>-boot` starts, configures, and packages the service.
-- **ARCH-MODULE-INTEGRATION-TESTS-001** **[REQUIRED][TOPIC]** — `<service>-integration-tests` is a standalone test module for cross-module, full-auto-configuration, and real database or middleware integration tests; production modules must not depend on it.
+- **ARCH-MODULE-INTEGRATION-TESTS-001** **[REQUIRED][TOPIC]** — The standalone `<service>-integration-tests` module verifies collaboration among real implementations from multiple modules, full auto-configuration, and real databases or middleware. Merely referencing another module's interfaces or DTOs does not make a test an integration test; production modules must not depend on this module.
 
 ## Package structure
 
@@ -59,6 +59,7 @@
 - **ARCH-PROJECT-CONFIG-001** **[REQUIRED][TOPIC]** — Create a root-level `config/` directory beside service modules as the preferred home for independently updateable resources.
 - **ARCH-PROJECT-CONFIG-003** **[DEFAULT][TOPIC]** — Prefer the project-root `config/` directory for project-level application configuration, MyBatis SQL/XML, database schema or migrations, Dubbo XML, and other independently updateable resources.
 - **ARCH-PROJECT-CONFIG-PACKAGING-001** **[REQUIRED][TOPIC]** — Do not package an independently updateable configuration resource in a module artifact merely because that module assembles the capability.
+- **ARCH-PROJECT-CONFIG-COMPAT-001** **[REQUIRED][TOPIC]** — Associate external SQL, mappings, schema, and other configuration resources with application versions and verify compatibility before deployment; independent deployment never removes code-version compatibility requirements.
 - **ARCH-PROJECT-CONFIG-002** **[REQUIRED][TOPIC]** — Load root-level `config/` resources explicitly through Spring or technology-specific location settings and make build, deployment, and local startup provide and validate them; package a resource under a module only when external loading is unsupported, code and resource versions are inseparable, or the artifact must be self-contained.
 - **CONFIG-DEFAULT-001** **[REQUIRED][TOPIC]** — When a `*Properties` type already provides a default value and the configuration file does not change it, the configuration file must not restate the property; configuration files carry only explicit decisions that differ from code defaults and externally varying values.
 - **CONFIG-PLACEHOLDER-001** **[REQUIRED][TOPIC]** — Configuration properties must not introduce environment-variable placeholders by default and must not require the deployment environment to provide a variable by default; when injection is genuinely needed, the deployment configuration or a dedicated profile carries it, and a missing value must fail fast.

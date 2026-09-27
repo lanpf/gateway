@@ -3,7 +3,7 @@ package com.cloud.gateway.domain.capability.header.rules;
 import com.cloud.framework.core.validation.Require;
 
 import com.cloud.framework.core.RequestHeader;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.common.DomainException;
 
 import java.util.Set;
@@ -29,7 +29,7 @@ public record HeaderAdmissionRules(
         return new HeaderAdmissionRules(Set.of(), Set.of(), Set.of());
     }
 
-    public void validate(HeaderPolicy policy) {
+    public void validate(HeaderConfig policy) {
         if (policy == null) {
             return;
         }
@@ -40,7 +40,7 @@ public record HeaderAdmissionRules(
     private void doValidate(String header, Set<String> deny) {
         String normalized = HeaderNameRules.normalize(header);
         boolean admitted = extra.contains(normalized)
-                || normalized.startsWith(HeaderPolicy.GATEWAY_PREFIX);
+                || normalized.startsWith(HeaderConfig.GATEWAY_PREFIX);
         if (RequestHeader.fromName(header).isPresent() || !admitted || deny.contains(normalized)) {
             throw DomainException.invalidObjectField();
         }

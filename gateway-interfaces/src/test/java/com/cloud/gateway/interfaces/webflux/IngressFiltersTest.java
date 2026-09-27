@@ -1,6 +1,6 @@
 package com.cloud.gateway.interfaces.webflux;
 
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityConfig;
+import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
 
 import com.cloud.gateway.application.ingress.CapabilityRegistration;
 
@@ -13,13 +13,13 @@ import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityResolver;
+import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
 import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
 import com.cloud.gateway.domain.capability.runtime.HeaderApplyCapability;
 import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.runtime.TimeoutCapability;
-import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.*;
 import com.cloud.gateway.domain.ingress.access.AccessEvaluator;
@@ -55,7 +55,7 @@ class IngressFiltersTest {
     private static final CapabilityBundleId TIMEOUT_BUNDLE = new CapabilityBundleId("public-read");
     private static final CapabilityBindingId TIMEOUT_BINDING = new CapabilityBindingId("all-ingress");
     /** Long enough not to race the assertion, short enough to keep the suite fast. */
-    private static final TimeoutPolicy TIMEOUT = new TimeoutPolicy(
+    private static final TimeoutConfig TIMEOUT = new TimeoutConfig(
             Duration.ofMillis(20), Duration.ofMillis(30), Duration.ofMillis(50));
 
     @Test
@@ -67,7 +67,7 @@ class IngressFiltersTest {
         PreparationStageCommandService preparation = new PreparationStageCommandService(() -> {
             captures.incrementAndGet();
             return new RevisionedAccessSnapshot(snapshot, new Revision("source"));
-        }, new SnapshotEndpointMatchSource(), new CapabilityExecutionCommandService(new CapabilityResolver(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()),
+        }, new SnapshotEndpointMatchSource(), new CapabilityExecutionCommandService(new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()),
                 planner(), List.of(new RateLimitCapabilityExecutor(planned -> {
             quotas.incrementAndGet();
             return CompletableFuture.completedFuture(RateLimitDecision.allowed(null, null, 1));
@@ -233,7 +233,7 @@ class IngressFiltersTest {
             throw new AssertionError("no client verification expected");
         }, new AccessEvaluator(), Clock.systemUTC());
         CapabilityExecutionCommandService capabilities = new CapabilityExecutionCommandService(
-                new CapabilityResolver(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), planner(), List.of(new RateLimitCapabilityExecutor(quotas),
+                new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), planner(), List.of(new RateLimitCapabilityExecutor(quotas),
                         new TimeoutCapabilityExecutor(), new HeaderApplyCapabilityExecutor()));
         return new IngressAdmissionGlobalFilter(new IngressAdmissionCommandService(access,
                 new AdmissionStageCommandService(capabilities)),
@@ -246,8 +246,8 @@ class IngressFiltersTest {
      * request reaches it, so the two lists must be kept in step here as well as in the configuration.
      */
     private static List<CapabilityRegistration<?>> planner() {
-        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitConfigDefinition.KEY)), new CapabilityRegistration<>(new TimeoutCapability(), config -> config.get(com.cloud.gateway.domain.capability.resilience.TimeoutConfigDefinition.KEY)),
-                new CapabilityRegistration<>(new HeaderApplyCapability(), config -> config.get(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.KEY)));
+        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicyComposer.INSTANCE)), new CapabilityRegistration<>(new TimeoutCapability(), config -> config.get(com.cloud.gateway.domain.capability.resilience.TimeoutPolicyComposer.INSTANCE)),
+                new CapabilityRegistration<>(new HeaderApplyCapability(), config -> config.get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE)));
     }
 
     private static CapabilityResponseWriter responses(RequestQuotaGuard quotas) {
@@ -311,7 +311,7 @@ class IngressFiltersTest {
     }
 
     /**
-     * A timeout bundle behind a globally scoped binding, so {@code CapabilityResolver} matches it for
+     * A timeout bundle behind a globally scoped binding, so {@code CapabilityPolicyAssembler} matches it for
      * any endpoint. The bundle id and the binding id are deliberately different values: they are two
      * identities, and the composition rejects a bundle whose map key disagrees with its own id.
      */

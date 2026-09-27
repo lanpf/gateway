@@ -13,9 +13,9 @@ gateway 将外部不可信请求转换为受控入口请求。请求生命周期
 ## 协作契约
 
 - 外部 App/Client 标识使用 gateway v1 协议。App 声明只证明匹配到 ENABLED 配置；可信 ClientId 仅由有效凭据恢复。客户端版本是非可信声明。
-- 有限的共享自定义 Header（CONTEXT/SIGNATURE）由 [framework-core RequestHeader](../../framework/docs/RESPONSIBILITIES.md) 枚举声明。gateway 管理名称扩展和禁止 set/remove 名单，TrustedHeaderResolver 仅按固定名称输出六种可信事实。HeaderPolicy 使用 trustedHeaders 集合，不支持重命名映射。API、存储和本地配置统一使用枚举选择。
+- 有限的共享自定义 Header（CONTEXT/SIGNATURE）由 [framework-core RequestHeader](../../framework/docs/RESPONSIBILITIES.md) 枚举声明。gateway 管理名称扩展和禁止 set/remove 名单，TrustedHeaderResolver 仅按固定名称输出六种可信事实。HeaderConfig 使用 trustedHeaders 集合，不支持重命名映射。API、存储和本地配置统一使用枚举选择。
 - AccessGrantedContext 携带 VerifiedApp（appId、platform）、可选的 VerifiedClient（clientId、credentialId、verificationMode、verifiedAt）与可选的完整 AuthenticatedSubject；v1 决定保留 issuer 与 authenticationExpiresAt，不构造裁剪值对象。未验证的 Client 声明不进入上下文；入口获准不替代下游最终业务授权。快照版本记录在 AccessDecision 上。AuthenticatedSubject.authenticationExpiresAt 在 Host 路径来自已认证 Token exp，在 Browser 路径来自收到验证响应时刻加剩余 idle TTL，不是会话绝对期限。
-- gateway.headers 在启动时生成不可变 HeaderAdmissionRules；保存、发布、快照编码/加载均校验名称准入及操作限制。HeaderPolicy 随快照动态更新，但部署规则当前变更需重启；不提供独立规则热刷新。此限制避免运行请求混用未经联合校验的规则和策略。
+- gateway.headers 在启动时生成不可变 HeaderAdmissionRules；保存、发布、快照编码/加载均校验名称准入及操作限制。HeaderConfig 随快照动态更新，但部署规则当前变更需重启；不提供独立规则热刷新。此限制避免运行请求混用未经联合校验的规则和策略。
 - 未发布阶段直接破坏式更新，不注册历史 Header 名称、LEGACY 分类或兼容映射，也不专门清除历史名称。未验签 Client 声明不能转为可信 CLIENT_ID。user-auth/framework-starter 读取逻辑迁移仍暂缓，现有下游必须迁移后才能按新契约协作；本次不改动这两个工程。历史签名算法按既定需求保留，与 Header 历史名称无关。
 - Host Session 使用 JWT/JWK 或 Reference Token introspection，统一恢复 subjectId/sessionId；验证 issuer、时间、audience、scope 和必需声明。两种技术路径不泄露到领域上下文。
 - 端点的 requiredAudiences/requiredScopes 是可选的附加访问要求（子集 AND 校验），不替代认证阶段校验；管理入口最低要求为 REQUIRED 主体、admin scope 和 gateway audience。
@@ -35,7 +35,7 @@ v1 交付聚焦阶段一入口准入：三段式固定管道（准备/接入/准
 
 PREALLOCATED、动态插件、任意脚本、业务权限判定、全局瞬时撤销不属于本期能力。
 
-能力配置与运行模型分别位于 domain.capability.configuration / runtime。有效配置统一为 EffectiveCapabilityConfig，application 的固定 CapabilityRegistration 每次绑定当前配置，生成直接携带 N 的请求级 CapabilityPlanningEntry；无状态 Planner 不引用 EffectiveCapabilityConfig。有效配置通过代码注册的类型化键读取，配置定义持有合并、默认值、同层竞争及跨 Bundle 校验规则。应用服务构造时双向检查运行能力与执行器，生产装配校验配置／运行目录一致；编解码器校验配置／协议目录一致。Bundle 的 API／配置载荷改为 capabilities 容器，旧 schema 不兼容，示例快照摘要已同步更新；执行点、签名、配额键和 Header 安全语义不变。
+能力配置与运行模型分别位于 domain.capability.configuration / runtime。有效配置统一为 EffectiveCapabilityPolicies，application 的固定 CapabilityRegistration 每次绑定当前非空 Effective*Policy，生成直接携带 P policy 的请求级 CapabilityPlanningEntry；无状态 Planner 不引用 EffectiveCapabilityPolicies。生效策略通过已注册 Composer 类型化读取，不再提供独立 Key；Composer 仅声明类型与组合行为。同层竞争由独立累加声明判定，全量配置约束在保存／发布及组装前校验，不属于 Composer 接口。应用服务构造时双向检查运行能力与执行器，生产装配校验配置／运行目录一致；编解码器校验配置／协议目录一致。Bundle 的 API／配置载荷改为 capabilities 容器，旧 schema 不兼容，示例快照摘要已同步更新；执行点、签名、配额键和 Header 安全语义不变。
 
 管理端点最低访问要求在启动时对当前快照校验；运行期安全链继续独立执行同一领域最低授权规则。该启动校验不等同于后续每次发布的管理端点配置审查，也不替代运行期纵深保护。
 
@@ -46,6 +46,34 @@ PREALLOCATED、动态插件、任意脚本、业务权限判定、全局瞬时�
 ## 验收边界
 
 当前模型以以上交付状态及 DOMAIN §5.3 为准；下方按日期保留的演进记录只描述当时实现，不定义当前执行点、事实或框架选型。
+
+### Composer 接口与配置校验分离（2026-09-28）
+
+CapabilityPolicyComposer 仅保留 capabilityId、configType、policyType、compose；移除 conflictsAtSamePriority、validateConfigurations、checked。删除 EffectiveCapabilityKey，策略容器改用同一注册 Composer 实例读取并检查 policyType，保留标识冒用与错误类型拒绝。本轮优先完成接口定义，CapabilityConfigRegistry 仍保留，未同时合并到 Assembler。
+
+同层竞争按注册时独立声明的 cumulativeCapabilities 判定，默认拒绝同层不同来源竞争，限流明确允许累加。全量约束通过独立 compositionValidation 回调执行，接收不可变完整 Bundle 集合；限流规则身份全局唯一与 EXACT 约束由 RateLimitConfig.validateComposition 承载，同时被生效限流策略复用。保存、发布、存储编解码和请求组装前的全量校验链不变，未命中配置仍校验。不新增 Descriptor／Validator 接口或模块依赖，HTTP／Nacos 字段及快照摘要格式不变。
+
+按 develop-service / refactor-service 的 ARCH-DOMAIN-COHESION-001、ARCH-SUBSTANTIVE-LAYERING-001、ARCH-DEPENDENCY-AUDIT-001 复核能力组装及配置保存／编解码链：业务约束留在领域，协议树转换仍由已有独立 MapStruct 契约及编解码适配器完成，application 不接管规则。范围外的其他管理 Controller HTTP 注册缺口及下游 Header 迁移仍保持原状态。
+
+Java 17 下 `mvn -o -B clean test -q`：401 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。新增测试覆盖未绑定 Bundle 中的重复规则、独立累加声明及防御性复制、全量校验与 compose 分离；现有扩展能力、同层冲突和存储往返测试继续通过。未运行真实中间件冒烟，未提交，其他在途修改保留。
+
+### 策略组装与组合职责收敛（2026-09-27）
+
+CapabilityResolver 更名为 CapabilityPolicyAssembler，CapabilityConfigDefinition 更名为 CapabilityPolicyComposer<C, P>，内建实现为 HeaderPolicyComposer、TimeoutPolicyComposer、RateLimitPolicyComposer。方法分别为 assemble 与 compose。移除 Registry.resolve 中间组装入口及重复的选中配置校验；Assembler 校验完整配置、匹配并去重排序 Bundle、直接调用各 Composer。Registry 保留注册、类型检查和组合约束分派，不再生成策略集合。
+
+为减少层次，Composer 保留必要的类型信息与独立组合校验钩子，不再拆出 Descriptor／Merger／Validator。其 compose 只消费有序配置，不依赖 Bundle、身份或槽位；新增能力仍通过注册扩展，通用容器、Assembler 与 Planner 不增加具体能力分支。HTTP／Nacos 字段、摘要格式、错误码和执行行为保持不变。
+
+按 refactor-service / develop-service 的 ARCH-DOMAIN-COHESION-001、ARCH-SUBSTANTIVE-LAYERING-001、ARCH-DEPENDENCY-AUDIT-001 复查入口→能力应用服务→Assembler／Composer→执行器，以及保存／编解码→Registry 校验链：组合规则留在 domain，应用编排及协议转换归属不变，无新增模块依赖。原有其他管理 Controller 的 HTTP 注册缺口保持范围外，不作扩大修复。
+
+Java 17 下 `mvn -o -B clean test -q`：398 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。扩展能力的策略组装、执行、编解码往返测试继续通过；新增测试覆盖 null 配置不可被覆盖隐藏、未命中 Bundle 仍需校验。集成测试仅编译，未运行真实中间件冒烟；未提交，保留其他在途修改。
+
+### 原始配置与生效策略分离（2026-09-27）
+
+Bundle 保存 RateLimitConfig、HeaderConfig、TimeoutConfig；解析后分别得到 EffectiveRateLimitPolicy、EffectiveHeaderPolicy、EffectiveTimeoutPolicy，由 EffectiveCapabilityPolicies 统一承载。限流保留多组配置及各组故障模式；Header 为单一安全配置；未配置超时由非空策略内部表达，不生成执行单元。Capability 泛型声明对应生效策略，统一使用 PlannableCapability<P>，不增加单槽位／多槽位接口。类型化键按具体策略类校验，移除列表专用键和未检查的泛型转换。
+
+依照 develop-service / refactor-service 保持领域默认值、合并和不变量在 domain，绑定与执行编排在 application，协议适配层仅提取配置应用转发计划。本轮没有新增模块依赖；HTTP／Nacos 结构、管理路径、限流配额键和快照摘要格式不变。
+
+Java 17 下 `mvn -o -B clean test -q`：396 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 及 `git diff --check` 通过。新增 5 项测试覆盖默认策略、限流多组故障模式、单值覆盖、类型和集合不变量、未配置超时不得生成预算。集成测试仅编译，未运行真实中间件冒烟；未提交，保留其他在途修改。
 
 ### 能力组合管理保存接入（2026-09-26）
 

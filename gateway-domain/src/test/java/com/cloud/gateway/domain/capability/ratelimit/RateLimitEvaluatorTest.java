@@ -22,7 +22,7 @@ class RateLimitEvaluatorTest {
 
     @Test
     void shouldSelectEveryApplicableRuleAndDeduplicateAcrossGroupsWithoutMutatingApplied() {
-        RateLimitPolicy group = new RateLimitPolicy(List.of(rule("ip", RateLimitDimension.IP, 1),
+        RateLimitConfig group = new RateLimitConfig(List.of(rule("ip", RateLimitDimension.IP, 1),
                 rule("client", RateLimitDimension.CLIENT, 2)), RedisFailureMode.OPEN_WITH_LOCAL);
         java.util.Set<RateLimitRuleId> applied = new java.util.HashSet<>();
         List<ApplicableQuota> selected = RateLimitEvaluator.applicable(List.of(group, group),
@@ -39,7 +39,7 @@ class RateLimitEvaluatorTest {
 
     @Test
     void shouldTreatMissingNullEmptyAndWhitespaceDimensionsIdentically() {
-        RateLimitPolicy group = new RateLimitPolicy(List.of(rule("client", RateLimitDimension.CLIENT, 1)), null);
+        RateLimitConfig group = new RateLimitConfig(List.of(rule("client", RateLimitDimension.CLIENT, 1)), null);
         java.util.Map<RateLimitDimension, String> dimensions = new java.util.EnumMap<>(RateLimitDimension.class);
         assertTrue(RateLimitEvaluator.applicable(List.of(group), dimensions, false, java.util.Set.of()).isEmpty());
         for (String value : java.util.Arrays.asList(null, "", " ", "\t", "\u2003")) {
@@ -81,17 +81,17 @@ class RateLimitEvaluatorTest {
                 () -> new RateLimitRule("x", RateLimitDimension.IP, 1, 0, RateLimitMode.EXACT));
         assertThrows(DomainException.class,
                 () -> new RateLimitRule("x", RateLimitDimension.IP, 1, 1, null));
-        assertThrows(DomainException.class, () -> new RateLimitPolicy(List.of(
+        assertThrows(DomainException.class, () -> new RateLimitConfig(List.of(
                 rule("same", RateLimitDimension.APP, 1), rule("same", RateLimitDimension.IP, 2)), null));
         assertThrows(IllegalArgumentException.class, () -> RateLimitMode.valueOf("PREALLOCATED"));
-        assertEquals(RedisFailureMode.CLOSED, new RateLimitPolicy(null, null).failureMode());
+        assertEquals(RedisFailureMode.CLOSED, new RateLimitConfig(null, null).failureMode());
     }
 
     @Test
     void shouldDefensivelyCopyRules() {
         ArrayList<RateLimitRule> source = new ArrayList<>();
         source.add(rule("one", RateLimitDimension.IP, 1));
-        RateLimitPolicy rules = new RateLimitPolicy(source, null);
+        RateLimitConfig rules = new RateLimitConfig(source, null);
         source.clear();
         assertEquals(1, rules.rules().size());
         assertThrows(UnsupportedOperationException.class, () -> rules.rules().clear());

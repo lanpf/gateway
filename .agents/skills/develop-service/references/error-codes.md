@@ -24,7 +24,7 @@
 
 - **ERROR-DOMAIN-COMMON-001** **[REQUIRED][TOPIC]** — Prefix shared domain errors with `DOMAIN_`; fix local code `000` as `DOMAIN_ENTITY_ID_INVALID`.
 - **ERROR-AGGREGATE-001** **[REQUIRED][TOPIC]** — Prefix aggregate errors with the aggregate name; the first two are `{AGGREGATE}_NOT_FOUND` and `{AGGREGATE}_ALREADY_EXISTS`.
-- **ERROR-ENUM-PLACEMENT-001** **[REQUIRED][TOPIC]** — Error enums live in the module of the layer that throws them: domain error enums in domain, application error enums in application, and infrastructure error enums in the owning infrastructure module.
+- **ERROR-ENUM-PLACEMENT-001** **[REQUIRED][TOPIC]** — Error enums live in the module owning their semantics: domain errors in domain, application errors in application, and infrastructure errors in the corresponding infrastructure module. An adapter translating and throwing a domain/application exception does not change that ownership.
 - **ERROR-ENUM-NAMING-001** **[REQUIRED][TOPIC]** — Organize and name error enums by owning aggregate, technical mechanism, or the shared-domain segment; do not create one enum mixing code segments from different layers.
 - **ERROR-UNIQUENESS-001** **[REQUIRED][TOPIC]** — A complete error code is globally unique within one deployment system; a local code need only be unique within its service prefix.
 - **ERROR-RANGE-001** **[REQUIRED][TOPIC]** — Unallocated complete aggregate ranges remain available, but unused codes inside an assigned aggregate range remain owned by that aggregate and must not be reassigned.

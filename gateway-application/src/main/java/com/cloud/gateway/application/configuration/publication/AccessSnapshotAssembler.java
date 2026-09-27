@@ -19,7 +19,7 @@ public final class AccessSnapshotAssembler {
                                           Instant businessTime) {
         content.capabilities().validate(content.apps(), content.clients(), content.endpoints(), capabilities);
         content.capabilities().bundles().values()
-                .forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.INSTANCE).orElse(null)));
+                .forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).orElse(null)));
         return new IngressSnapshot(version, content, hasher.hash(content), businessTime);
     }
 

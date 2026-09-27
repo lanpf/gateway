@@ -14,7 +14,7 @@ class HeaderValueRulesTest {
     void shouldAcceptEmptyAndBoundedValuesWithoutTrimming() {
         for (String value : List.of("", " ", "value", "a".repeat(4096))) {
             assertDoesNotThrow(() -> HeaderValueRules.validate(value));
-            HeaderPolicy policy = new HeaderPolicy(Set.of(), Map.of("X-Gateway-Value", value), Set.of(), null);
+            HeaderConfig policy = new HeaderConfig(Set.of(), Map.of("X-Gateway-Value", value), Set.of(), null);
             assertEquals(value, policy.setHeaders().get("X-Gateway-Value"));
         }
     }
@@ -25,8 +25,8 @@ class HeaderValueRulesTest {
         assertThrows(DomainException.class, () -> HeaderValueRules.validate("a".repeat(4097)));
         Map<String, String> values = new HashMap<>();
         values.put("X-Gateway-Value", null);
-        assertThrows(DomainException.class, () -> new HeaderPolicy(Set.of(), values, Set.of(), null));
-        assertThrows(DomainException.class, () -> new HeaderPolicy(Set.of(),
+        assertThrows(DomainException.class, () -> new HeaderConfig(Set.of(), values, Set.of(), null));
+        assertThrows(DomainException.class, () -> new HeaderConfig(Set.of(),
                 Map.of("X-Gateway-Value", "a".repeat(4097)), Set.of(), null));
     }
 
@@ -36,7 +36,7 @@ class HeaderValueRulesTest {
             if (Character.isISOControl(codePoint)) {
                 String value = "before" + (char) codePoint + "after";
                 assertThrows(DomainException.class, () -> HeaderValueRules.validate(value));
-                assertThrows(DomainException.class, () -> new HeaderPolicy(Set.of(),
+                assertThrows(DomainException.class, () -> new HeaderConfig(Set.of(),
                         Map.of("X-Gateway-Value", value), Set.of(), null));
             }
         }

@@ -27,7 +27,7 @@ import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
@@ -90,7 +90,7 @@ class NacosPolicyDefinitionRepositoriesTest {
         var repository = new NacosCapabilityCompositionDefinitionRepository(operations, properties, codec);
         RevisionedAccessDefinition<CapabilityComposition> observed = repository.load();
         var id = new CapabilityBundleId("standard");
-        var changed = new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new TimeoutPolicy(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
+        var changed = new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new TimeoutConfig(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
         assertNotNull(repository.compareAndSet(observed.sourceRevision(), changed));
         assertNull(repository.compareAndSet(observed.sourceRevision(), empty));
         assertEquals(changed, repository.load().value());

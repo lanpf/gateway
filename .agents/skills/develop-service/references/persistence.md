@@ -9,7 +9,7 @@
 ## Boundary, concurrency, and transactions
 
 - **INFRA-REPOSITORY-001** **[REQUIRED][TOPIC]** — Repository adapters translate domain repository contracts to data access, while persistence repositories expose data-access capability only.
-- **INFRA-PERSISTENCE-001** **[REQUIRED][TOPIC]** — Keep concrete JPA, MyBatis, or MyBatis-Plus repositories, DOs, DO conversion mappers, mapper statements, and technical assembly in the matching persistence implementation module.
+- **INFRA-PERSISTENCE-001** **[REQUIRED][TOPIC]** — The matching persistence implementation module owns concrete JPA, MyBatis, or MyBatis-Plus repositories, DOs, DO conversion mappers, and SQL/XML loading, assembly, and verification. Physical resource placement follows the layered-service configuration rules.
 - **INFRA-DO-001** **[REQUIRED][TOPIC]** — Do not share DO classes across persistence technologies; each JPA, MyBatis, or MyBatis-Plus implementation module owns its DOs with only that technology's required mapping annotations, and DO names follow the naming rules.
 - **INFRA-MAPPER-001** **[REQUIRED][TOPIC]** — Each persistence implementation module owns the conversion mappers between domain objects or application read models and that technology's DOs; do not place converters that depend on concrete DOs in shared infrastructure.
 - **PERSISTENCE-SELECTION-001** **[REQUIRED][TOPIC]** — Use one persistence technology in each persistence implementation module and assemble only one implementation of a repository in a runtime artifact; alternative JPA, MyBatis, and MyBatis-Plus implementations may live in separate modules.
@@ -37,7 +37,7 @@
 
 - **PERSISTENCE-PAGE-001** **[REQUIRED][TOPIC]** — Paginate with a stable unique order and never rely on unspecified database order.
 - **PERSISTENCE-CURSOR-001** **[DEFAULT][TOPIC]** — Prefer cursors for deep pagination or continuous scans.
-- **PERSISTENCE-QUERY-001** **[REQUIRED][TOPIC]** — Support frequent and large-table conditions, ordering, and joins with verified indexes and query plans; prohibit N+1 access and unbounded result sets.
+- **PERSISTENCE-QUERY-001** **[REQUIRED][TOPIC]** — Design indexes by access patterns, data scale, and execution plans; verify plans and acceptable performance before adding high-frequency or large-table queries rather than requiring an index per predicate. Prohibit N+1 access and unbounded result sets.
 - **PERSISTENCE-JPA-001** **[REQUIRED][TOPIC]** — Do not rely on Open Session in View to hide JPA lazy loading; design aggregate fetch boundaries and read projections explicitly.
 - **PERSISTENCE-MYBATIS-001** **[REQUIRED][TOPIC]** — Configure the MyBatis-Plus database type explicitly and fail on unsupported types; keep custom interceptors ordered and verify they cannot bypass pagination or naming rules.
 
@@ -47,4 +47,5 @@
 - **PERSISTENCE-DATA-INTEGRITY-001** **[ADVISORY][TOPIC]** — A shared `DataIntegrityViolationException` catch may cover JPA and Spring-translated MyBatis `DuplicateKeyException`, which is a subclass of it.
 - **PERSISTENCE-DATA-INTEGRITY-002** **[REQUIRED][TOPIC]** — After the shared catch, confirm the violation is the intended unique constraint by known constraint name, SQLState/vendor code, or a business-key reread; never classify not-null, foreign-key, or check-constraint violations as duplicate keys.
 - **PERSISTENCE-JPA-FLUSH-001** **[REQUIRED][TOPIC]** — To catch a JPA unique-constraint failure inside an adapter, flush within that catch boundary; otherwise translate the deferred exception at a boundary that covers transaction commit.
-- **PERSISTENCE-DUPLICATE-LOG-001** **[REQUIRED][TOPIC]** — Log every unique-constraint conflict once at the translation boundary with constraint/scene, sanitized business key, and outcome; use INFO or WARN for expected idempotency and ERROR plus rethrow for unknown or unclassified integrity failures.
+- **PERSISTENCE-IDEMPOTENT-RECOVERY-001** **[REQUIRED][TOPIC]** — After a unique-constraint failure, never reread and report idempotent success using a failed or rollback-only transaction or an unreliable persistence context. Especially after JPA/Hibernate persistence exceptions, end the failed transaction before verifying existing outcomes through a valid new transaction or independent query boundary. A nested call inside the failed transaction alone is not recovery; propagate verification failures.
+- **PERSISTENCE-DUPLICATE-LOG-001** **[REQUIRED][TOPIC]** — Record unique-constraint conflicts once at the translation boundary with constraint/scene, sanitized business key, and outcome. Severity, recurring-event aggregation, and audit exceptions follow the logging rules; rethrow unknown or unclassified integrity failures.

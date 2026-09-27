@@ -1,9 +1,9 @@
-<!-- engineering-standards:begin version=3.1.6 -->
+<!-- engineering-standards:begin version=3.1.7 -->
 ## Shared engineering guidance
 
 Rule markers: [REQUIRED] is release-blocking, [DEFAULT] applies unless a concrete deviation reason is recorded, [ADVISORY] is optional guidance; [BASELINE] rules are preloaded for every change, [TOPIC] rules apply when the affected capability matches.
 
-- **STD-HIERARCHY-001** **[REQUIRED][BASELINE]** — Shared rules apply to every project; service rules additionally apply to service projects, and project-specific authoritative documents may only add or tighten constraints.
+- **STD-HIERARCHY-001** **[REQUIRED][BASELINE]** — Shared rules apply to every project; service rules additionally apply to service projects, and project-specific authoritative documents may only add or tighten constraints. Preload and recheck baseline rules, but apply conditional rules only when their type or technology is relevant; never introduce unnecessary types, modules, or dependencies solely to satisfy an inapplicable rule.
 - **STD-DOCS-001** **[REQUIRED][BASELINE]** — Before changing a service, read the project documentation entry declared by its project guidance, then read every authoritative document routed for the task.
 - **STD-DOMAIN-002** **[REQUIRED][BASELINE]** — Before changing domain boundaries, language, business rules, errors, domain events, or API business semantics, read the service's authoritative domain document.
 - **JAVA-VERSION-001** **[REQUIRED][BASELINE]** — Use Java 17.

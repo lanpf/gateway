@@ -17,7 +17,7 @@
 
 - **JAVA-VALIDATION-REQUIRE-001** **[REQUIRED][TOPIC]** — Business checks express expected business rejections and must throw an exception extending framework-core `BaseException` with a stable business code, through a Require exception supplier or an explicit throw. Tool fallback must preserve that meaning; ordinary technical preconditions must not use business exception suppliers.
 - **JAVA-VALIDATION-COLLECTION-ELEMENT-001** **[DEFAULT][TOPIC]** — In modules depending on framework-core, prefer `FrameworkException.missingCollectionElement()` or `FrameworkException.invalidCollectionElement()` for technical checks of null or invalid collection elements.
-- **JAVA-VALIDATION-API-001** **[DEFAULT][TOPIC]** — For API requests, prefer Jakarta Bean Validation for field-shape constraints; perform business checks in API only when the failure is a business error explicitly promised by the API contract.
+- **JAVA-VALIDATION-API-001** **[DEFAULT][TOPIC]** — Prefer Jakarta Bean Validation for API field-shape constraints; a check returns a business error only when the API contract explicitly promises that error semantics. Execute the check at its responsibility boundary rather than moving it into API or protocol code because the API exposes the error.
 - **JAVA-VALIDATION-LAYER-001** **[REQUIRED][TOPIC]** — Validate rules that depend on domain state, persistence data, or use-case context in application or domain rather than moving them to the protocol-binding layer.
 
 ## Exceptions and logging

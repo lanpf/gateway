@@ -18,10 +18,10 @@
 ## External service calls
 
 - **SERVICE-CALL-EXTERNAL-BOUNDARY-001** **[REQUIRED][TOPIC]** — Confine external service calls to a local adapter boundary in the concrete infrastructure adapter module and use locally owned request and response types that follow the external-payload naming rule; external SDK types, protocol models, and serialization details must not cross into application or domain, and mapping between local and external models is explicit.
-- **SERVICE-CALL-EXTERNAL-PAYLOAD-001** **[REQUIRED][TOPIC]** — Define typed protocol models for fixed-structure external requests and responses; when they use `application/json`, name them `*RequestPayload` and `*ResponsePayload`.
+- **SERVICE-CALL-EXTERNAL-PAYLOAD-001** **[REQUIRED][TOPIC]** — Define typed models for fixed-structure external requests and responses, except the narrowly defined small path/query/header parameter exception; application/json uses `*RequestPayload` and `*ResponsePayload`.
 - **SERVICE-CALL-EXTERNAL-BINDING-001** **[REQUIRED][TOPIC]** — HTTP method and parameter location do not change payload naming; a client adapter, dedicated encoder, or mapper binds payload data to GET query/path/header parameters or POST form/body data.
 - **SERVICE-CALL-EXTERNAL-PAYLOAD-BEHAVIOR-001** **[REQUIRED][TOPIC]** — External-service payloads describe protocol data only and must not implement `queryParams()`, `headers()`, serialization, HTTP parameter assembly, or a dependency on one HTTP client.
-- **SERVICE-CALL-EXTERNAL-PARAMETER-001** **[DEFAULT][TOPIC]** — A client method may declare a small fixed parameter set explicitly when it has no reuse need.
+- **SERVICE-CALL-EXTERNAL-PARAMETER-001** **[DEFAULT][TOPIC]** — A client may directly declare a small fixed set of path/query/header parameters with no reuse need instead of creating a request payload. This exception excludes fixed JSON bodies and responses and never permits assembling fixed fields in a Map.
 
 ## External Map boundaries
 

@@ -8,7 +8,7 @@ import com.cloud.framework.core.naming.Namespaced;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
@@ -252,7 +252,7 @@ class RateLimitIT {
     }
 
     private static RateLimitDecision acquire(Node node, List<RateLimitRule> rules, RedisFailureMode failure) {
-        return node.service().acquire(new QuotaCommand(List.of(new RateLimitPolicy(rules, failure)),
+        return node.service().acquire(new QuotaCommand(List.of(new RateLimitConfig(rules, failure)),
                 Map.of(RateLimitDimension.CLIENT, VALUE), false), new java.util.HashSet<>());
     }
 

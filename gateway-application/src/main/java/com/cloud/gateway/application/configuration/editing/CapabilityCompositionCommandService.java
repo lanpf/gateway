@@ -26,7 +26,7 @@ public final class CapabilityCompositionCommandService {
     public Revision save(SaveCapabilityCompositionCommand command) {
         capabilities.validate(command.capabilityComposition().bundles().values());
         command.capabilityComposition().bundles().values()
-                .forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.INSTANCE).orElse(null)));
+                .forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).orElse(null)));
         return writer.update(repository, command.expectedSourceRevision(), current -> command.capabilityComposition());
     }
 }

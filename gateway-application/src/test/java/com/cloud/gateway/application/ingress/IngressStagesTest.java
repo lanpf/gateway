@@ -1,6 +1,6 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityConfig;
+import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
 
 import com.cloud.gateway.application.ingress.CapabilityRegistration;
 
@@ -15,7 +15,7 @@ import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
 import com.cloud.gateway.domain.capability.runtime.CapabilityExecutionKey;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
@@ -44,7 +44,7 @@ import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityResolver;
+import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
 import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
 import com.cloud.gateway.domain.capability.configuration.*;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
@@ -175,7 +175,7 @@ class IngressStagesTest {
 
         assertInstanceOf(AccessStageOutput.Allowed.class, result.access());
         assertTrue(result.execution().continues());
-        assertNotNull(result.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.KEY));
+        assertNotNull(result.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE));
         assertEquals(1, acquisitions.get());
     }
 
@@ -263,12 +263,12 @@ class IngressStagesTest {
     }
 
     private static CapabilityExecutionCommandService execution(RequestQuotaExecutor quotas) {
-        return new CapabilityExecutionCommandService(new CapabilityResolver(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), planner(),
+        return new CapabilityExecutionCommandService(new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), planner(),
                 List.of(new RateLimitCapabilityExecutor(quotas)));
     }
 
     private static List<CapabilityRegistration<?>> planner() {
-        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitConfigDefinition.KEY)));
+        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicyComposer.INSTANCE)));
     }
 
     private static IngressAdmissionCommandService ingress(RequestQuotaExecutor quotas) {
@@ -299,7 +299,7 @@ class IngressStagesTest {
 
     private static CapabilityComposition composition() {
         CapabilityBundleId id = new CapabilityBundleId("limits");
-        CapabilityBundle bundle = new CapabilityBundle(id, java.util.List.of(new RateLimitPolicy(List.of(
+        CapabilityBundle bundle = new CapabilityBundle(id, java.util.List.of(new RateLimitConfig(List.of(
                 new RateLimitRule("ip-rule", RateLimitDimension.IP, 10, 1, RateLimitMode.EXACT),
                 new RateLimitRule("app-rule", RateLimitDimension.APP, 10, 1, RateLimitMode.EXACT)), null)));
         return new CapabilityComposition(Map.of(id, bundle), List.of(new CapabilityBinding(

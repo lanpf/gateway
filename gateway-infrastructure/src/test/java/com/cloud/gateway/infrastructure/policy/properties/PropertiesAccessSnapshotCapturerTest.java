@@ -15,7 +15,7 @@ import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
 import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
 import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,7 +46,7 @@ class PropertiesAccessSnapshotCapturerTest {
     @Test
     void shouldValidateDeploymentHeadersBeforeExposingLocalSnapshot() {
         CapabilityBundleId id = new CapabilityBundleId("header");
-        HeaderPolicy headers = new HeaderPolicy(Set.of(), Map.of("X-Unregistered", "value"), Set.of(), null);
+        HeaderConfig headers = new HeaderConfig(Set.of(), Map.of("X-Unregistered", "value"), Set.of(), null);
         CapabilityComposition composition = new CapabilityComposition(
                 Map.of(id, new CapabilityBundle(id, java.util.List.of(headers))), List.of());
         assertThrows(DomainException.class, () -> new PropertiesAccessSnapshotCapturer(

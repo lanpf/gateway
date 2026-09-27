@@ -55,9 +55,11 @@ java -jar gateway-boot/target/gateway-boot-0.3.0-SNAPSHOT.jar \
 
 ### 能力组合示例
 
+能力配置类型统一使用 `*Config`，解析结果使用 `Effective*Policy`；这次 Java 模型拆分不改变现有 HTTP／Nacos 字段与快照摘要格式。对应关系及默认值见 [领域设计](docs/DOMAIN.md#3-能力组合与绑定解析)。
+
 以下为本地 `gateway.access-definition.policies` 下的配置片段。先给受管理的公开只读端点添加 `public-read` 标签。Bundle 内统一使用 capabilities 容器；能力标识为精确的注册名称，能力内部字段使用 camelCase，Duration 使用 ISO-8601。Bundle／Binding 外层的本地绑定字段仍使用 kebab-case，Nacos 文档使用 camelCase。
 
-当前注册的能力节点为 `rate-limit`、`timeout`、`header-apply`。新增能力需同时部署配置定义、运行实现和受控编解码注册；未支持的节点会被拒绝。交付边界见 [职责及交付状态](docs/RESPONSIBILITIES.md)。
+当前注册的能力节点为 `rate-limit`、`timeout`、`header-apply`。新增能力需部署策略组合器、必要的独立组合约束、运行实现和受控编解码注册；未支持的节点会被拒绝。交付边界见 [职责及交付状态](docs/RESPONSIBILITIES.md)。
 
 ```yaml
 bundles:

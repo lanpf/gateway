@@ -4,7 +4,7 @@ import com.cloud.framework.core.naming.DefaultResourceNameResolver;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
 import com.cloud.gateway.application.quota.QuotaCommand;
@@ -78,7 +78,7 @@ class RateLimitQuotaAdapterTest {
                 .thenThrow(new RedisConnectionFailureException("unreachable"));
         QuotaCommandService service = new QuotaCommandService(adapter,
                 new LocalRateLimitQuotaAdapter(keys, new RedisRateLimitProperties(), () -> 0L), QuotaObserver.noop());
-        QuotaCommand command = new QuotaCommand(List.of(new RateLimitPolicy(List.of(rule), RedisFailureMode.OPEN_WITH_LOCAL)),
+        QuotaCommand command = new QuotaCommand(List.of(new RateLimitConfig(List.of(rule), RedisFailureMode.OPEN_WITH_LOCAL)),
                 Map.of(RateLimitDimension.CLIENT, "partner"), false);
         assertTrue(service.acquire(command, new HashSet<>()).allowed());
         assertTrue(service.acquire(command, new HashSet<>()).allowed());
