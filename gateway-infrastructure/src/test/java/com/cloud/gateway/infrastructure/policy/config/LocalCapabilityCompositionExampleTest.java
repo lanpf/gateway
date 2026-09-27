@@ -13,6 +13,7 @@ import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.mapstruct.ClientPropertiesMapStructMapper;
+import com.cloud.gateway.infrastructure.policy.mapstruct.ClientPropertiesMapStructMapperImpl;
 import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionPropertiesMapStructMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -70,8 +71,7 @@ class LocalCapabilityCompositionExampleTest {
                 Bindable.of(GatewayPolicyDefinitionProperties.class)).orElseThrow(AssertionError::new);
         var mapper = new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
                 new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))));
-        ClientPropertiesMapStructMapper clients = org.mapstruct.factory.Mappers.getMapper(
-                com.cloud.gateway.infrastructure.policy.mapstruct.ClientPropertiesMapStructMapper.class);
+        ClientPropertiesMapStructMapper clients = new ClientPropertiesMapStructMapperImpl();
         CapabilityCompositionPropertiesMapStructMapper policyConfiguration = new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionPropertiesMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()));
         var content = new IngressContent(
                 mapper.toDomainApps(new AppPropertiesMapStructMapperImpl().toStored(properties.getApps())),
