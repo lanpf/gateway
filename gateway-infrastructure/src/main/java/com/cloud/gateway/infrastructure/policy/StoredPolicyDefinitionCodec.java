@@ -1,11 +1,11 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.domain.policy.header.HeaderRules;
+import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 
 import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -19,10 +19,10 @@ public final class StoredPolicyDefinitionCodec extends PolicyYamlCodec {
             new TypeReference<>() { };
 
     private final StoredAccessSnapshotMapper mapper;
-    private final HeaderRules headerRules;
+    private final HeaderAdmissionRules headerRules;
 
     public StoredPolicyDefinitionCodec(StoredAccessSnapshotMapper mapper, ObjectMapper objectMapper,
-            HeaderRules headerRules) {
+            HeaderAdmissionRules headerRules) {
         super(objectMapper);
         this.mapper = mapper;
         this.headerRules = headerRules;
@@ -31,14 +31,18 @@ public final class StoredPolicyDefinitionCodec extends PolicyYamlCodec {
     public CapabilityComposition decodeCapabilityComposition(String content) {
         return decode(content, StoredCapabilityComposition.class, stored -> {
             CapabilityComposition decoded = mapper.toDomainPolicies(stored);
-            headerRules.validate(decoded);
+            validateHeaderAdmission(decoded);
             return decoded;
         });
     }
 
     public String encodeCapabilityComposition(CapabilityComposition definition) {
-        headerRules.validate(definition);
+        validateHeaderAdmission(definition);
         return encode(mapper.toStoredPolicies(definition));
+    }
+
+    private void validateHeaderAdmission(CapabilityComposition composition) {
+        composition.bundles().values().forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.INSTANCE).orElse(null)));
     }
 
     public EndpointRegistry decodeEndpointRegistry(String content) {

@@ -8,8 +8,8 @@ import com.cloud.gateway.api.facade.admin.definition.EndpointsApiView;
 import com.cloud.gateway.api.facade.admin.definition.SaveEndpointApiCommand;
 import com.cloud.gateway.api.facade.admin.snapshot.SnapshotApiView;
 import com.cloud.gateway.api.facade.admin.snapshot.SnapshotUpdateApiOutput;
-import com.cloud.gateway.api.facade.policy.CapabilityCompositionApiCommand;
-import com.cloud.gateway.api.facade.policy.SaveCapabilityCompositionApiCommand;
+import com.cloud.gateway.api.facade.admin.definition.CapabilityCompositionApiCommand;
+import com.cloud.gateway.api.facade.admin.definition.SaveCapabilityCompositionApiCommand;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -44,6 +44,37 @@ class ApiNamingContractTest {
                 "{\"bundles\":{},\"bindings\":[]}", CapabilityCompositionApiCommand.class);
         assertTrue(composition.bundles().isEmpty());
         assertTrue(command.policies().bindings().isEmpty());
+    }
+
+    @Test
+    void shouldPreserveAndDetachOpenCapabilityPayloads() throws Exception {
+        String document = """
+                {"bundleId":"example","capabilities":{"budget":{"units":8,"labels":["a"]}}}
+                """;
+        CapabilityCompositionApiCommand.BundleApiCommand decoded = json.readValue(
+                document, CapabilityCompositionApiCommand.BundleApiCommand.class);
+        assertEquals(json.readTree(document), json.valueToTree(decoded));
+        SaveCapabilityCompositionApiCommand.CapabilityCompositionApiCommand.BundleApiCommand nested = json.readValue(
+                document, SaveCapabilityCompositionApiCommand.CapabilityCompositionApiCommand.BundleApiCommand.class);
+        assertEquals(json.readTree(document), json.valueToTree(nested));
+
+        List<String> labels = new ArrayList<>(List.of("a"));
+        java.util.Map<String, Object> node = new java.util.HashMap<>();
+        node.put("labels", labels);
+        java.util.Map<String, java.util.Map<String, Object>> nodes = new java.util.HashMap<>();
+        nodes.put("budget", node);
+        CapabilityCompositionApiCommand.BundleApiCommand command =
+                new CapabilityCompositionApiCommand.BundleApiCommand("example", nodes);
+        labels.clear();
+        node.clear();
+        nodes.clear();
+        assertEquals(List.of("a"), command.capabilities().get("budget").get("labels"));
+        assertThrows(UnsupportedOperationException.class, () -> command.capabilities().clear());
+        assertThrows(UnsupportedOperationException.class, () -> command.capabilities().get("budget").clear());
+        List<?> copied = (List<?>) command.capabilities().get("budget").get("labels");
+        assertThrows(UnsupportedOperationException.class, copied::clear);
+        assertThrows(IllegalArgumentException.class, () -> new CapabilityCompositionApiCommand.BundleApiCommand(
+                "example", java.util.Map.of("budget", java.util.Map.of("value", new Object()))));
     }
 
     @Test

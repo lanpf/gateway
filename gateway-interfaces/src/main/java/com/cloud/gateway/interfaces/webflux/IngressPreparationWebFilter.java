@@ -58,7 +58,7 @@ public final class IngressPreparationWebFilter implements WebFilter, Ordered {
                 })).onErrorResume(DomainException.class, error -> reject(exchange, HttpStatus.BAD_REQUEST));
     }
 
-    /** Internal paths and malformed declaration headers never reach the security chain. */
+    /** Internal paths and malformed declaration header never reach the security chain. */
     private static HttpStatus edgeRejection(ServerWebExchange exchange) {
         String path = exchange.getRequest().getPath().value();
         if (path.equals("/internal") || path.startsWith("/internal/")) {

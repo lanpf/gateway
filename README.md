@@ -15,9 +15,9 @@
 | 模块 | 职责 |
 | --- | --- |
 | gateway-api | 管理 Facade、请求/响应与协议常量 |
-| gateway-domain | 身份、端点、Bundle/Binding、Header、签名协议、配额聚合、缓存准入与快照规则 |
+| gateway-domain | 身份、端点、Bundle/Binding、Header、签名协议、配额聚合与快照规则 |
 | gateway-application | 发布/回退/保存、分阶段入口、签名认证、配额及下游治理用例与端口 |
-| gateway-infrastructure | 本地只读配置、规范化序列化、LKG、缓存与熔断适配 |
+| gateway-infrastructure | 本地只读配置、规范化序列化、LKG 适配 |
 | gateway-infrastructure-persistence-nacos | 五份 Definition、完整 Snapshot、CAS、监听及历史 |
 | gateway-infrastructure-coordination-redis | 发布/回退锁与持久回退状态 |
 | gateway-infrastructure-security-spring | Token 解码／introspection、Browser Session、密钥与密码学适配 |
@@ -44,43 +44,37 @@ java -jar gateway-boot/target/gateway-boot-0.3.0-SNAPSHOT.jar \
 
 主要配置入口：
 
-- `gateway.policy-definition`：本地只读 App、Client、端点、凭据、Bundle/Binding。
-- `gateway.policy.nacos`：配置中心 dataId、group、历史与 LKG。
+- `gateway.access-definition`：本地只读 App、Client、端点、凭据、Bundle/Binding。
+- `gateway.access.nacos`：配置中心 dataId、group、历史与 LKG。
 - `gateway.security.access-token`：JWT/JWK 或 Reference introspection，需与 user-auth 一致。
 - `gateway.security.request-signature`：密钥引用解析及时间窗口。
 - `spring.cloud.gateway.server.webflux.routes`：SCG 交付路由，id 与端点 routeId 同值。
-- `gateway.headers`：`extra-headers`、`forbidden-set-headers`、`forbidden-remove-headers`。名称匹配忽略大小写；集合在启动时生成不可变 HeaderRules，变更需重启，不使用可变 Properties 逐请求读取。
+- `gateway.headers`：`extra-headers`、`forbidden-set-headers`、`forbidden-remove-headers`。名称匹配忽略大小写；集合在启动时生成不可变 HeaderAdmissionRules，变更需重启，不使用可变 Properties 逐请求读取。
 
 本机管理路由使用保留 routeId `gateway-admin`，端点必须登记，不能作为代理路由绕过认证。启动验证普通端点引用的实际路由存在。
 
-### 策略组合示例
+### 能力组合示例
 
-以下为本地 `gateway.policy-definition.policies` 下的配置片段。先给受管理的公开只读端点添加 `public-read` 标签；不要把缓存 Bundle 绑定到登录或主体相关端点。Nacos 第五份 Definition 使用对应 camelCase 字段及 ISO-8601 Duration，由管理接口/编码器生成，不能直接复制本地绑定格式。
+以下为本地 `gateway.access-definition.policies` 下的配置片段。先给受管理的公开只读端点添加 `public-read` 标签。Bundle 内统一使用 capabilities 容器；能力标识为精确的注册名称，能力内部字段使用 camelCase，Duration 使用 ISO-8601。Bundle／Binding 外层的本地绑定字段仍使用 kebab-case，Nacos 文档使用 camelCase。
+
+当前注册的能力节点为 `rate-limit`、`timeout`、`header-apply`。新增能力需同时部署配置定义、运行实现和受控编解码注册；未支持的节点会被拒绝。交付边界见 [职责及交付状态](docs/RESPONSIBILITIES.md)。
 
 ```yaml
 bundles:
   ingress-protection:
     bundle-id: ingress-protection
-    rate-limit:
-      on-redis-failure: CLOSED
-      rules:
-        - { rule-id: ingress-ip, dimension: IP, capacity: 100, refill-per-second: 20, mode: EXACT }
+    capabilities:
+      rate-limit:
+        onRedisFailure: CLOSED
+        rules:
+          - { ruleId: ingress-ip, dimension: IP, capacity: 100, refillPerSecond: 20, mode: EXACT }
   public-read:
     bundle-id: public-read
-    timeout: { connect: 1s, read: 3s, total: 5s }
-    circuit-breaker:
-      failure-rate-threshold: 50
-      slow-call-rate-threshold: 50
-      slow-call-duration: 2s
-      minimum-calls: 20
-      sliding-window-size: 50
-      half-open-calls: 5
-      wait-duration: 10s
-      fallback: STALE_CACHE
-    cache: { ttl: 30s, stale-window: 10s, max-body-bytes: 65536, vary-headers: [accept-language] }
-    headers:
-      trusted-headers: [APP_ID, CLIENT_ID]
-      credential-forwarding: { authorization-header: STRIP, cookies: STRIP_ALL }
+    capabilities:
+      timeout: { connect: PT1S, read: PT3S, total: PT5S }
+      header-apply:
+        trustedHeaders: [APP_ID, CLIENT_ID]
+        credentialForwarding: { authorizationHeader: STRIP, cookies: STRIP_ALL }
 bindings:
   - { binding-id: all-ingress, bundle-id: ingress-protection }
   - { binding-id: public-reads, bundle-id: public-read, tags: [public-read] }
@@ -88,28 +82,51 @@ bindings:
 
 Header 节点整体替换默认输出集合，示例没有选择的 Subject/Session 字段不会写入；需要时显式加入。普通 set/remove 的名称必须为 RequestHeader、extra-headers 或 X-Gateway- 前缀之一，再通过独立操作权限校验。标准协议字段不在 RequestHeader 中；仓库 config/application.yml 显式配置禁止设置/删除名单，不会因为加入 extra-headers 而绕过该名单。规则身份 `ingress-ip` 应保持稳定。快照发布前会校验 Bundle、Binding、端点和身份引用，配置错误不会静默降级。
 
-有 MeterRegistry 时采集 `gateway.ingress.requests`、`gateway.ingress.ambiguous_endpoint_match` 与 `gateway.quota.decisions` 指标，固定标签不带调用方、端点或密钥；指标导出和告警由部署侧装配。歧义端点匹配是配置缺陷，只在该指标中对内可见，对外仍统一拒绝。不按每次限流输出 INFO 日志，Redis 故障进入/恢复时记录状态变化。阶段二（缓存、熔断、超时、降级）不属于 v1，无对应指标。
+有 MeterRegistry 时采集 `gateway.ingress.requests`、`gateway.ingress.ambiguous_endpoint_match` 与 `gateway.quota.decisions` 指标，固定标签不带调用方、端点或密钥；指标导出和告警由部署侧装配。歧义端点匹配是配置缺陷，只在该指标中对内可见，对外仍统一拒绝。不按每次限流输出 INFO 日志，Redis 故障进入/恢复时记录状态变化。
 
 ## Definition 与发布
 
 Nacos group 默认为 GATEWAY，环境由 namespace 隔离。准备四份 Definition：
 
 1. gateway-endpoints.yaml
-2. gateway-app-policies.yaml
-3. gateway-client-policies.yaml
-4. gateway-policy-configuration.yaml
+2. gateway-app-capabilities.yaml
+3. gateway-client-capabilities.yaml
+4. gateway-access-configuration.yaml
 
-端点接入状态并入 `gateway-endpoints.yaml`：每个端点条目自带 `access` 节点，不再有独立的 endpoint-access Definition。凭据转发设置由 `gateway-policy-configuration.yaml` 的 HeaderPolicy 承载，端点与 Header 节点都不再声明 `credential-forwarding`。
+端点接入状态并入 `gateway-endpoints.yaml`：每个端点条目自带 `access` 节点，不再有独立的 endpoint-access Definition。凭据转发设置仅由 `gateway-access-configuration.yaml` 中的 `capabilities.header-apply.credentialForwarding` 承载，端点不再单独声明。
 
-完整快照 dataId 为 `gateway-policy.yaml`，本地 LKG 默认为 `data/gateway-policy.yaml`。示例位于 [配置示例目录](gateway-infrastructure-persistence-nacos/src/main/resources/examples)。
+完整快照 dataId 为 `gateway-access.yaml`，本地 LKG 默认为 `data/gateway-access.yaml`。示例位于 [配置示例目录](gateway-infrastructure-persistence-nacos/src/main/resources/examples)。
 
-Admin 基础路径为 `/admin/gateway`；保存只修改 Definition，`POST /snapshot/publish` 显式发布，`POST /snapshot/rollback` 回退。策略组合通过 `PUT /policies/configuration` 保存。请求需通过 App 和管理 Bearer scope/audience 认证；具体载荷见 gateway-api。
+Admin 基础路径为 `/admin/gateway`；`PUT /policies/configuration` 整体保存能力组合 Definition，返回新的 `sourceRevision`，不会自动发布。请求需通过 App 和管理 Bearer scope/audience 认证；具体载荷见 gateway-api。发布／回退是独立用例，管理 HTTP 入口的已验证范围与已知限制见 [交付状态](docs/RESPONSIBILITIES.md#交付状态)。
 
-策略组合 Java 类型统一使用 `CapabilityComposition`；本轮包名与快照返回类型调整不变更部署配置键、管理路径或 dataId。端点主体要求使用 `REQUIRED` / `ANONYMOUS`，旧 `OPTIONAL` 值需更新并重新生成快照摘要；Client 验证要求仍使用 `REQUIRED` / `OPTIONAL`。
+能力组合保存请求示例（`expectedSourceRevision` 必须替换为当前 `gateway-access-configuration.yaml` 的 revision；初始化 Definition 仍通过配置中心完成）：
 
-Client 配置合并为 `clients`，凭据内嵌于 `credentials.activeCredential/graceCredential`；本地入口为 `gateway.policy-definition.clients`。接入设置和凭据更新共用 `gateway-client-policies.yaml` 的 revision，任一操作成功后另一操作须使用最新 revision。凭据操作要求 Client 已存在，接入设置不会覆盖其凭据。端点配置及管理请求以 `status: ENABLED` 或 `DISABLED` 替代 `enabled` 布尔值。旧分离 Definition、旧布尔字段及旧快照需重建，不提供混合读取兼容层。
+```json
+{
+  "expectedSourceRevision": "current-definition-revision",
+  "policies": {
+    "bundles": {
+      "default": {
+        "bundleId": "default",
+        "capabilities": {
+          "timeout": { "connect": "PT1S", "read": "PT3S", "total": "PT5S" }
+        }
+      }
+    },
+    "bindings": [
+      { "bindingId": "all", "bundleId": "default", "tags": [] }
+    ]
+  }
+}
+```
 
-端点与 Header 节点的凭据转发设置统一为 `credentialForwarding`（API/Nacos）或 `credential-forwarding`（本地 YAML），领域类型为 `CredentialForwarding`。不再使用 `credentialForwardingPolicy`、Header 下的 `credentials` 或端点下的 `forwarding`；Client 下的 `credentials` 不变。此更名会改变内容摘要，外部开发快照须重新生成，仓库示例已同步。
+这是整份替换，不是局部更新；未携带的 Bundle／Binding 会从编辑态移除。能力标识和内部字段与本地／Nacos 示例一致，HTTP 数组必须使用 JSON 数组，不能使用本地 Properties 的数字索引对象。管理身份从已认证上下文注入，不应在 body 中声明 userId／sessionId 来证明权限。
+
+能力组合 Java 类型统一使用 `CapabilityComposition`。本轮同时更名部署配置键与 dataId：配置前缀 `gateway.policy-definition` / `gateway.policy.nacos` 改为 `gateway.access-definition` / `gateway.access.nacos`；dataId 改为 `gateway-access.yaml`（完整快照）、`gateway-app-capabilities.yaml`、`gateway-client-capabilities.yaml`、`gateway-access-configuration.yaml`，`gateway-endpoints.yaml` 不变。管理路径不变。端点主体要求使用 `REQUIRED` / `ANONYMOUS`，旧 `OPTIONAL` 值需更新并重新生成快照摘要；Client 验证要求仍使用 `REQUIRED` / `OPTIONAL`。
+
+Client 配置合并为 `clients`，凭据内嵌于 `credentials.activeCredential/graceCredential`；本地入口为 `gateway.access-definition.clients`。接入设置和凭据更新共用 `gateway-client-capabilities.yaml` 的 revision，任一操作成功后另一操作须使用最新 revision。凭据操作要求 Client 已存在，接入设置不会覆盖其凭据。端点配置及管理请求以 `status: ENABLED` 或 `DISABLED` 替代 `enabled` 布尔值。旧分离 Definition、旧布尔字段及旧快照需重建，不提供混合读取兼容层。
+
+本次能力配置为破坏式 schema 更新：Bundle 固定的 rateLimit／timeout／headers 字段改为 capabilities；旧本地配置、Definition 与快照需重新生成，不提供旧结构别名。能力内部字段采用 camelCase，包含 credentialForwarding。规范化摘要也随新结构改变；先部署支持全部配置能力的实例，再发布新配置，旧版本不能接纳未支持的能力。
 
 仅快照发布身份可写 Snapshot，运行身份只读。首次启动远端和 LKG 均无有效快照时失败。开发阶段破坏式更新后，应按新模型重新准备开发配置；旧 snapshot schema 不兼容。保留三种历史签名计算方式并不意味着保留旧配置结构。
 
@@ -153,7 +170,7 @@ Surefire 报告位于各模块 target/surefire-reports；Failsafe 报告位于 g
 | AccessSnapshotPropagationIT | MD5 CAS、多实例监听收敛；旧请求引用完整保留版本 1，新读取观察版本 2，无混用。 |
 | RedisPolicyCoordinationIT | 跨连接锁互斥、异常释放、租约恢复；rollbackState 跨实例可见、TTL=-1、幂等清除、namespace 隔离。锁资源 ingress-policy 保留，不随模型改名迁移。 |
 | RedisReplayGuardIT | 两个连接工厂 10 个并发登记恰好一次成功；TTL 到期可重新登记，过期证据不写入，namespace 隔离。 |
-| GatewayPipelineIT | 随机端口真实 SCG 与 Reactor Netty 下游；身份/凭据清除、完整快照切换后 Header 刷新、未知端点及缺失 App 提前拒绝、实际路由与端点 routeId 不一致拒绝。阶段二能力已不属于 v1，不再断言缓存命中与超时降级；快照为内存源，Redis 精确性由 RateLimitIT 单独覆盖。 |
+| GatewayPipelineIT | 随机端口真实 SCG 与 Reactor Netty 下游；身份/凭据清除、完整快照切换后 Header 刷新、未知端点及缺失 App 提前拒绝、实际路由与端点 routeId 不一致拒绝。快照为内存源，Redis 精确性由 RateLimitIT 单独覆盖。 |
 | BrowserSessionIngressIT | 双应用真实 Nacos/MySQL/Redis；有效 Cookie 及允许 Origin 放行并结束会话，无效 Cookie 401、非法 Origin 403；需同级 user-auth/config/db/schema.sql 及兼容的开发构件，不能用单元测试代替协作验收。 |
 
 Nacos、协调与快照场景可在 `manualObservationPoint()` 设置断点（`RedisPolicyCoordinationIT`、`AccessSnapshotPropagationIT`、`NacosPolicyAdministrationIT`、`RedisReplayGuardIT` 四个场景提供该方法）；`RateLimitIT`、`GatewayPipelineIT` 与 Browser 场景改用 `-Dgateway.it.manual-observation-seconds=30`，Browser 场景为其自身的观察断点。Nacos 测试输出实际控制台地址（映射容器 8080 的根路径，不是 8848/nacos）；Redis 测试输出连接命令及 namespace。只在输出的隔离测试资源中检查键和 TTL；若输出 marker，可删除该具体 marker 提前结束观察。未配置观察参数时不等待，恢复测试或窗口到期后自动清理。报告位于前述 Failsafe 目录，容器日志用于定位启动失败。

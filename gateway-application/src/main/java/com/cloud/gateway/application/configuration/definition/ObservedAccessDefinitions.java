@@ -5,7 +5,7 @@ import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 
 import java.util.List;
 

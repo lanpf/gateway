@@ -1,14 +1,34 @@
 package com.cloud.gateway.application.ingress;
 
+import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityResolver;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+
 import com.cloud.gateway.domain.app.AppId;
+import com.cloud.gateway.domain.capability.runtime.PlannableCapability;
+import com.cloud.gateway.application.ingress.CapabilityRegistration;
+import com.cloud.gateway.domain.capability.runtime.CapabilityContext;
+import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
+import com.cloud.gateway.domain.capability.runtime.CapabilityExecutionKey;
+import com.cloud.gateway.domain.capability.runtime.CapabilityOutcome;
+import com.cloud.gateway.domain.capability.runtime.CapabilityRepeat;
+import com.cloud.gateway.domain.capability.runtime.CapabilitySlot;
+import com.cloud.gateway.domain.capability.runtime.CapabilityUnit;
+import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.endpoint.*;
 import com.cloud.gateway.domain.ingress.access.AccessGrantedContext;
 import com.cloud.gateway.domain.ingress.access.RequestEvidence;
-import com.cloud.gateway.domain.ingress.access.app.VerifiedApp;
-import com.cloud.gateway.domain.policy.bundle.*;
-import com.cloud.gateway.domain.policy.capability.*;
-import com.cloud.gateway.domain.policy.execution.*;
-import com.cloud.gateway.domain.policy.header.HeaderPolicy;
+import com.cloud.gateway.domain.ingress.access.VerifiedApp;
+import com.cloud.gateway.domain.capability.configuration.*;
+import com.cloud.gateway.domain.capability.header.HeaderPolicy;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -33,18 +53,18 @@ class CapabilityExecutionCommandServiceTest {
         CapabilityExecutionCommandService service = service(List.of(
                 definition("first", "one"), definition("second", "two", "three"), definition("third", "four")),
                 List.of(
-                        executor("first", units -> { calls.add("first"); return CompletableFuture.completedFuture(new Outcome(true)); }),
-                        executor("second", units -> { calls.add("second"); assertEquals(2, units.size()); return CompletableFuture.completedFuture(new Outcome(false)); }),
+                        executor("first", units -> { calls.add("first"); return CompletableFuture.completedFuture(new Outcome(CapabilityOutcome.Disposition.CONTINUE)); }),
+                        executor("second", units -> { calls.add("second"); assertEquals(2, units.size()); return CompletableFuture.completedFuture(new Outcome(CapabilityOutcome.Disposition.STOP)); }),
                         executor("third", units -> { throw new AssertionError("must short circuit"); })));
         CapabilityExecutionKey previous = new CapabilityExecutionKey("previous", "unit", null);
         CapabilityExecutionOutput output = service.execute(command(Set.of(previous))).toCompletableFuture().join();
         CapabilityExecution report = output.execution();
         assertEquals(List.of("first", "second"), calls);
-        assertFalse(report.allowed());
+        assertFalse(report.continues());
         assertEquals(4, report.executed().size());
         assertEquals(2, report.outcomes().size());
         assertTrue(report.executed().contains(previous));
-        assertNotNull(output.capabilities().headers());
+        assertNotNull(output.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.KEY));
     }
 
     @Test
@@ -52,10 +72,9 @@ class CapabilityExecutionCommandServiceTest {
         CapabilityExecutor<Unit> first = executor("first", units -> {
             throw new AssertionError("validation must precede execution");
         });
-        CapabilityExecutionCommandService missing = service(
-                List.of(definition("first", "one"), definition("missing", "two")), List.of(first));
-        assertThrows(CompletionException.class, () -> missing.execute(command(Set.of())).toCompletableFuture().join());
-        CapabilityDefinition wrongType = definition("first", ignored -> List.of(new OtherUnit("bad")));
+        assertThrows(IllegalArgumentException.class, () -> service(
+                List.of(definition("first", "one"), definition("missing", "two")), List.of(first)));
+        CapabilityRegistration<Object> wrongType = definition("first", ignored -> List.of(new OtherUnit("bad")));
         CapabilityExecutionCommandService mismatch = service(List.of(wrongType), List.of(first));
         assertInstanceOf(ClassCastException.class, assertThrows(CompletionException.class,
                 () -> mismatch.execute(command(Set.of())).toCompletableFuture().join()).getCause());
@@ -81,28 +100,29 @@ class CapabilityExecutionCommandServiceTest {
         assertSame(failure, assertThrows(CompletionException.class,
                 () -> service.execute(command(Set.of())).toCompletableFuture().join()).getCause());
         assertThrows(IllegalArgumentException.class, () -> service(List.of(), List.of(executor, executor)));
-        assertTrue(service(List.of(), List.of()).execute(command(Set.of())).toCompletableFuture().join().execution().allowed());
+        assertTrue(service(List.of(), List.of()).execute(command(Set.of())).toCompletableFuture().join().execution().continues());
     }
 
     @Test
-    void shouldReturnTheExactResolvedNodesConsumedByThePlannerEvenOnDenial() {
-        AtomicReference<ResolvedCapabilities> planned = new AtomicReference<>();
-        CapabilityDefinition definition = definition("test", resolved -> {
-            planned.set(resolved);
+    void shouldHandThePlannerTheSameResolvedNodeTheOutputReports() {
+        AtomicReference<List<RateLimitPolicy>> planned = new AtomicReference<>();
+        CapabilityRegistration<List<RateLimitPolicy>> definition = definition(RateLimitCapability.ID, node -> {
+            planned.set(node);
             return List.of(new Unit("unit"));
         });
         HeaderPolicy headers = new HeaderPolicy(Set.of(), Map.of("X-Gateway-Test", "selected"), Set.of(), null);
-        CapabilityBundleId id = new CapabilityBundleId("headers");
+        CapabilityBundleId id = new CapabilityBundleId("header");
         CapabilityComposition composition = new CapabilityComposition(
-                Map.of(id, new CapabilityBundle(id, null, null, null, null, headers)),
+                Map.of(id, new CapabilityBundle(id, java.util.List.of(headers))),
                 List.of(new CapabilityBinding(new CapabilityBindingId("global"), id, null, null, Set.of(), null, null, null)));
-        CapabilityExecutionCommandService service = service(List.of(definition),
-                List.of(executor("test", units -> CompletableFuture.completedFuture(new Outcome(false)))));
+        CapabilityExecutionCommandService service = service(List.of(
+                new CapabilityRegistration<>(definition.capability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitConfigDefinition.KEY))),
+                List.of(executor(RateLimitCapability.ID, units -> CompletableFuture.completedFuture(new Outcome(CapabilityOutcome.Disposition.STOP)))));
         CapabilityExecutionOutput output = service.execute(new CapabilityExecutionCommand(composition, BEFORE, Set.of()))
                 .toCompletableFuture().join();
-        assertSame(planned.get(), output.capabilities());
-        assertSame(headers, output.capabilities().headers());
-        assertFalse(output.execution().allowed());
+        assertSame(planned.get(), output.capabilities().get(com.cloud.gateway.domain.capability.ratelimit.RateLimitConfigDefinition.KEY));
+        assertSame(headers, output.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderConfigDefinition.KEY));
+        assertFalse(output.execution().continues());
     }
 
     @Test
@@ -115,14 +135,13 @@ class CapabilityExecutionCommandServiceTest {
         CapabilityContext after = new CapabilityContext(CapabilitySlot.POST_AUTH, EVIDENCE, endpoint,
                 new AccessGrantedContext(new VerifiedApp(app, "web"), null, null));
         CapabilityBundleId id = new CapabilityBundleId("limits");
-        CapabilityComposition composition = new CapabilityComposition(Map.of(id, new CapabilityBundle(id,
-                new RateLimitRules(List.of(
+        CapabilityComposition composition = new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new RateLimitPolicy(List.of(
                         new RateLimitRule("ip", RateLimitDimension.IP, 10, 1, RateLimitMode.EXACT),
-                        new RateLimitRule("app", RateLimitDimension.APP, 10, 1, RateLimitMode.EXACT)), null),
-                null, null, null, null)), List.of(
+                        new RateLimitRule("app", RateLimitDimension.APP, 10, 1, RateLimitMode.EXACT)), null)))), List.of(
                 new CapabilityBinding(new CapabilityBindingId("global"), id, null, null, Set.of(), null, null, null)));
         List<List<String>> batches = new ArrayList<>();
-        CapabilityExecutionCommandService service = service(List.of(new RateLimitCapability()), List.of(
+        CapabilityExecutionCommandService service = service(List.of(
+                new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitConfigDefinition.KEY))), List.of(
                 new RateLimitCapabilityExecutor(quotas -> {
                     batches.add(quotas.stream().map(quota -> quota.rule().ruleId().value()).toList());
                     return CompletableFuture.completedFuture(RateLimitDecision.allowed(null, null, 1));
@@ -166,15 +185,16 @@ class CapabilityExecutionCommandServiceTest {
 
     private record Unit(String unitId) implements CapabilityUnit { }
     private record OtherUnit(String unitId) implements CapabilityUnit { }
-    private record Outcome(boolean allowed) implements CapabilityOutcome { }
+    private record Outcome(CapabilityOutcome.Disposition disposition) implements CapabilityOutcome {
+    }
 
     private static CapabilityExecutionCommand command(Set<CapabilityExecutionKey> previous) {
         return new CapabilityExecutionCommand(CapabilityComposition.empty(), BEFORE, previous);
     }
 
-    private static CapabilityExecutionCommandService service(List<CapabilityDefinition> definitions,
+    private static CapabilityExecutionCommandService service(List<CapabilityRegistration<?>> definitions,
             List<CapabilityExecutor<?>> executors) {
-        return new CapabilityExecutionCommandService(new CapabilityResolver(), new CapabilityPlanner(definitions), executors);
+        return new CapabilityExecutionCommandService(new CapabilityResolver(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), definitions, executors);
     }
 
     private static CapabilityExecutor<Unit> executor(String id, Function<List<Unit>, CompletionStage<Outcome>> action) {
@@ -185,19 +205,19 @@ class CapabilityExecutionCommandServiceTest {
         };
     }
 
-    private static CapabilityDefinition definition(String id, String... units) {
+    private static CapabilityRegistration<Object> definition(String id, String... units) {
         return definition(id, ignored -> java.util.Arrays.stream(units).map(Unit::new).toList());
     }
 
-    private static CapabilityDefinition definition(String id,
-            Function<ResolvedCapabilities, List<? extends CapabilityUnit>> units) {
-        return new CapabilityDefinition() {
-            public String capability() { return id; }
+    private static <N> CapabilityRegistration<N> definition(String id,
+            Function<N, List<? extends CapabilityUnit>> units) {
+        return new CapabilityRegistration<>(new PlannableCapability<N>() {
+            public String name() { return id; }
             public Set<CapabilitySlot> slots() { return Set.of(CapabilitySlot.PRE_AUTH, CapabilitySlot.POST_AUTH); }
             public CapabilityRepeat repeat() { return CapabilityRepeat.ONCE_PER_REQUEST; }
-            public List<? extends CapabilityUnit> units(ResolvedCapabilities resolved, CapabilityContext context) {
-                return units.apply(resolved);
+            public List<? extends CapabilityUnit> units(N node, CapabilityContext context) {
+                return units.apply(node);
             }
-        };
+        }, config -> null);
     }
 }

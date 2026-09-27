@@ -1,11 +1,23 @@
 package com.cloud.gateway.interfaces.webflux;
 
+import com.cloud.gateway.interfaces.subject.SubjectAuthenticator;
+
 import com.cloud.framework.core.RequestHeader;
 import com.cloud.gateway.application.ingress.AccessStageCommand;
 import com.cloud.gateway.application.ingress.PreparationStageOutput;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.application.ingress.AccessStageOutput;
 import com.cloud.gateway.application.ingress.AdmissionStageOutput;
+import com.cloud.gateway.application.ingress.CapabilityExecutionCommandService;
+import com.cloud.gateway.application.ingress.CapabilityExecutionOutput;
+import com.cloud.gateway.domain.capability.runtime.CapabilityContext;
+import com.cloud.gateway.domain.capability.runtime.CapabilitySlot;
+import com.cloud.gateway.domain.capability.runtime.HeaderApplyCapability;
+import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.runtime.TimeoutCapability;
+import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.ingress.access.AccessGrantedContext;
+import com.cloud.gateway.domain.endpoint.EndpointMatch;
 import com.cloud.gateway.application.ingress.IngressAdmissionCommandService;
 import com.cloud.gateway.application.ingress.IngressAdmissionOutput;
 import com.cloud.gateway.api.constants.GatewayPathApiConstants;
@@ -16,7 +28,9 @@ import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.client.ClientId;
 
+import java.io.IOException;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -40,9 +54,11 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.netty.http.client.PrematureCloseException;
 
 @RequiredArgsConstructor
 public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered {
@@ -54,6 +70,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
     private final SubjectAuthenticator<Authentication> hostSessionSubjectAuthenticator;
     private final SubjectAuthenticator<String> browserSessionSubjectAuthenticator;
     private final CapabilityResponseWriter responses;
+    private final CapabilityExecutionCommandService capabilities;
     private final RequestHeaderWriter headerWriter = new RequestHeaderWriter();
 
     @Override
@@ -114,16 +131,97 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
                     AccessStageOutput.Allowed allowed = admitted.access();
                     exchange.getAttributes().put(GatewayRequestAttributes.TRUSTED_CONTEXT, allowed.decision().grantedContext());
                     return responses.respond(exchange, admitted.execution())
-                            .flatMap(permitted -> {
-                                if (!permitted) {
-                                    return Mono.empty();
-                                }
-                                ServerWebExchange forwarded = headerWriter.write(exchange, allowed.decision().grantedContext(),
-                                        admitted.capabilities().headers(),
-                                        prepared.snapshot().content().capabilityComposition().trustedHeaderNames());
-                                return chain.filter(forwarded);
-                            });
+                            .flatMap(permitted -> permitted
+                                    ? forward(exchange, chain, prepared, allowed, admitted)
+                                    : Mono.empty());
                 });
+    }
+
+    /**
+     * The FORWARD phase: capabilities that shape the upstream call run once, after admission and
+     * before it is issued. Two of them only declare what to do -- the timeout budget and the header
+     * plan -- so the phase hands those values over and this adapter applies them.
+     *
+     * <p>The header plan is applied here rather than before the phase, so that a refused call is never
+     * rewritten. Transport failures are projected here without an additional capability phase.
+     */
+    private Mono<Void> forward(ServerWebExchange exchange, GatewayFilterChain chain,
+            PreparationStageOutput.Prepared prepared, AccessStageOutput.Allowed allowed,
+            AdmissionStageOutput admitted) {
+        Endpoint endpoint = ((EndpointMatch.Unique) prepared.endpointMatch()).endpoint();
+        AccessGrantedContext granted = allowed.decision().grantedContext();
+        CapabilityContext context = new CapabilityContext(CapabilitySlot.FORWARD, prepared.evidence(), endpoint,
+                granted);
+        // Admission already resolved against this same snapshot, endpoint and granted identity, and
+        // resolution does not read the slot -- so reusing it is not a shortcut
+        // that could resolve differently, it is simply not repeating work that cannot differ.
+        return Mono.fromCompletionStage(() -> capabilities.executeAgainst(admitted.capabilities(), context,
+                admitted.execution().executed())).flatMap(output ->
+                responses.respond(exchange, output.execution()).flatMap(permitted -> {
+                    if (!permitted) {
+                        return Mono.empty();
+                    }
+                    HeaderPolicy plan = headerPlan(output);
+                    if (plan == null) {
+                        // Fail closed. Forwarding without the plan would send the caller's own protected
+                        // fields downstream, so a missing plan is a defect to stop on, never to skip.
+                        // Unreachable today -- the resolver always supplies a plan -- but this is the
+                        // guard that keeps a future change from turning that into a silent leak.
+                        return reject(exchange, HttpStatus.INTERNAL_SERVER_ERROR);
+                    }
+                    ServerWebExchange forwarded = headerWriter.write(exchange, granted, plan);
+                    TimeoutPolicy timeout = timeoutPolicy(output);
+                    if (timeout != null) {
+                        // Connect and read belong to the transport, so they are published to the route
+                        // metadata the client reads; the total is enforced below, around the whole call.
+                        RouteTimeoutMetadata.apply(forwarded, timeout);
+                    }
+                    Mono<Void> downstream = chain.filter(forwarded);
+                    if (timeout != null) {
+                        downstream = downstream.timeout(timeout.total());
+                    }
+                    return downstream.onErrorResume(error -> onDownstreamFailure(forwarded, error));
+                }));
+    }
+
+    private static HeaderPolicy headerPlan(CapabilityExecutionOutput output) {
+        return output.execution().outcomes().stream()
+                .filter(HeaderApplyCapability.Outcome.class::isInstance)
+                .map(HeaderApplyCapability.Outcome.class::cast)
+                .map(HeaderApplyCapability.Outcome::policy)
+                .findFirst().orElse(null);
+    }
+
+    private static TimeoutPolicy timeoutPolicy(CapabilityExecutionOutput output) {
+        return output.execution().outcomes().stream()
+                .filter(TimeoutCapability.Outcome.class::isInstance)
+                .map(TimeoutCapability.Outcome.class::cast)
+                .map(TimeoutCapability.Outcome::policy)
+                .findFirst().orElse(null);
+    }
+
+    /**
+     * Project supported transport failures only before commitment; never replace a committed response.
+     */
+    private static Mono<Void> onDownstreamFailure(ServerWebExchange exchange, Throwable error) {
+        HttpStatus status = failureStatus(error);
+        if (status == null || exchange.getResponse().isCommitted()) {
+            return Mono.error(error);
+        }
+        return reject(exchange, status);
+    }
+
+    /** Map known transport errors; unrelated failures retain their original error handling. */
+    private static HttpStatus failureStatus(Throwable error) {
+        if (error instanceof TimeoutException || error instanceof io.netty.handler.timeout.TimeoutException
+                || error instanceof ResponseStatusException status
+                        && status.getStatusCode().value() == HttpStatus.GATEWAY_TIMEOUT.value()) {
+            return HttpStatus.GATEWAY_TIMEOUT;
+        }
+        if (error instanceof IOException || error instanceof PrematureCloseException) {
+            return HttpStatus.BAD_GATEWAY;
+        }
+        return null;
     }
 
     private static ClientSignatureEvidence signatureEvidence(

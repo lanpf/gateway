@@ -2,7 +2,7 @@ package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.framework.core.naming.ResourceNameResolver;
 import com.cloud.framework.starter.autoconfigure.naming.AbstractKeyResolver;
-import com.cloud.gateway.domain.policy.capability.RateLimitRule;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.springframework.util.Assert;

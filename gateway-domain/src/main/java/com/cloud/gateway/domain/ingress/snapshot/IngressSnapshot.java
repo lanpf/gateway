@@ -1,9 +1,9 @@
 package com.cloud.gateway.domain.ingress.snapshot;
 
 import com.cloud.framework.core.validation.Require;
+import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.common.DomainError;
 import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.gateway.domain.client.CredentialId;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -19,7 +19,7 @@ public record IngressSnapshot(
     public IngressSnapshot {
         Require.notNull(version, DomainException::missingField);
         Require.notNull(content, DomainException::missingField);
-        contentHash = Require.notBlank(contentHash, DomainException::missingField).trim();
+        contentHash = Require.notBlank(contentHash, DomainException::invalidObjectField).trim();
         Require.notNull(publishedAt, DomainException::missingField);
         validate(content);
         validateCredentials(content, publishedAt);
@@ -27,10 +27,10 @@ public record IngressSnapshot(
 
 
     private static void validate(IngressContent content) {
-        content.clientRegistry().values().stream()
+        content.clients().values().stream()
                 .flatMap(client -> client.access().allowedApps().stream())
                 .forEach(appId -> {
-                    if (content.appRegistry().find(appId).isEmpty()) {
+                    if (content.apps().find(appId).isEmpty()) {
                         throw invalid();
                     }
                 });
@@ -39,7 +39,7 @@ public record IngressSnapshot(
 
     private static void validateCredentials(IngressContent content, Instant publishedAt) {
         Set<CredentialId> indexed = new HashSet<>();
-        content.clientRegistry().values().stream()
+        content.clients().values().stream()
                 .map(client -> client.access().credentials())
                 .filter(Objects::nonNull)
                 .forEach(credentials -> {
@@ -62,7 +62,7 @@ public record IngressSnapshot(
 
     /** Pure version/content acceptance; source revisions and atomic replacement belong to adapters. */
     public Acceptance acceptanceOf(IngressSnapshot candidate) {
-        Objects.requireNonNull(candidate, "candidate");
+        Require.notNull(candidate, DomainException::missingField);
         if (candidate.version().value() < version.value()) {
             return Acceptance.STALE;
         }

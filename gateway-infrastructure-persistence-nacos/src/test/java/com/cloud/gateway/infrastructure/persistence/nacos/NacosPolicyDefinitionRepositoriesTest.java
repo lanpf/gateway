@@ -24,12 +24,11 @@ import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.client.SignatureContract;
 import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.policy.bundle.CapabilityBundle;
-import com.cloud.gateway.domain.policy.bundle.CapabilityBundleId;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
-import com.cloud.gateway.domain.policy.capability.TimeoutPolicy;
-import com.cloud.gateway.domain.policy.header.HeaderRules;
-import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
 import com.cloud.gateway.infrastructure.persistence.nacos.operations.NacosConfigOperations;
@@ -47,21 +46,21 @@ import org.junit.jupiter.api.Test;
 class NacosPolicyDefinitionRepositoriesTest {
     private final NacosPolicyProperties properties = new NacosPolicyProperties();
     private final StoredPolicyDefinitionCodec codec = new StoredPolicyDefinitionCodec(
-            new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl())), new ObjectMapper().findAndRegisterModules(),
-            HeaderRules.registeredOnly());
+            new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())))), new ObjectMapper().findAndRegisterModules(),
+            HeaderAdmissionRules.registeredOnly());
 
     @Test
     void shouldLoadAndUpdateOnlyEndpointDefinitionDataId() {
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations();
         IngressContent content = PolicyTestFixtures.snapshot(1, true).content();
         operations.values.put(properties.getEndpointDefinitionDataId(),
-                codec.encodeEndpointRegistry(content.endpointRegistry()));
+                codec.encodeEndpointRegistry(content.endpoints()));
         NacosEndpointAccessDefinitionRepository repository =
                 new NacosEndpointAccessDefinitionRepository(operations, properties, codec);
 
         RevisionedAccessDefinition<EndpointRegistry> observed = repository.load();
-        EndpointRegistry updated = PolicyTestFixtures.snapshot(2, false).content().endpointRegistry();
+        EndpointRegistry updated = PolicyTestFixtures.snapshot(2, false).content().endpoints();
 
         assertNotNull(repository.compareAndSet(observed.sourceRevision(), updated));
         assertFalse(repository.load().value().find(new EndpointId("USER_AUTH.LOGIN")).orElseThrow().enabled());
@@ -75,12 +74,12 @@ class NacosPolicyDefinitionRepositoriesTest {
         FakeNacosConfigOperations operations = new FakeNacosConfigOperations();
         IngressContent content = PolicyTestFixtures.snapshot(1, true).content();
         operations.values.put(properties.getAppDefinitionDataId(),
-                codec.encodeApps(content.appRegistry()));
+                codec.encodeApps(content.apps()));
         NacosAppAccessDefinitionRepository repository =
                 new NacosAppAccessDefinitionRepository(operations, properties, codec);
 
-        assertNull(repository.compareAndSet(new com.cloud.gateway.domain.ingress.snapshot.Revision("stale"), content.appRegistry()));
-        assertEquals(content.appRegistry().asMap(), repository.load().value().asMap());
+        assertNull(repository.compareAndSet(new com.cloud.gateway.domain.ingress.snapshot.Revision("stale"), content.apps()));
+        assertEquals(content.apps().asMap(), repository.load().value().asMap());
     }
 
     @Test void shouldCasIndependentCapabilityCompositionDefinition() {
@@ -91,9 +90,7 @@ class NacosPolicyDefinitionRepositoriesTest {
         var repository = new NacosCapabilityCompositionDefinitionRepository(operations, properties, codec);
         RevisionedAccessDefinition<CapabilityComposition> observed = repository.load();
         var id = new CapabilityBundleId("standard");
-        var changed = new CapabilityComposition(Map.of(id, new CapabilityBundle(id, null,
-                new TimeoutPolicy(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3)),
-                null, null, null)), List.of());
+        var changed = new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new TimeoutPolicy(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
         assertNotNull(repository.compareAndSet(observed.sourceRevision(), changed));
         assertNull(repository.compareAndSet(observed.sourceRevision(), empty));
         assertEquals(changed, repository.load().value());
@@ -119,7 +116,7 @@ class NacosPolicyDefinitionRepositoriesTest {
         assertNotNull(repository.compareAndSet(observed.sourceRevision(), updated));
         assertNull(repository.compareAndSet(observed.sourceRevision(), clients));
         assertEquals(credentials, repository.load().value().find(clientId).orElseThrow().access().credentials());
-        assertEquals(Set.of("gateway-client-capabilityComposition.yaml"), operations.values.keySet());
+        assertEquals(Set.of("gateway-client-capabilities.yaml"), operations.values.keySet());
     }
 
     private static final class FakeNacosConfigOperations implements NacosConfigOperations {

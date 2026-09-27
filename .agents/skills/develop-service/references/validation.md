@@ -8,19 +8,20 @@
 
 ## Bean Validation
 
-- **JAVA-VALIDATION-001** **[DEFAULT][BASELINE]** — Prefer Jakarta Bean Validation for constraints on bindable Bean properties and method parameters or return values; declare nullability, format, and range constraints on the owning field, property, or record component.
+- **JAVA-VALIDATION-001** **[DEFAULT][BASELINE]** — When dependencies and runtime validation are available, prefer Jakarta Bean Validation for nullability, format, and range constraints on bindable Bean properties and method parameters or returns. Declare constraints on the corresponding field, property, record component, parameter, or return location and ensure the call path actually triggers validation.
 - **JAVA-VALIDATION-CASCADE-001** **[REQUIRED][BASELINE]** — `@Valid` marks cascaded validation of nested objects and is not itself a constraint.
 
 ## Explicit checks
 
-- **JAVA-VALIDATION-002** **[REQUIRED][BASELINE]** — Use explicit checks only when Bean Validation cannot express a constraint or an internal API outside the framework binding path requires fast failure, such as a domain constructor or factory.
-- **JAVA-VALIDATION-TECHNICAL-001** **[REQUIRED][BASELINE]** — Technical preconditions detect programming errors or protect internal invariants and do not form a stable business protocol; their exception messages are diagnostic only and callers must not inspect message text to determine a business result.
-- **JAVA-OBJECTS-REQUIRE-NONNULL-001** **[DEFAULT][BASELINE]** — For a technical precondition that checks nullity only, prefer JDK `Objects.requireNonNull`.
-- **JAVA-ASSERT-001** **[REQUIRED][BASELINE]** — For a technical precondition that checks blankness, ranges, collections, or arbitrary conditions, a module already depending on Spring Framework for its responsibility uses `org.springframework.util.Assert`.
-- **JAVA-VALIDATE-001** **[REQUIRED][BASELINE]** — For the same richer technical preconditions, a Spring-decoupled module uses project-managed `org.apache.commons.lang3.Validate`.
-- **JAVA-VALIDATION-003** **[REQUIRED][BASELINE]** — Do not add Spring Framework only for explicit checks and do not hand-write equivalents these tools provide; utility dependency selection follows the common-utilities rules.
-- **JAVA-VALIDATION-MESSAGE-001** **[REQUIRED][BASELINE]** — Jakarta Bean Validation and technical-precondition diagnostic messages are written in English and are not a stable business protocol.
+- **JAVA-VALIDATION-002** **[REQUIRED][BASELINE]** — Use explicit checks when Bean Validation cannot express the constraint, the call path cannot guarantee validation, or an explicit business-error meaning is required; this includes constructors and factories outside framework binding that need fast failure.
+- **JAVA-VALIDATION-TECHNICAL-001** **[REQUIRED][BASELINE]** — Technical preconditions detect programming errors or protect internal technical invariants. They must not use service business error codes; general technical exceptions or `FrameworkException` with framework-wide technical codes are allowed.
+- **JAVA-OBJECTS-REQUIRE-NONNULL-001** **[REQUIRED][BASELINE]** — Use JDK checks such as `Objects.requireNonNull` when existing Require, Assert, and Validate dependencies are unavailable or cannot satisfy the constraint and failure semantics. Hand-write a check only when existing tools and the JDK cannot meet the need.
+- **JAVA-REQUIRE-PRIORITY-001** **[REQUIRED][BASELINE]** — Select explicit-check tools by failure semantics first, then existing dependencies and capability; prefer framework-core `Require` when it can meet both the constraint and exception semantics.
+- **JAVA-ASSERT-001** **[REQUIRED][BASELINE]** — Use Spring `org.springframework.util.Assert` from an existing dependency when Require is unavailable or unsuitable and Assert satisfies the constraint and failure semantics.
+- **JAVA-VALIDATE-001** **[REQUIRED][BASELINE]** — Use project-managed `org.apache.commons.lang3.Validate` from an existing dependency when Require and Assert are unavailable or unsuitable and Validate satisfies the constraint and failure semantics.
+- **JAVA-VALIDATION-003** **[REQUIRED][BASELINE]** — Do not add dependencies solely for explicit checks or hand-write equivalent logic already provided by an available tool that satisfies the failure semantics; dependency selection follows the common-utilities rules.
 
 ## Exceptions and logging
 
+- **JAVA-VALIDATION-MESSAGE-001** **[REQUIRED][BASELINE]** — Classify exceptions by failure semantics, not merely inheritance from `BaseException`. Service business errors use the Chinese templates bound to their error codes; project-authored technical diagnostics and Bean Validation messages use English, while original third-party exception messages are exempt. Callers use business error codes, never exception message parsing, to determine business outcomes.
 - **JAVA-EXCEPTION-003** **[REQUIRED][BASELINE]** — Handle or propagate business exceptions and never silently ignore an exception; non-business exception logging follows the logging rules.

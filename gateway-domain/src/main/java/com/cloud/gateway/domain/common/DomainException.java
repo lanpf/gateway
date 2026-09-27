@@ -12,14 +12,14 @@ public final class DomainException extends BaseException {
     }
 
     public static DomainException missingField() {
-        return new DomainException(DomainError.DOMAIN_OBJECT_FIELD_REQUIRED);
+        return new DomainException(DomainError.DOMAIN_OBJECT_REQUIRED);
     }
 
-    public static DomainException invalidField() {
-        return new DomainException(DomainError.DOMAIN_OBJECT_FIELD_INVALID);
+    public static DomainException invalidObjectField() {
+        return new DomainException(DomainError.DOMAIN_OBJECT_INVALID);
     }
 
     public static DomainException invalidState() {
-        return new DomainException(DomainError.DOMAIN_OBJECT_STATE_INVALID);
+        return new DomainException(DomainError.DOMAIN_OBJECT_abnormal);
     }
 }

@@ -5,6 +5,7 @@ import com.cloud.gateway.api.facade.admin.snapshot.*;
 
 /** HTTP request to API command conversion contract; implementations contain no access rules. */
 public interface GatewayPolicyAdminRestMapper {
+    SaveCapabilityCompositionApiCommand toCommand(GatewayPolicyAdminRequest.SaveCapabilityComposition source);
     SaveAppApiCommand toCommand(GatewayPolicyAdminRequest.SaveAppAccess source);
     SaveClientApiCommand toCommand(GatewayPolicyAdminRequest.SaveClientAccess source);
     SaveClientCredentialApiCommand toCommand(GatewayPolicyAdminRequest.SaveClientCredential source);

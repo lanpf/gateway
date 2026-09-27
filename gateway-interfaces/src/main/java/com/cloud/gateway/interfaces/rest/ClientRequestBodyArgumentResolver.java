@@ -33,7 +33,8 @@ public final class ClientRequestBodyArgumentResolver extends AbstractMessageRead
 
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
-        return parameter.hasParameterAnnotation(RequestBody.class)
+        return (parameter.hasParameterAnnotation(ClientRequestBody.class)
+                || parameter.hasParameterAnnotation(RequestBody.class))
                 && ClientRequest.class.isAssignableFrom(parameter.getParameterType());
     }
 
@@ -41,7 +42,9 @@ public final class ClientRequestBodyArgumentResolver extends AbstractMessageRead
     public Mono<Object> resolveArgument(
             MethodParameter parameter, BindingContext bindingContext, ServerWebExchange exchange) {
         RequestBody requestBody = parameter.getParameterAnnotation(RequestBody.class);
-        return readBody(withoutValidation(parameter), requestBody.required(), bindingContext, exchange)
+        ClientRequestBody clientBody = parameter.getParameterAnnotation(ClientRequestBody.class);
+        boolean required = clientBody != null ? clientBody.required() : requestBody.required();
+        return readBody(withoutValidation(parameter), required, bindingContext, exchange)
                 .cast(ClientRequest.class)
                 .doOnNext(request -> bindProtectedHeaders(request, exchange))
                 .doOnNext(request -> validate(parameter, request, bindingContext, exchange))

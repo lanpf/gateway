@@ -2,6 +2,7 @@ package com.cloud.gateway.infrastructure.persistence.nacos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointId;
@@ -12,8 +13,10 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
 class StoredAccessSnapshotCodecTest {
+    /** Mirrors {@code GatewayPathApiConstants.ADMIN_POLICIES_APP}; the api module is an outer layer. */
+    private static final String ADMIN_APP_PATH = "/admin/gateway/policies/app";
     private static final String PACKAGED_EXAMPLE_HASH =
-            "f10716f0b79522fbb277e9961c8bb42d6cbcb958525c92f07176d6ee700aa47c";
+            "59344a56435c27761724b84594512088c75724898088bc43fe779c6ee34d1f4d";
 
     private final StoredAccessSnapshotCodec codec = PolicyTestFixtures.codec();
 
@@ -25,9 +28,9 @@ class StoredAccessSnapshotCodecTest {
 
         assertEquals(7, decoded.version().value());
         assertEquals(source.contentHash(), decoded.contentHash());
-        assertEquals("user-auth", decoded.content().endpointRegistry()
+        assertEquals("user-auth", decoded.content().endpoints()
                 .find(new EndpointId("USER_AUTH.LOGIN")).orElseThrow().routeId().value());
-        assertEquals(true, decoded.content().endpointRegistry()
+        assertEquals(true, decoded.content().endpoints()
                 .find(new EndpointId("USER_AUTH.LOGIN")).orElseThrow().enabled());
     }
 
@@ -42,7 +45,7 @@ class StoredAccessSnapshotCodecTest {
     @Test
     void shouldDecodePackagedBootstrapExample() throws IOException {
         String content;
-        try (java.io.InputStream input = getClass().getResourceAsStream("/examples/gateway-policy.yaml")) {
+        try (java.io.InputStream input = getClass().getResourceAsStream("/examples/gateway-access.yaml")) {
             content = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
 
@@ -50,7 +53,11 @@ class StoredAccessSnapshotCodecTest {
 
         assertEquals(1, decoded.version().value());
         assertEquals(PACKAGED_EXAMPLE_HASH, decoded.contentHash());
+        // The example must carry the real admin path, and tampering with it must be rejected by the
+        // content hash. Both halves matter: if the example drifted, the replacement below would
+        // silently become a no-op and the hash guard would go unexercised.
+        assertTrue(content.contains(ADMIN_APP_PATH));
         assertThrows(InfrastructureException.class, () -> codec.decodeSnapshot(
-                content.replace("/admin/gateway/policies/app", "/admin/gateway/capabilityComposition/app")));
+                content.replace(ADMIN_APP_PATH, ADMIN_APP_PATH + "-tampered")));
     }
 }

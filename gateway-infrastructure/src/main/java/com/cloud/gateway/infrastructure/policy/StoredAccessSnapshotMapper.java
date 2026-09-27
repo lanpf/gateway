@@ -8,7 +8,7 @@ import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 
 import java.util.List;
 import java.util.Map;

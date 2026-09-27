@@ -1,7 +1,7 @@
 package com.cloud.gateway.domain.endpoint;
 
-import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.validation.Require;
 
 import java.util.Set;
 
@@ -16,11 +16,11 @@ public record EndpointAccess(
         Require.notNull(subjectAuthenticationRequirement, DomainException::missingField);
 
         requiredScopes = requiredScopes == null ? Set.of() : requiredScopes;
-        requiredScopes.forEach(value -> Require.notBlank(value, DomainException::invalidField));
+        requiredScopes.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
         requiredScopes = Set.copyOf(requiredScopes);
 
         requiredAudiences = requiredAudiences == null ? Set.of() : requiredAudiences;
-        requiredAudiences.forEach(value -> Require.notBlank(value, DomainException::invalidField));
+        requiredAudiences.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
         requiredAudiences = Set.copyOf(requiredAudiences);
     }
 }

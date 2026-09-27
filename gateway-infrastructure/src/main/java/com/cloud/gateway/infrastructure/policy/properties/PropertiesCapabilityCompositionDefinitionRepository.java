@@ -1,7 +1,7 @@
 package com.cloud.gateway.infrastructure.policy.properties;
 
 import com.cloud.gateway.application.configuration.definition.RevisionedAccessDefinition;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 import com.cloud.gateway.infrastructure.policy.CapabilityCompositionPropertiesMapper;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;

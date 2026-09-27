@@ -4,12 +4,12 @@ import com.cloud.gateway.api.facade.admin.snapshot.*;
 import com.cloud.gateway.application.configuration.publication.*;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
-import com.cloud.gateway.interfaces.config.GatewayMapperConfig;
 import com.cloud.gateway.interfaces.facade.admin.snapshot.AccessSnapshotApiMapper;
+import com.cloud.framework.core.mapper.MapStructConfig;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(config = GatewayMapperConfig.class)
+@Mapper(config = MapStructConfig.class)
 public abstract class AccessSnapshotApiMapStructMapper implements AccessSnapshotApiMapper {
     @Override public abstract PublishAccessSnapshotCommand toCommand(ReleaseSnapshotApiCommand source);
     @Override public abstract RollbackAccessSnapshotCommand toCommand(RollbackSnapshotApiCommand source);

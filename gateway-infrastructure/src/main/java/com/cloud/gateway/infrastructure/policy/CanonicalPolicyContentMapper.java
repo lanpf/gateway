@@ -4,5 +4,5 @@ import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 
 /** Canonical encoding contract. Ordering and textual protocol normalization are intentional. */
 public interface CanonicalPolicyContentMapper {
-    CanonicalPolicyContent toCanonical(IngressContent source);
+    CanonicalIngressContent toCanonical(IngressContent source);
 }

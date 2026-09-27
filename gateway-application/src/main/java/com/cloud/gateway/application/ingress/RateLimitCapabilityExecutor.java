@@ -1,7 +1,7 @@
 package com.cloud.gateway.application.ingress;
 
 import com.cloud.gateway.application.quota.RequestQuotaExecutor;
-import com.cloud.gateway.domain.policy.capability.RateLimitCapability;
+import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 import lombok.RequiredArgsConstructor;

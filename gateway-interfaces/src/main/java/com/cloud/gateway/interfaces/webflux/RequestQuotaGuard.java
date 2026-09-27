@@ -1,10 +1,10 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.gateway.application.quota.PlannedQuotaCommand;
-import com.cloud.gateway.domain.policy.capability.ApplicableQuota;
+import com.cloud.gateway.domain.capability.ratelimit.ApplicableQuota;
 import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.application.quota.RequestQuotaExecutor;
-import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 import lombok.RequiredArgsConstructor;

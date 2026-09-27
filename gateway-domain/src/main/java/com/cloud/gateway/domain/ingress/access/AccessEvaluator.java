@@ -1,21 +1,21 @@
 package com.cloud.gateway.domain.ingress.access;
 
-import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
+import com.cloud.gateway.domain.common.DomainException;
+
+import com.cloud.framework.core.validation.Require;
 
 import com.cloud.framework.core.SubjectType;
-import com.cloud.framework.core.validation.Require;
-import com.cloud.gateway.domain.ingress.access.app.VerifiedApp;
+import com.cloud.gateway.domain.app.App;
+import com.cloud.gateway.domain.client.Client;
+import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
+import com.cloud.gateway.domain.endpoint.Endpoint;
+import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.ingress.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.ingress.access.client.VerifiedClient;
 import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
 import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationOutcome;
 import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationRejectReason;
-import com.cloud.gateway.domain.app.App;
-import com.cloud.gateway.domain.client.Client;
-import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
-import com.cloud.gateway.domain.endpoint.Endpoint;
-import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
+import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 
 public final class AccessEvaluator {
     public AccessDecision evaluate(
@@ -29,12 +29,12 @@ public final class AccessEvaluator {
         Require.notNull(clientVerification, DomainException::missingField);
         Require.notNull(subjectAuthentication, DomainException::missingField);
 
-        Endpoint endpoint = snapshot.content().endpointRegistry()
+        Endpoint endpoint = snapshot.content().endpoints()
                 .find(request.endpointId()).filter(Endpoint::enabled).orElse(null);
         if (endpoint == null) {
             return AccessDecision.denied(AccessDenyReason.ENDPOINT_NOT_FOUND, snapshot.version());
         }
-        App app = snapshot.content().appRegistry().find(request.appId()).filter(App::enabled).orElse(null);
+        App app = snapshot.content().apps().find(request.appId()).filter(App::enabled).orElse(null);
         if (app == null) {
             return AccessDecision.denied(AccessDenyReason.APP_NOT_FOUND, snapshot.version());
         }
@@ -76,7 +76,7 @@ public final class AccessEvaluator {
             return null;
         }
         // if a client is provided, it must be match the client policy and allowed apps
-        Client client = snapshot.content().clientRegistry().find(request.clientId()).filter(Client::enabled).orElse(null);
+        Client client = snapshot.content().clients().find(request.clientId()).filter(Client::enabled).orElse(null);
         if (client == null) {
             return AccessDenyReason.CLIENT_NOT_FOUND;
         }

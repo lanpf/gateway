@@ -1,9 +1,10 @@
 package com.cloud.gateway.domain.ingress.access;
 
-import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
+import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
-import com.cloud.gateway.domain.common.DomainException;
+
+import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 
 public sealed interface AccessDecision {
     record Allowed(AccessGrantedContext grantedContext, SnapshotVersion snapshotVersion) implements AccessDecision {

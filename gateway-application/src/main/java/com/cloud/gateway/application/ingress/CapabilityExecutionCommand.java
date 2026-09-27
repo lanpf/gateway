@@ -1,8 +1,8 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
-import com.cloud.gateway.domain.policy.execution.CapabilityContext;
-import com.cloud.gateway.domain.policy.execution.CapabilityExecutionKey;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.runtime.CapabilityContext;
+import com.cloud.gateway.domain.capability.runtime.CapabilityExecutionKey;
 import java.util.Objects;
 import java.util.Set;
 

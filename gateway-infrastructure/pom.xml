@@ -87,5 +87,15 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+            Test scope only. The module assembles its adapters through auto-configuration, and the
+            wiring from configuration properties into those adapters is the part most likely to be
+            silently wrong, so it needs to be asserted against a real context.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

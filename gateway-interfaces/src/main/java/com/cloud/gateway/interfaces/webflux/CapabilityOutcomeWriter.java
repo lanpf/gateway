@@ -1,6 +1,6 @@
 package com.cloud.gateway.interfaces.webflux;
 
-import com.cloud.gateway.domain.policy.execution.CapabilityOutcome;
+import com.cloud.gateway.domain.capability.runtime.CapabilityOutcome;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 

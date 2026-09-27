@@ -1,10 +1,10 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.gateway.application.quota.QuotaCommandService;
-import com.cloud.gateway.domain.policy.capability.RateLimitCapability;
-import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.execution.CapabilityExecution;
-import com.cloud.gateway.domain.policy.execution.CapabilityOutcome;
+import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
+import com.cloud.gateway.domain.capability.runtime.CapabilityOutcome;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
@@ -29,17 +29,42 @@ class CapabilityResponseWriterTest {
     }
 
     @Test
-    void shouldFailClosedForUnknownDenialAndAllowEmptyPlan() {
+    void shouldFailClosedForUnknownStopAndAllowEmptyPlan() {
         CapabilityResponseWriter writer = new CapabilityResponseWriter(List.of());
         MockServerWebExchange denied = MockServerWebExchange.from(MockServerHttpRequest.get("/test"));
-        assertFalse(writer.respond(denied, report(new Outcome(false))).block());
+        assertFalse(writer.respond(denied, report(new Outcome(CapabilityOutcome.Disposition.STOP))).block());
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, denied.getResponse().getStatusCode());
         MockServerWebExchange allowed = MockServerWebExchange.from(MockServerHttpRequest.get("/test"));
         assertTrue(writer.respond(allowed, CapabilityExecution.empty()).block());
         assertNull(allowed.getResponse().getStatusCode());
+        MockServerWebExchange continuing = MockServerWebExchange.from(MockServerHttpRequest.get("/test"));
+        assertTrue(writer.respond(continuing, report(new Outcome(CapabilityOutcome.Disposition.CONTINUE))).block());
+        assertNull(continuing.getResponse().getStatusCode());
     }
 
-    private record Outcome(boolean allowed) implements CapabilityOutcome { }
+    private record Outcome(CapabilityOutcome.Disposition disposition) implements CapabilityOutcome {
+    }
+
+    @Test
+    void shouldStopAfterSuccessfulResponseRegardlessOfWriterContinuationFlag() {
+        CapabilityResponseWriter writer = new CapabilityResponseWriter(List.of(new SuccessfulOutcomeWriter()));
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test"));
+        assertFalse(writer.respond(exchange, report(new Outcome(CapabilityOutcome.Disposition.STOP))).block());
+        assertEquals(HttpStatus.OK, exchange.getResponse().getStatusCode());
+        assertTrue(exchange.getResponse().isCommitted());
+    }
+
+    private static final class SuccessfulOutcomeWriter implements CapabilityOutcomeWriter<Outcome> {
+        @Override
+        public Class<Outcome> outcomeType() { return Outcome.class; }
+
+        @Override
+        public reactor.core.publisher.Mono<Boolean> respond(
+                org.springframework.web.server.ServerWebExchange exchange, Outcome outcome) {
+            exchange.getResponse().setStatusCode(HttpStatus.OK);
+            return exchange.getResponse().setComplete().thenReturn(true);
+        }
+    }
 
     private static CapabilityExecution report(CapabilityOutcome outcome) {
         return new CapabilityExecution(Set.of(), List.of(outcome));

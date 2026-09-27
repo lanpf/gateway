@@ -1,9 +1,10 @@
 package com.cloud.gateway.domain.ingress.access;
 
+import com.cloud.gateway.domain.common.DomainException;
+
 import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.common.DomainException;
 
 import java.util.Locale;
 import java.util.Set;
@@ -25,11 +26,11 @@ public record RequestEvidence(
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 
     public RequestEvidence {
-        method = Require.notBlank(method, DomainException::missingField).trim().toUpperCase(Locale.ROOT);
+        method = Require.notBlank(method, DomainException::invalidObjectField).trim().toUpperCase(Locale.ROOT);
         // rawPath and rawQuery are signed verbatim: never decoded, trimmed, sorted or rewritten.
-        Require.notBlank(rawPath, DomainException::missingField);
-        origin = origin == null ? null : Require.notBlank(origin, DomainException::invalidField).trim();
-        remoteIp = Require.notBlank(remoteIp, DomainException::missingField).trim();
+        Require.notBlank(rawPath, DomainException::invalidObjectField);
+        origin = origin == null ? null : Require.notBlank(origin, DomainException::invalidObjectField).trim();
+        remoteIp = Require.notBlank(remoteIp, DomainException::invalidObjectField).trim();
     }
 
     /** Non-safe methods drive Browser Session origin validation. */

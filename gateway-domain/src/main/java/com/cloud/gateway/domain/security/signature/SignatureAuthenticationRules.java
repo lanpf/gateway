@@ -1,11 +1,14 @@
 package com.cloud.gateway.domain.security.signature;
 
-import com.cloud.framework.core.validation.Require;
-import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.common.DomainException;
+
+import com.cloud.framework.core.validation.Require;
+
+import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.Credential;
+import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.client.SignatureContract;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,7 +22,7 @@ public record SignatureAuthenticationRules(Duration maxClockSkew) {
 
     public SignatureAuthenticationRules {
         Require.notNull(maxClockSkew, DomainException::missingField);
-        Require.that(maxClockSkew, v -> !v.isNegative() && !v.isZero(), DomainException::invalidField);
+        Require.that(maxClockSkew, v -> !v.isNegative() && !v.isZero(), DomainException::invalidObjectField);
     }
 
     public Optional<Instant> acceptedTimestamp(SignatureInput evidence, Instant now) {

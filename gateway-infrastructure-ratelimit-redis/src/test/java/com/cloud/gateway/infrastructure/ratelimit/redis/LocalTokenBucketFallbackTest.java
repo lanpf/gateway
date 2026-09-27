@@ -1,6 +1,10 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
-import com.cloud.gateway.domain.policy.capability.*;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
+
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;

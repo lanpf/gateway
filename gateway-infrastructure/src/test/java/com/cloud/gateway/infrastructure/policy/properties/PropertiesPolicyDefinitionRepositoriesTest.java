@@ -1,5 +1,6 @@
 package com.cloud.gateway.infrastructure.policy.properties;
 
+import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
 import com.cloud.gateway.infrastructure.policy.mapstruct.AccessSnapshotDocumentMapStructMapperImpl;
@@ -11,7 +12,7 @@ import com.cloud.gateway.application.configuration.definition.RevisionedAccessDe
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.app.AppStatus;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.config.GatewayPolicyDefinitionProperties;
@@ -25,27 +26,23 @@ class PropertiesPolicyDefinitionRepositoriesTest {
         var properties = new GatewayPolicyDefinitionProperties();
         var bundle = new com.cloud.gateway.infrastructure.policy.config.CapabilityCompositionProperties.Bundle();
         bundle.setBundleId("standard");
-        var timeout = new com.cloud.gateway.infrastructure.policy.config.CapabilityCompositionProperties.Timeout();
-        timeout.setConnect(java.time.Duration.ofSeconds(1));
-        timeout.setRead(java.time.Duration.ofSeconds(2));
-        timeout.setTotal(java.time.Duration.ofSeconds(3));
-        bundle.setTimeout(timeout);
+        java.util.Map<String, Object> timeout = new java.util.HashMap<>(java.util.Map.of("connect", "PT1S", "read", "PT2S", "total", "PT3S"));
+        bundle.getCapabilities().put("timeout", timeout);
         properties.getPolicies().getBundles().put("standard", bundle);
-        var mapper = new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl()));
-        CapabilityCompositionPropertiesMapStructMapper policyConfiguration = org.mapstruct.factory.Mappers.getMapper(
-                com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionPropertiesMapStructMapper.class);
+        var mapper = new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))));
+        CapabilityCompositionPropertiesMapStructMapper policyConfiguration = new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionPropertiesMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()));
         var codec = new StoredPolicyDefinitionCodec(mapper, new ObjectMapper().findAndRegisterModules(),
-                com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                HeaderAdmissionRules.registeredOnly());
         var repository = new PropertiesCapabilityCompositionDefinitionRepository(properties, mapper, policyConfiguration, codec);
         RevisionedAccessDefinition<CapabilityComposition> first = repository.load();
-        timeout.setTotal(java.time.Duration.ofSeconds(4));
+        timeout.put("total", "PT4S");
         RevisionedAccessDefinition<CapabilityComposition> second = repository.load();
         org.junit.jupiter.api.Assertions.assertNotEquals(first.sourceRevision(), second.sourceRevision());
         assertEquals(java.time.Duration.ofSeconds(4), second.value().bundles()
-                .get(new com.cloud.gateway.domain.policy.bundle.CapabilityBundleId("standard")).timeout().total());
+                .get(new com.cloud.gateway.domain.capability.configuration.CapabilityBundleId("standard")).find(com.cloud.gateway.domain.capability.resilience.TimeoutConfigDefinition.INSTANCE).orElseThrow().total());
         assertEquals(java.time.Duration.ofSeconds(3), first.value().bundles()
-                .get(new com.cloud.gateway.domain.policy.bundle.CapabilityBundleId("standard")).timeout().total());
+                .get(new com.cloud.gateway.domain.capability.configuration.CapabilityBundleId("standard")).find(com.cloud.gateway.domain.capability.resilience.TimeoutConfigDefinition.INSTANCE).orElseThrow().total());
     }
 
     @Test
@@ -58,11 +55,11 @@ class PropertiesPolicyDefinitionRepositoriesTest {
         properties.getApps().put("web-app", app);
         properties.getClients().put(
                 "unrelated-invalid-client", new GatewayPolicyDefinitionProperties.Client());
-        StoredAccessSnapshotMapper mapper = new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl()));
+        StoredAccessSnapshotMapper mapper = new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))));
         StoredPolicyDefinitionCodec codec = new StoredPolicyDefinitionCodec(
                 mapper, new ObjectMapper().findAndRegisterModules(),
-                com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                HeaderAdmissionRules.registeredOnly());
         PropertiesAppAccessDefinitionRepository repository =
                 new PropertiesAppAccessDefinitionRepository(properties, mapper, new AppPropertiesMapStructMapperImpl(), codec);
 

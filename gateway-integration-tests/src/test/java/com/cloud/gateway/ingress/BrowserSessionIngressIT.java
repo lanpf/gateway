@@ -1,5 +1,6 @@
 package com.cloud.gateway.ingress;
 
+import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
@@ -26,32 +27,30 @@ import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
-import com.cloud.gateway.domain.policy.AuthorizationHeaderForwardingMode;
+import com.cloud.gateway.domain.capability.header.AuthorizationHeaderForwardingMode;
 import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.app.AppId;
-import com.cloud.gateway.domain.policy.CookieForwardingMode;
-import com.cloud.gateway.domain.policy.CredentialForwarding;
+import com.cloud.gateway.domain.capability.header.CookieForwardingMode;
+import com.cloud.gateway.domain.capability.header.CredentialForwarding;
 import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.domain.client.ClientStatus;
-import com.cloud.gateway.domain.policy.bundle.CapabilityBinding;
-import com.cloud.gateway.domain.policy.bundle.CapabilityBindingId;
-import com.cloud.gateway.domain.policy.bundle.CapabilityBundle;
-import com.cloud.gateway.domain.policy.bundle.CapabilityBundleId;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
-import com.cloud.gateway.domain.policy.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.header.HeaderPolicy;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
-import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
-import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
 import com.cloud.userauth.api.authentication.CreateSessionHandoffApiCommandOutput;
 import com.cloud.userauth.api.constants.UserAuthPathApiConstants;
 import com.cloud.userauth.api.authentication.IssueAuthChallengeApiCommandOutput;
@@ -328,10 +327,10 @@ class BrowserSessionIngressIT {
     private void seedSnapshot() throws Exception {
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
-                new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl()), objectMapper);
+                new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), objectMapper);
         StoredPolicyDefinitionCodec codec = new StoredPolicyDefinitionCodec(
-                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl())), objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())))), objectMapper, HeaderAdmissionRules.registeredOnly());
         NacosPolicyProperties properties = nacosPolicyProperties();
 
         // Endpoint access state is stored inline in the endpoint definition; there is no separate document.
@@ -379,7 +378,7 @@ class BrowserSessionIngressIT {
     }
 
     private CapabilityComposition browserSessionPolicies() {
-        // The downstream contract uses the current identity headers without compatibility aliases.
+        // The downstream contract uses the current identity header without compatibility aliases.
         HeaderPolicy headers = new HeaderPolicy(Set.of(
                 RequestHeader.APP_ID, RequestHeader.APP_PLATFORM, RequestHeader.SUBJECT_TYPE,
                 RequestHeader.USER_ID, RequestHeader.SESSION_ID),
@@ -387,7 +386,7 @@ class BrowserSessionIngressIT {
                         AuthorizationHeaderForwardingMode.STRIP, CookieForwardingMode.ALLOW_LIST, Set.of("BROWSER_SESSION")));
         // This browser entry does not authenticate a Client client: never manufacture a trusted Client alias.
         var bundleId = new CapabilityBundleId("user-auth-browser");
-        var bundle = new CapabilityBundle(bundleId, null, null, null, null, headers);
+        var bundle = new CapabilityBundle(bundleId, java.util.List.of(headers));
         return new CapabilityComposition(Map.of(bundleId, bundle), List.of(new CapabilityBinding(
                 new CapabilityBindingId("user-auth-browser-end"), bundleId, new ServiceId("user-auth"),
                 new EndpointId(ENDPOINT_ID), Set.of(), null, null, null)));
@@ -396,8 +395,8 @@ class BrowserSessionIngressIT {
     private StoredAccessSnapshotCodec snapshotCodec(
             ObjectMapper objectMapper, com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher) {
         return new StoredAccessSnapshotCodec(
-                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl())), hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())))), hasher, objectMapper, HeaderAdmissionRules.registeredOnly());
     }
 
     private NacosPolicyProperties nacosPolicyProperties() {

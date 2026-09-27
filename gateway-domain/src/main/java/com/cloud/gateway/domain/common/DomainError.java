@@ -8,9 +8,9 @@ import lombok.Getter;
 
 public enum DomainError implements BaseError {
     DOMAIN_ENTITY_ID_INVALID(0, "领域实体ID非法"),
-    DOMAIN_OBJECT_FIELD_REQUIRED(1, "领域对象字段不能为空"),
-    DOMAIN_OBJECT_FIELD_INVALID(2, "领域对象字段非法"),
-    DOMAIN_OBJECT_STATE_INVALID(3, "领域对象状态异常"),
+    DOMAIN_OBJECT_REQUIRED(1, "领域对象字段不能为空"),
+    DOMAIN_OBJECT_INVALID(2, "领域对象字段非法"),
+    DOMAIN_OBJECT_abnormal(3, "领域对象状态异常"),
 
     ACCESS_SNAPSHOT_NOT_FOUND(100, "入口策略快照不存在"),
     ACCESS_SNAPSHOT_ALREADY_EXISTS(101, "入口策略快照已存在"),
@@ -26,7 +26,10 @@ public enum DomainError implements BaseError {
 
     CLIENT_NOT_FOUND(250, "调用方不存在"),
     CLIENT_ALREADY_EXISTS(251, "调用方已存在"),
-    CLIENT_AMBIGUOUS(252, "调用方定义存在冲突");
+    CLIENT_AMBIGUOUS(252, "调用方定义存在冲突"),
+
+
+    SIGNATURE_VERIFIER_NOT_FOUND(300, "签名验证器不存在");
 
     @Getter private final int localCode;
     @Getter private final String message;

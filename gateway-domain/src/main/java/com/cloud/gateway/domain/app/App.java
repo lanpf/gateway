@@ -1,8 +1,10 @@
 package com.cloud.gateway.domain.app;
 
-import com.cloud.framework.core.validation.Require;
-import com.cloud.framework.domain.AggregateRoot;
 import com.cloud.gateway.domain.common.DomainException;
+
+import com.cloud.framework.core.validation.Require;
+
+import com.cloud.framework.domain.AggregateRoot;
 
 public record App(
         AppId appId,
@@ -13,7 +15,7 @@ public record App(
 {
     public App {
         Require.notNull(appId, DomainException::missingField);
-        platform = Require.notBlank(platform, DomainException::missingField).trim();
+        platform = Require.notBlank(platform, DomainException::invalidObjectField).trim();
         Require.notNull(status, DomainException::missingField);
         Require.notNull(access, DomainException::missingField);
     }
@@ -32,4 +34,3 @@ public record App(
         return access.allowsOrigin(origin);
     }
 }
-

@@ -9,9 +9,9 @@ class DomainErrorTest {
     @Test
     void shouldKeepSharedDomainErrorCodesAtAuthorizedDevelopmentAllocation() {
         assertEquals("800000", DomainError.DOMAIN_ENTITY_ID_INVALID.getErrorCode());
-        assertEquals("800001", DomainError.DOMAIN_OBJECT_FIELD_REQUIRED.getErrorCode());
-        assertEquals("800002", DomainError.DOMAIN_OBJECT_FIELD_INVALID.getErrorCode());
-        assertEquals("800003", DomainError.DOMAIN_OBJECT_STATE_INVALID.getErrorCode());
+        assertEquals("800001", DomainError.DOMAIN_OBJECT_REQUIRED.getErrorCode());
+        assertEquals("800002", DomainError.DOMAIN_OBJECT_INVALID.getErrorCode());
+        assertEquals("800003", DomainError.DOMAIN_OBJECT_abnormal.getErrorCode());
     }
 
     @Test

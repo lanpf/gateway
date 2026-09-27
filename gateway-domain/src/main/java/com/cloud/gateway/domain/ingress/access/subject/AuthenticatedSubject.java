@@ -26,19 +26,19 @@ public record AuthenticatedSubject(
 
         switch (subjectType) {
             case HOST_SESSION -> {
-                issuer = Require.notBlank(issuer, DomainException::missingField).trim();
+                issuer = Require.notBlank(issuer, DomainException::invalidObjectField).trim();
 
                 audiences = audiences == null ? Set.of() : audiences;
-                audiences.forEach(value -> Require.notBlank(value, DomainException::invalidField));
+                audiences.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
                 audiences = Set.copyOf(audiences);
 
                 scopes = scopes == null ? Set.of() : scopes;
-                scopes.forEach(value -> Require.notBlank(value, DomainException::invalidField));
+                scopes.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
                 scopes = Set.copyOf(scopes);
             }
             case BROWSER_SESSION -> {
                 if (StringUtils.isNotBlank(issuer) || CollectionUtils.isNotEmpty(audiences) || CollectionUtils.isNotEmpty(scopes)) {
-                    throw DomainException.invalidField();
+                    throw DomainException.invalidObjectField();
                 }
 
                 issuer = null;

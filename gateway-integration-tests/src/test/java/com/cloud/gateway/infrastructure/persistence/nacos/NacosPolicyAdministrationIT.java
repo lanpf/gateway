@@ -1,5 +1,6 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
+import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
@@ -51,10 +52,9 @@ import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
-import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodAccessSnapshotStore;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
@@ -147,12 +147,12 @@ class NacosPolicyAdministrationIT {
         configService = NacosFactory.createConfigService(serverAddress);
 
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-        StoredAccessSnapshotMapper snapshotMapper = new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl()));
+        StoredAccessSnapshotMapper snapshotMapper = new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))));
         com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
-                new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl()), objectMapper);
-        definitionCodec = new StoredPolicyDefinitionCodec(snapshotMapper, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
-        snapshotCodec = new StoredAccessSnapshotCodec(snapshotMapper, hasher, objectMapper, com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+                new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), objectMapper);
+        definitionCodec = new StoredPolicyDefinitionCodec(snapshotMapper, objectMapper, HeaderAdmissionRules.registeredOnly());
+        snapshotCodec = new StoredAccessSnapshotCodec(snapshotMapper, hasher, objectMapper, HeaderAdmissionRules.registeredOnly());
 
         policyProperties = policyProperties();
         seedDefinitionsAndBootstrapSnapshot(hasher);
@@ -194,10 +194,10 @@ class NacosPolicyAdministrationIT {
 
         com.cloud.gateway.application.configuration.publication.AccessDefinitions definitions = new com.cloud.gateway.application.configuration.publication.AccessDefinitions(endpointRepository, appRepository,
                 clientAccessRepository, policyConfigurationRepository);
-        com.cloud.gateway.domain.policy.header.HeaderRules headerRules =
-                com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly();
+        HeaderAdmissionRules headerRules =
+                HeaderAdmissionRules.registeredOnly();
         com.cloud.gateway.application.configuration.publication.AccessSnapshotPublication publication = new com.cloud.gateway.application.configuration.publication.AccessSnapshotPublication(snapshotStore,
-                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(hasher, headerRules), Clock.systemUTC());
+                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(hasher, headerRules, com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), Clock.systemUTC());
         com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService snapshotService = new com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService(
                 new com.cloud.gateway.application.configuration.publication.AccessPublicationCommandService(definitions, snapshotStore, publication, rollbackState,
                         publishLock),
@@ -208,7 +208,15 @@ class NacosPolicyAdministrationIT {
                 new ClientAccessCommandService(clientAccessRepository, rollbackState, publishLock),
                 new ClientCredentialCommandService(clientAccessRepository, rollbackState, publishLock),
                 new com.cloud.gateway.application.configuration.editing.EndpointAccessCommandService(endpointRepository, rollbackState, publishLock),
-                new com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.AccessDefinitionApiMapStructMapperImpl());
+                new com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.AccessDefinitionApiMapStructMapperImpl(),
+                new com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService(
+                        policyConfigurationRepository, rollbackState, publishLock, headerRules,
+                        com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()),
+                new com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.CapabilityCompositionApiMapStructMapperImpl(
+                        com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(
+                                com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(),
+                                new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(),
+                                new com.fasterxml.jackson.databind.ObjectMapper())));
         snapshotFacade = new DefaultAccessSnapshotCommandFacade(snapshotService,
                 new com.cloud.gateway.interfaces.facade.admin.snapshot.mapstruct.AccessSnapshotApiMapStructMapperImpl());
 
@@ -273,14 +281,14 @@ class NacosPolicyAdministrationIT {
         IngressSnapshot firstSnapshot = awaitSnapshot(2);
         assertEquals(firstOutput.contentHash(), firstSnapshot.contentHash());
         assertEquals(2L, firstSnapshot.version().value());
-        assertTrue(firstSnapshot.content().appRegistry().find(new AppId(APP_ID)).isPresent());
-        Client publishedClient = firstSnapshot.content().clientRegistry()
+        assertTrue(firstSnapshot.content().apps().find(new AppId(APP_ID)).isPresent());
+        Client publishedClient = firstSnapshot.content().clients()
                 .find(new ClientId(CLIENT_ID)).orElseThrow();
         assertEquals(Set.of(new AppId(APP_ID)), publishedClient.access().allowedApps());
         assertEquals("admin-it-active",
                 publishedClient.access().credentials().activeCredential().credentialId().value());
         // Endpoint access state is stored inline in the endpoint definition, never in a separate document.
-        assertEquals(ClientVerificationRequirement.OPTIONAL, firstSnapshot.content().endpointRegistry()
+        assertEquals(ClientVerificationRequirement.OPTIONAL, firstSnapshot.content().endpoints()
                 .find(new EndpointId(ENDPOINT_ID)).orElseThrow().access().clientVerificationRequirement());
 
         definitionFacade.saveEndpoint(new SaveEndpointApiCommand(
@@ -307,7 +315,7 @@ class NacosPolicyAdministrationIT {
         assertAllDefinitionDataIds();
         assertEquals(secondOutput.contentHash(), currentSnapshot.contentHash());
         assertEquals(3L, currentSnapshot.version().value());
-        Endpoint currentEndpoint = currentSnapshot.content().endpointRegistry()
+        Endpoint currentEndpoint = currentSnapshot.content().endpoints()
                 .find(new EndpointId(ENDPOINT_ID)).orElseThrow();
         assertTrue(currentEndpoint.enabled());
         assertEquals(ClientVerificationRequirement.REQUIRED,
@@ -322,7 +330,7 @@ class NacosPolicyAdministrationIT {
         });
         IngressSnapshot historicalSnapshot = snapshotHistory.find(new SnapshotVersion(2)).orElseThrow();
         assertEquals(firstOutput.contentHash(), historicalSnapshot.contentHash());
-        assertEquals(ClientVerificationRequirement.OPTIONAL, historicalSnapshot.content().endpointRegistry()
+        assertEquals(ClientVerificationRequirement.OPTIONAL, historicalSnapshot.content().endpoints()
                 .find(new EndpointId(ENDPOINT_ID)).orElseThrow().access().clientVerificationRequirement());
 
         manualObservationPoint();

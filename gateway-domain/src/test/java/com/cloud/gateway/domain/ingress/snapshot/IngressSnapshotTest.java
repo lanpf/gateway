@@ -3,10 +3,7 @@ package com.cloud.gateway.domain.ingress.snapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
-import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
-import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 import com.cloud.gateway.domain.app.App;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.app.AppAccess;

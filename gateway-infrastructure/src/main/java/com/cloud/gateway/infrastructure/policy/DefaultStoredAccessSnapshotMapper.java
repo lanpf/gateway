@@ -21,7 +21,7 @@ import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Comparator;
@@ -48,9 +48,9 @@ public final class DefaultStoredAccessSnapshotMapper implements StoredAccessSnap
     @Override
     public StoredAccessSnapshot toStore(IngressSnapshot source) {
         IngressContent content = source.content();
-        return documents.snapshot(source, toStoredEndpoints(content.endpointRegistry()),
-                toStoredApps(content.appRegistry()), toStoredClients(content.clientRegistry()),
-                content.capabilityComposition());
+        return documents.snapshot(source, toStoredEndpoints(content.endpoints()),
+                toStoredApps(content.apps()), toStoredClients(content.clients()),
+                content.capabilities());
     }
 
     @Override

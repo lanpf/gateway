@@ -1,5 +1,9 @@
 package com.cloud.gateway.application.configuration;
 
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -12,6 +16,8 @@ import com.cloud.framework.lock.LockExecutor;
 import com.cloud.gateway.application.configuration.publication.RevisionedAccessSnapshot;
 import com.cloud.gateway.application.common.ApplicationException;
 import com.cloud.gateway.application.common.ApplicationError;
+import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.header.HeaderPolicy;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.client.Credentials;
@@ -39,8 +45,8 @@ import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.ClientRegistry;
-import com.cloud.gateway.domain.policy.bundle.*;
-import com.cloud.gateway.domain.policy.capability.TimeoutPolicy;
+import com.cloud.gateway.domain.capability.configuration.*;
+import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,7 +72,7 @@ class AccessCommandServicesTest {
         appService(store).save(new com.cloud.gateway.application.configuration.editing.SaveAppAccessCommand(store.clients.revision(), APP_ID, "IOS", Set.of()));
         assertEquals("IOS", store.clients.value().find(APP_ID).orElseThrow().platform());
         assertEquals(1, store.clients.writeCount);
-        assertEquals("WEB", store.capture().snapshot().content().appRegistry().find(APP_ID)
+        assertEquals("WEB", store.capture().snapshot().content().apps().find(APP_ID)
                 .orElseThrow().platform());
         assertEquals(0, store.publishCount);
     }
@@ -96,8 +102,8 @@ class AccessCommandServicesTest {
         snapshotService(store, com.cloud.gateway.application.configuration.publication.AccessSnapshotHistory.empty()).publish(new com.cloud.gateway.application.configuration.publication.PublishAccessSnapshotCommand());
         assertEquals(1, store.publishCount);
         assertEquals(2, store.capture().snapshot().version().value());
-        assertEquals("IOS", store.capture().snapshot().content().appRegistry().find(APP_ID).orElseThrow().platform());
-        assertEquals("WEB", original.appRegistry().find(APP_ID).orElseThrow().platform());
+        assertEquals("IOS", store.capture().snapshot().content().apps().find(APP_ID).orElseThrow().platform());
+        assertEquals("WEB", original.apps().find(APP_ID).orElseThrow().platform());
     }
 
     @Test
@@ -114,8 +120,8 @@ class AccessCommandServicesTest {
             assertEquals(1, store.clients.writeCount);
             assertEquals(1, store.endpoints.writeCount);
             assertEquals(1, store.publishCount);
-            assertEquals(web.appRegistry().asMap(), store.clients.value().asMap());
-            assertEquals("WEB", store.capture().snapshot().content().appRegistry().find(APP_ID).orElseThrow().platform());
+            assertEquals(web.apps().asMap(), store.clients.value().asMap());
+            assertEquals("WEB", store.capture().snapshot().content().apps().find(APP_ID).orElseThrow().platform());
             assertEquals(3, store.capture().snapshot().version().value());
         }
     }
@@ -172,8 +178,8 @@ class AccessCommandServicesTest {
         IngressContent base = content(true);
         Client client = new Client(CLIENT_ID, ClientStatus.ENABLED,
                 new ClientAccess(Set.of(), new Credentials(active, grace)));
-        return new IngressContent(base.appRegistry(), new ClientRegistry(List.of(client)),
-                base.endpointRegistry(), base.capabilityComposition());
+        return new IngressContent(base.apps(), new ClientRegistry(List.of(client)),
+                base.endpoints(), base.capabilities());
     }
 
     @Test
@@ -198,7 +204,7 @@ class AccessCommandServicesTest {
 
         assertEquals(2, output.snapshotVersion().value());
         assertEquals("disabled", output.contentHash());
-        assertFalse(store.capture().snapshot().content().endpointRegistry()
+        assertFalse(store.capture().snapshot().content().endpoints()
                 .find(new EndpointId("LOGIN")).orElseThrow().enabled());
     }
 
@@ -265,12 +271,12 @@ class AccessCommandServicesTest {
 
     @Test
     void shouldNotActivateRecoveryWhenTargetViolatesHeaderRules() {
-        CapabilityBundleId id = new CapabilityBundleId("invalid-headers");
-        com.cloud.gateway.domain.policy.header.HeaderPolicy headers =
-                new com.cloud.gateway.domain.policy.header.HeaderPolicy(Set.of(), Map.of("X-Unregistered", "value"),
+        CapabilityBundleId id = new CapabilityBundleId("invalid-header");
+        HeaderPolicy headers =
+                new HeaderPolicy(Set.of(), Map.of("X-Unregistered", "value"),
                         Set.of(), null);
         CapabilityComposition policies = new CapabilityComposition(
-                Map.of(id, new CapabilityBundle(id, null, null, null, null, headers)), List.of());
+                Map.of(id, new CapabilityBundle(id, java.util.List.of(headers))), List.of());
         IngressContent targetContent = withPolicies(content(true), policies);
         IngressSnapshot target = new IngressSnapshot(new SnapshotVersion(1), targetContent,
                 hash(targetContent), CLOCK.instant());
@@ -492,8 +498,8 @@ class AccessCommandServicesTest {
     private static TestStore clientStore(Client client) {
         IngressContent source = content(true);
         Client other = new Client(new ClientId("other-client"), ClientStatus.ENABLED, new ClientAccess(Set.of(), null));
-        return new TestStore(snapshot(1, content(true)), new IngressContent(source.appRegistry(),
-                new ClientRegistry(List.of(client, other)), source.endpointRegistry(), source.capabilityComposition()));
+        return new TestStore(snapshot(1, content(true)), new IngressContent(source.apps(),
+                new ClientRegistry(List.of(client, other)), source.endpoints(), source.capabilities()));
     }
 
     private static Credentials clientCredentials(String id) {
@@ -509,10 +515,10 @@ class AccessCommandServicesTest {
     private static com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService snapshotService(TestStore store, com.cloud.gateway.application.configuration.publication.AccessSnapshotHistory history, Clock clock) {
         com.cloud.gateway.application.configuration.publication.AccessDefinitions definitions = new com.cloud.gateway.application.configuration.publication.AccessDefinitions(
                 store.endpoints, store.clients, store.clientAccess, store.policies);
-        com.cloud.gateway.domain.policy.header.HeaderRules rules =
-                com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly();
+        HeaderAdmissionRules rules =
+                HeaderAdmissionRules.registeredOnly();
         com.cloud.gateway.application.configuration.publication.AccessSnapshotPublication publication = new com.cloud.gateway.application.configuration.publication.AccessSnapshotPublication(store,
-                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(AccessCommandServicesTest::hash, rules), clock);
+                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(AccessCommandServicesTest::hash, rules, com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), clock);
         AccessPublishLock publishLock = new AccessPublishLock(store.lockExecutor);
         return new com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService(
                 new com.cloud.gateway.application.configuration.publication.AccessPublicationCommandService(definitions, store, publication, store,
@@ -522,20 +528,18 @@ class AccessCommandServicesTest {
     }
 
     private static String hash(IngressContent content) {
-        return (content.endpointRegistry().find(new EndpointId("LOGIN")).orElseThrow().enabled() ? "enabled" : "disabled")
-                + (content.appRegistry().asMap().isEmpty() ? "" : content.appRegistry().asMap().toString())
-                + (content.capabilityComposition().bundles().isEmpty() ? "" : content.capabilityComposition().toString());
+        return (content.endpoints().find(new EndpointId("LOGIN")).orElseThrow().enabled() ? "enabled" : "disabled")
+                + (content.apps().asMap().isEmpty() ? "" : content.apps().asMap().toString())
+                + (content.capabilities().bundles().isEmpty() ? "" : content.capabilities().toString());
     }
 
     private static CapabilityComposition configuredPolicies() {
         var id = new CapabilityBundleId("standard");
-        return new CapabilityComposition(Map.of(id, new CapabilityBundle(id, null,
-                new TimeoutPolicy(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3)),
-                null, null, null)), List.of());
+        return new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new TimeoutPolicy(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
     }
 
     private static IngressContent withPolicies(IngressContent source, CapabilityComposition policies) {
-        return new IngressContent(source.appRegistry(), source.clientRegistry(), source.endpointRegistry(),
+        return new IngressContent(source.apps(), source.clients(), source.endpoints(),
                 policies);
     }
 
@@ -543,7 +547,7 @@ class AccessCommandServicesTest {
         var store = new TestStore(snapshot(1, content(true)), content(true));
         store.endpoints.failOnLoad = true;
         CapabilityComposition policies = configuredPolicies();
-        var service = new com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService(store.policies, store, new AccessPublishLock(store.lockExecutor), com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+        var service = new com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService(store.policies, store, new AccessPublishLock(store.lockExecutor), HeaderAdmissionRules.registeredOnly(), com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry());
         service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityCompositionCommand(store.policies.revision(), policies));
         assertEquals(policies, store.policies.value());
         assertEquals(0, store.publishCount);
@@ -557,19 +561,18 @@ class AccessCommandServicesTest {
         CapabilityComposition policies = configuredPolicies();
         var store = new TestStore(snapshot(1, content(true)), withPolicies(content(true), policies));
         snapshotService(store, version -> Optional.empty()).publish(new com.cloud.gateway.application.configuration.publication.PublishAccessSnapshotCommand());
-        assertEquals(policies, store.capture().snapshot().content().capabilityComposition());
+        assertEquals(policies, store.capture().snapshot().content().capabilities());
         assertEquals(2, store.policies.readCount);
     }
 
     @Test void shouldRejectUnadmittedHeadersBeforeSavingOrPublishing() {
-        var id = new CapabilityBundleId("invalid-headers");
-        var headers = new com.cloud.gateway.domain.policy.header.HeaderPolicy(Set.of(),
+        var id = new CapabilityBundleId("invalid-header");
+        var headers = new HeaderPolicy(Set.of(),
                 Map.of("X-Unregistered", "value"), Set.of(), null);
         var policies = new CapabilityComposition(Map.of(id,
-                new CapabilityBundle(id, null, null, null, null, headers)), List.of());
+                new CapabilityBundle(id, java.util.List.of(headers))), List.of());
         var store = new TestStore(snapshot(1, content(true)), content(true));
-        var service = new com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService(store.policies, store,
-                new AccessPublishLock(store.lockExecutor), com.cloud.gateway.domain.policy.header.HeaderRules.registeredOnly());
+        var service = new com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService(store.policies, store, new AccessPublishLock(store.lockExecutor), HeaderAdmissionRules.registeredOnly(), com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry());
         assertThrows(com.cloud.gateway.domain.common.DomainException.class,
                 () -> service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityCompositionCommand(store.policies.revision(), policies)));
         assertTrue(store.policies.value().bundles().isEmpty());
@@ -598,7 +601,7 @@ class AccessCommandServicesTest {
         assertTrue(store.active);
         assertEquals(0, store.publishCount);
         service.rollback(new com.cloud.gateway.application.configuration.publication.RollbackAccessSnapshotCommand(new SnapshotVersion(1)));
-        assertEquals(targetContent.capabilityComposition(), store.capture().snapshot().content().capabilityComposition());
+        assertEquals(targetContent.capabilities(), store.capture().snapshot().content().capabilities());
         assertFalse(store.active);
         assertEquals(1, store.policies.writeCount);
     }
@@ -713,10 +716,10 @@ class AccessCommandServicesTest {
 
         private TestStore(IngressSnapshot snapshot, IngressContent definitions) {
             this.snapshot = new RevisionedAccessSnapshot(snapshot, new Revision("snapshot-1"));
-            endpoints = new EndpointDefinitions(definitions.endpointRegistry());
-            clients = new AppDefinitions(definitions.appRegistry());
-            clientAccess = new ClientAccessDefinitions(definitions.clientRegistry());
-            policies = new ConfigurationDefinitions(definitions.capabilityComposition());
+            endpoints = new EndpointDefinitions(definitions.endpoints());
+            clients = new AppDefinitions(definitions.apps());
+            clientAccess = new ClientAccessDefinitions(definitions.clients());
+            policies = new ConfigurationDefinitions(definitions.capabilities());
         }
 
         private void disableApp(AppId id) {

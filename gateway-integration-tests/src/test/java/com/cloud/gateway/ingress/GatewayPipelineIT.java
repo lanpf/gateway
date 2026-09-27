@@ -1,5 +1,11 @@
 package com.cloud.gateway.ingress;
 
+import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
+import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
 import com.cloud.gateway.application.configuration.publication.RevisionedAccessSnapshot;
 import com.cloud.gateway.application.quota.QuotaCommandService;
@@ -7,6 +13,10 @@ import com.cloud.gateway.application.quota.QuotaObserver;
 import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
+import com.cloud.gateway.domain.capability.header.HeaderPolicy;
+import com.cloud.gateway.domain.capability.resilience.TimeoutPolicy;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
@@ -23,15 +33,13 @@ import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.app.AppId;
-import com.cloud.gateway.domain.policy.bundle.*;
-import com.cloud.gateway.domain.policy.capability.*;
+import com.cloud.gateway.domain.capability.configuration.*;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
-import com.cloud.gateway.domain.policy.CredentialForwarding;
+import com.cloud.gateway.domain.capability.header.CredentialForwarding;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.domain.policy.header.*;
-import com.cloud.gateway.interfaces.config.GatewayIngressWebFluxBeans;
+import com.cloud.gateway.interfaces.config.IngressWebFluxConfiguration;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -238,7 +246,7 @@ class GatewayPipelineIT {
                             SubjectAuthenticationRequirement.ANONYMOUS, Set.of(), Set.of())));
         }
         var baseId = new CapabilityBundleId("base");
-        var base = new CapabilityBundle(baseId, null, timeout, null, null, headers);
+        var base = new CapabilityBundle(baseId, java.util.List.of(timeout, headers));
         var policies = new CapabilityComposition(Map.of(baseId, base), List.of(
                 new CapabilityBinding(new CapabilityBindingId("base"), baseId, new ServiceId(SERVICE),
                         null, Set.of(), null, null, null)));
@@ -266,10 +274,11 @@ class GatewayPipelineIT {
             CodecsAutoConfiguration.class, ReactorAutoConfiguration.class, SslAutoConfiguration.class,
             ReactiveWebServerFactoryAutoConfiguration.class, HttpHandlerAutoConfiguration.class,
             WebFluxAutoConfiguration.class, GatewayAutoConfiguration.class})
-    @Import(GatewayIngressWebFluxBeans.class)
+    @Import(IngressWebFluxConfiguration.class)
     static class PipelineApplication {
         @Bean Clock clock() { return Clock.systemUTC(); }
-        @Bean RateLimitQuota rateLimitQuota() {
+        @Bean
+        RateLimitQuota rateLimitQuota() {
             return (rule, value) -> RateLimitDecision.allowed(rule.dimension(), value, 1);
         }
         @Bean QuotaCommandService quotaCommandService(RateLimitQuota quota) {

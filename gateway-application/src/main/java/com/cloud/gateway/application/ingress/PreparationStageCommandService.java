@@ -5,8 +5,8 @@ import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.ingress.access.RequestEvidence;
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointMatch;
-import com.cloud.gateway.domain.policy.execution.CapabilityContext;
-import com.cloud.gateway.domain.policy.execution.CapabilitySlot;
+import com.cloud.gateway.domain.capability.runtime.CapabilityContext;
+import com.cloud.gateway.domain.capability.runtime.CapabilitySlot;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
@@ -27,7 +27,7 @@ public final class PreparationStageCommandService {
         RequestEvidence evidence = command.evidence();
         IngressSnapshot snapshot = capturer.capture().snapshot();
         List<Endpoint> candidates = matches.match(
-                snapshot.content().endpointRegistry(), evidence.method(), evidence.rawPath());
+                snapshot.content().endpoints(), evidence.method(), evidence.rawPath());
         EndpointMatch match = EndpointMatch.of(candidates);
         if (match instanceof EndpointMatch.Ambiguous) {
             observer.ambiguousMatch();
@@ -36,10 +36,10 @@ public final class PreparationStageCommandService {
 
         CapabilityContext context = new CapabilityContext(CapabilitySlot.PRE_AUTH, evidence, endpoint, null);
         CapabilityExecutionCommand capabilityCommand = new CapabilityExecutionCommand(
-                snapshot.content().capabilityComposition(), context, Set.of());
+                snapshot.content().capabilities(), context, Set.of());
         IngressTask<PreparationStageOutput> task = new IngressTask<>();
         task.finish(task.track(capabilities.execute(capabilityCommand))
-                .thenApply(output -> output.execution().allowed()
+                .thenApply(output -> output.execution().continues()
                         ? new PreparationStageOutput.Prepared(snapshot, match, evidence, output.execution())
                         : new PreparationStageOutput.Denied(output.execution())));
         return task;

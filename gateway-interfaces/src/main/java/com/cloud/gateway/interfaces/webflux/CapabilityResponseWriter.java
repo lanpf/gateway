@@ -1,7 +1,7 @@
 package com.cloud.gateway.interfaces.webflux;
 
-import com.cloud.gateway.domain.policy.execution.CapabilityExecution;
-import com.cloud.gateway.domain.policy.execution.CapabilityOutcome;
+import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
+import com.cloud.gateway.domain.capability.runtime.CapabilityOutcome;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,10 +26,11 @@ public final class CapabilityResponseWriter {
     public Mono<Boolean> respond(ServerWebExchange exchange, CapabilityExecution execution) {
         return Mono.defer(() -> {
             for (CapabilityOutcome outcome : execution.outcomes()) {
-                if (!outcome.allowed()) {
+                if (outcome.disposition() != CapabilityOutcome.Disposition.CONTINUE) {
                     CapabilityOutcomeWriter<?> writer = writers.get(outcome.getClass());
                     if (writer != null) {
-                        return writer.respondOutcome(exchange, outcome);
+                        // The outcome owns flow control; its writer cannot resume a stopped chain.
+                        return writer.respondOutcome(exchange, outcome).thenReturn(false);
                     }
                     exchange.getResponse().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
                     return exchange.getResponse().setComplete().thenReturn(false);

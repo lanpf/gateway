@@ -15,11 +15,11 @@ public record Credential(
     public Credential {
         Require.notNull(credentialId, DomainException::missingField);
         Require.notNull(signatureContract, DomainException::missingField);
-        secretRef = Require.notBlank(secretRef, DomainException::missingField).trim();
+        secretRef = Require.notBlank(secretRef, DomainException::invalidObjectField).trim();
         Require.notNull(validFrom, DomainException::missingField);
         Require.notNull(expiresAt, DomainException::missingField);
         if (!validFrom.isBefore(expiresAt)) {
-            throw DomainException.invalidField();
+            throw DomainException.invalidObjectField();
         }
     }
 

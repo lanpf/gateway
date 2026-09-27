@@ -1,8 +1,8 @@
 package com.cloud.gateway.domain.endpoint;
 
-import com.cloud.framework.core.validation.Require;
-import com.cloud.gateway.domain.common.DomainError;
 import com.cloud.gateway.domain.common.DomainException;
+
+import com.cloud.framework.core.validation.Require;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -32,7 +32,7 @@ public sealed interface EndpointMatch {
 
         Map<EndpointId, Endpoint> indexed = new LinkedHashMap<>();
         for (Endpoint candidate : candidates) {
-            Require.notNull(candidate, DomainException::invalidField);
+            Require.notNull(candidate, DomainException::missingField);
             Endpoint present = indexed.putIfAbsent(candidate.id(), candidate);
             if (present != null && !present.equals(candidate) || indexed.size() > 1) {
                 return new Ambiguous();

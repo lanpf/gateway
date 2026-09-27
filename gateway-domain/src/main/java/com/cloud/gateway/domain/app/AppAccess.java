@@ -1,6 +1,7 @@
 package com.cloud.gateway.domain.app;
 
 import com.cloud.framework.core.validation.Require;
+
 import com.cloud.gateway.domain.common.DomainException;
 
 import java.net.URI;
@@ -27,7 +28,7 @@ public record AppAccess(Set<String> allowedOrigins) {
     }
 
     private static String normalizeOrigin(String origin) {
-        String value = Require.notBlank(origin, DomainException::missingField).trim();
+        String value = Require.notBlank(origin, DomainException::invalidObjectField).trim();
         try {
             URI uri = new URI(value);
             String scheme = uri.getScheme();
@@ -38,7 +39,7 @@ public record AppAccess(Set<String> allowedOrigins) {
                     || uri.getRawQuery() != null
                     || uri.getRawFragment() != null
                     || (uri.getRawPath() != null && !uri.getRawPath().isEmpty())) {
-                throw DomainException.invalidField();
+                throw DomainException.invalidObjectField();
             }
             int port = uri.getPort();
             if ((scheme.equalsIgnoreCase("https") && port == 443)
@@ -54,7 +55,7 @@ public record AppAccess(Set<String> allowedOrigins) {
                     null,
                     null).toASCIIString();
         } catch (URISyntaxException exception) {
-            throw DomainException.invalidField();
+            throw DomainException.invalidObjectField();
         }
     }
 }

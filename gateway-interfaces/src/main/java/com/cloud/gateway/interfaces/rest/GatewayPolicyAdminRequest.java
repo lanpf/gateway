@@ -25,6 +25,12 @@ public final class GatewayPolicyAdminRequest {
     private GatewayPolicyAdminRequest() { }
 
     @Getter @Setter
+    public static final class SaveCapabilityComposition extends AuthenticatedSessionClientRequest {
+        @NotBlank private String expectedSourceRevision;
+        @NotNull @Valid private com.cloud.gateway.api.facade.admin.definition.SaveCapabilityCompositionApiCommand.CapabilityCompositionApiCommand policies;
+    }
+
+    @Getter @Setter
     public static final class SaveAppAccess extends AuthenticatedSessionClientRequest {
         @NotBlank private String expectedSourceRevision;
         @NotBlank @JsonProperty("appId") private String targetAppId;

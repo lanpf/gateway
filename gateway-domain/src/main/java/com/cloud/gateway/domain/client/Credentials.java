@@ -1,7 +1,8 @@
 package com.cloud.gateway.domain.client;
 
-import com.cloud.framework.core.validation.Require;
+import com.cloud.framework.core.error.BaseException;
 import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.validation.Require;
 
 import java.util.Optional;
 
@@ -25,7 +26,7 @@ public record Credentials(
         return Optional.ofNullable(graceCredential);
     }
 
-    private static DomainException invalid() {
-        return DomainException.invalidField();
+    private static BaseException invalid() {
+        return DomainException.invalidObjectField();
     }
 }

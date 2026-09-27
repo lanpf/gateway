@@ -1,8 +1,8 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.gateway.application.quota.QuotaObserver;
-import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitRule;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;

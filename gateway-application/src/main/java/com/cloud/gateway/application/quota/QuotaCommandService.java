@@ -1,10 +1,10 @@
 package com.cloud.gateway.application.quota;
 
-import com.cloud.gateway.domain.policy.capability.ApplicableQuota;
-import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitRuleId;
-import com.cloud.gateway.domain.policy.capability.RateLimitEvaluator;
-import com.cloud.gateway.domain.policy.capability.RateLimitQuota;
+import com.cloud.gateway.domain.capability.ratelimit.ApplicableQuota;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRuleId;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitEvaluator;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;

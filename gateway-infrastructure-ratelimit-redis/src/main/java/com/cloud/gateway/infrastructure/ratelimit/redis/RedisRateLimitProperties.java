@@ -23,7 +23,7 @@ public class RedisRateLimitProperties implements Namespaced {
 
     /**
      * Upper bound on one Redis quota call. A hanging dependency must not hold a request open; on
-     * expiry the denied is {@code unavailable}, so the configured RedisFailurePolicy decides.
+     * expiry the denied is {@code unavailable}, so the configured RedisFailureMode decides.
      */
     @NotNull @DurationMin(millis = 1)
     private Duration acquireTimeout = Duration.ofMillis(500);

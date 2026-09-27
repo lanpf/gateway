@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.deser.DeserializationProblemHandler;
 import java.io.IOException;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
-import com.cloud.gateway.api.facade.policy.CapabilityCompositionApiCommand;
+import com.cloud.gateway.api.facade.admin.definition.CapabilityCompositionApiCommand;
 import org.springframework.stereotype.Component;
 
 /** Header access schema is strict even when other HTTP payloads tolerate unknown fields. */

@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import com.cloud.gateway.interfaces.rest.GatewayAccessDefinitionCommandController;
 
 /**
  * Auto-configurations must stay outside the component-scan path. Scanned, they are registered
@@ -14,7 +15,11 @@ import org.springframework.context.annotation.FilterType;
 @SpringBootApplication
 @ComponentScan(
         basePackages = GatewayApplication.BASE_PACKAGE,
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = AutoConfiguration.class))
+        excludeFilters = {
+                @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = AutoConfiguration.class),
+                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
+                        classes = GatewayAccessDefinitionCommandController.class)
+        })
 public class GatewayApplication {
     public static final String BASE_PACKAGE = "com.cloud.gateway";
 

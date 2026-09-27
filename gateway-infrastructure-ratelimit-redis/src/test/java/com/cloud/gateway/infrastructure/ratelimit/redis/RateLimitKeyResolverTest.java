@@ -1,7 +1,9 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.framework.core.naming.DefaultResourceNameResolver;
-import com.cloud.gateway.domain.policy.capability.*;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 

@@ -1,8 +1,8 @@
 package com.cloud.gateway.domain.endpoint;
 
+import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.framework.core.validation.Require;
 import com.cloud.framework.domain.AggregateRoot;
-import com.cloud.gateway.domain.common.DomainException;
 
 import java.util.List;
 import java.util.Set;
@@ -23,12 +23,11 @@ public record Endpoint(
         Require.notNull(serviceId, DomainException::missingField);
         Require.notNull(routeId, DomainException::missingField);
 
-        Require.notEmpty(matchers, DomainException::missingField);
-        matchers.forEach(matcher -> Require.notNull(matcher, DomainException::invalidField));
+        Require.notEmpty(matchers, DomainException::invalidObjectField).forEach(value -> Require.notNull(value, DomainException::missingField));
         matchers = List.copyOf(matchers);
 
         tags = tags == null ? Set.of() : tags;
-        tags.forEach(tag -> Require.notBlank(tag, DomainException::invalidField));
+        tags.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
         tags = Set.copyOf(tags);
 
         Require.notNull(status, DomainException::missingField);

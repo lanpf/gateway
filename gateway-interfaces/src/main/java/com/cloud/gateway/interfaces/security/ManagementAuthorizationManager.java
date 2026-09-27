@@ -2,7 +2,7 @@ package com.cloud.gateway.interfaces.security;
 
 import com.cloud.framework.core.SubjectType;
 import com.cloud.gateway.domain.security.ManagementAccessRules;
-import com.cloud.gateway.interfaces.webflux.HostSessionSubjectAuthenticator;
+import com.cloud.gateway.interfaces.subject.HostSessionSubjectAuthenticator;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;

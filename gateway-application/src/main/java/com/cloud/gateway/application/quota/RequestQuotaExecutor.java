@@ -1,7 +1,7 @@
 package com.cloud.gateway.application.quota;
 
-import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.ApplicableQuota;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.ApplicableQuota;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 

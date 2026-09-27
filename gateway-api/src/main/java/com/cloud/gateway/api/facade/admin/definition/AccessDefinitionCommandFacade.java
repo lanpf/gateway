@@ -5,11 +5,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * Management commands for the three access definitions. Content upserts never carry status;
+ * Management commands for access definitions and capability composition. Content upserts never carry status;
  * enable/disable are dedicated transitions. Assembled only when a writable definition store
  * exists; read-only deployments expose the query facade alone.
  */
 public interface AccessDefinitionCommandFacade {
+    Result<DefinitionSaveApiOutput> saveCapabilityComposition(@NotNull @Valid SaveCapabilityCompositionApiCommand command);
+
     Result<DefinitionSaveApiOutput> saveApp(@NotNull @Valid SaveAppApiCommand command);
 
     Result<DefinitionSaveApiOutput> saveClient(@NotNull @Valid SaveClientApiCommand command);

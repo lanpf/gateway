@@ -2,7 +2,15 @@ package com.cloud.gateway.application.quota;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.cloud.gateway.domain.policy.capability.*;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRuleId;
+import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -23,7 +31,7 @@ class QuotaCommandServiceTest {
             return RateLimitDecision.rejected(rule.dimension(), key, Duration.ofMillis(rule.capacity()));
         }, unusedLocal(), (rule, decision) -> observations.add(decision));
         Set<RateLimitRuleId> applied = new HashSet<>();
-        RateLimitDecision decision = service.acquire(command(RedisFailurePolicy.CLOSED), applied);
+        RateLimitDecision decision = service.acquire(command(RedisFailureMode.CLOSED), applied);
         assertEquals(List.of("short", "long", "ip"), calls);
         assertEquals(Set.of(new RateLimitRuleId("short"), new RateLimitRuleId("long"), new RateLimitRuleId("ip")), applied);
         assertEquals(3, observations.size());
@@ -39,12 +47,12 @@ class QuotaCommandServiceTest {
                     localCalls.add(rule.ruleId().value());
                     return RateLimitDecision.allowed(rule.dimension(), key, 2);
                 }, (rule, decision) -> observations.add(decision));
-        QuotaCommand open = command(RedisFailurePolicy.OPEN_WITH_LOCAL);
+        QuotaCommand open = command(RedisFailureMode.OPEN_WITH_LOCAL);
         assertTrue(service.acquire(open, new HashSet<>()).allowed());
         assertEquals(3, localCalls.size());
         assertEquals(3, observations.size());
         assertTrue(observations.stream().allMatch(RateLimitDecision::allowed));
-        assertTrue(service.acquire(command(RedisFailurePolicy.CLOSED), new HashSet<>()).unavailable());
+        assertTrue(service.acquire(command(RedisFailureMode.CLOSED), new HashSet<>()).unavailable());
         assertEquals(3, localCalls.size());
     }
 
@@ -54,7 +62,7 @@ class QuotaCommandServiceTest {
         QuotaCommandService service = service((rule, key) -> calls.incrementAndGet() == 1
                 ? RateLimitDecision.rejected(rule.dimension(), key, Duration.ofSeconds(1))
                 : RateLimitDecision.allowed(rule.dimension(), key, 1), unusedLocal(), QuotaObserver.noop());
-        assertFalse(service.acquire(command(RedisFailurePolicy.OPEN_WITH_LOCAL), new HashSet<>()).allowed());
+        assertFalse(service.acquire(command(RedisFailureMode.OPEN_WITH_LOCAL), new HashSet<>()).allowed());
         assertEquals(3, calls.get());
     }
 
@@ -65,7 +73,7 @@ class QuotaCommandServiceTest {
                 (rule, key) -> calls.incrementAndGet() == 1
                         ? RateLimitDecision.unavailable(rule.dimension(), key)
                         : RateLimitDecision.rejected(rule.dimension(), key, Duration.ofSeconds(10)), QuotaObserver.noop());
-        assertTrue(service.acquire(command(RedisFailurePolicy.OPEN_WITH_LOCAL), new HashSet<>()).unavailable());
+        assertTrue(service.acquire(command(RedisFailureMode.OPEN_WITH_LOCAL), new HashSet<>()).unavailable());
         assertEquals(3, calls.get());
     }
 
@@ -76,7 +84,7 @@ class QuotaCommandServiceTest {
             calls.add(rule.ruleId().value());
             return RateLimitDecision.allowed(rule.dimension(), key, 1);
         }, unusedLocal(), QuotaObserver.noop());
-        QuotaCommand all = command(RedisFailurePolicy.CLOSED);
+        QuotaCommand all = command(RedisFailureMode.CLOSED);
         Set<RateLimitRuleId> applied = new HashSet<>();
         service.acquire(new QuotaCommand(all.groups(), all.dimensions(), true), applied);
         assertEquals(List.of("ip"), calls);
@@ -94,7 +102,7 @@ class QuotaCommandServiceTest {
         dimensions.put(RateLimitDimension.IP, null);
         dimensions.put(RateLimitDimension.CLIENT, " \t");
         Set<RateLimitRuleId> applied = new HashSet<>();
-        assertTrue(service.acquire(new QuotaCommand(command(RedisFailurePolicy.CLOSED).groups(), dimensions, false), applied).allowed());
+        assertTrue(service.acquire(new QuotaCommand(command(RedisFailureMode.CLOSED).groups(), dimensions, false), applied).allowed());
         assertTrue(applied.isEmpty());
     }
 
@@ -102,7 +110,7 @@ class QuotaCommandServiceTest {
     void shouldPreserveRawKeysAndDefensivelyCopyCommandFacts() {
         Map<RateLimitDimension, String> dimensions = new EnumMap<>(RateLimitDimension.class);
         dimensions.put(RateLimitDimension.IP, " raw:key ");
-        List<RateLimitRules> groups = new ArrayList<>(command(RedisFailurePolicy.CLOSED).groups());
+        List<RateLimitPolicy> groups = new ArrayList<>(command(RedisFailureMode.CLOSED).groups());
         QuotaCommand command = new QuotaCommand(groups, dimensions, false);
         groups.clear();
         dimensions.clear();
@@ -121,7 +129,7 @@ class QuotaCommandServiceTest {
         QuotaCommandService service = service((rule, key) -> { throw new IllegalStateException("unexpected"); },
                 unusedLocal(), QuotaObserver.noop());
         Set<RateLimitRuleId> applied = new HashSet<>();
-        assertThrows(IllegalStateException.class, () -> service.acquire(command(RedisFailurePolicy.OPEN_WITH_LOCAL), applied));
+        assertThrows(IllegalStateException.class, () -> service.acquire(command(RedisFailureMode.OPEN_WITH_LOCAL), applied));
         assertTrue(applied.isEmpty());
     }
 
@@ -133,8 +141,8 @@ class QuotaCommandServiceTest {
         return (rule, key) -> { throw new AssertionError("local quota must not run"); };
     }
 
-    private static QuotaCommand command(RedisFailurePolicy failure) {
-        return new QuotaCommand(List.of(new RateLimitRules(List.of(
+    private static QuotaCommand command(RedisFailureMode failure) {
+        return new QuotaCommand(List.of(new RateLimitPolicy(List.of(
                 new RateLimitRule("short", RateLimitDimension.CLIENT, 100, 1, RateLimitMode.EXACT),
                 new RateLimitRule("long", RateLimitDimension.CLIENT, 900, 1, RateLimitMode.EXACT),
                 new RateLimitRule("ip", RateLimitDimension.IP, 500, 1, RateLimitMode.EXACT)), failure)),

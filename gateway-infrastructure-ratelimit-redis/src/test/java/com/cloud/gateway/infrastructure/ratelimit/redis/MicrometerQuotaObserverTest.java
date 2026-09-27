@@ -4,7 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.cloud.gateway.application.quota.QuotaCommand;
 import com.cloud.gateway.application.quota.QuotaCommandService;
-import com.cloud.gateway.domain.policy.capability.*;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRuleId;
+import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.HashSet;
@@ -40,7 +46,7 @@ class MicrometerQuotaObserverTest {
             QuotaCommandService service = new QuotaCommandService(
                     (rule, key) -> RateLimitDecision.unavailable(rule.dimension(), key),
                     (rule, key) -> RateLimitDecision.allowed(rule.dimension(), key, 0), new MicrometerQuotaObserver(registry));
-            QuotaCommand command = new QuotaCommand(List.of(new RateLimitRules(List.of(RULE), RedisFailurePolicy.OPEN_WITH_LOCAL)),
+            QuotaCommand command = new QuotaCommand(List.of(new RateLimitPolicy(List.of(RULE), RedisFailureMode.OPEN_WITH_LOCAL)),
                     Map.of(RateLimitDimension.CLIENT, "private-identity"), false);
             HashSet<RateLimitRuleId> applied = new HashSet<>();
             service.acquire(command, applied);

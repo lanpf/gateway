@@ -1,6 +1,6 @@
 package com.cloud.gateway.interfaces.webflux;
 
-import com.cloud.gateway.domain.policy.capability.RateLimitCapability;
+import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;

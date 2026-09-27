@@ -22,7 +22,7 @@
 
 ## Domain allocation
 
-- **ERROR-DOMAIN-COMMON-001** **[REQUIRED][TOPIC]** — Prefix shared domain errors with `DOMAIN_`; reserve `000`, `001`, `002`, and `003` for `DOMAIN_ENTITY_ID_INVALID`, `DOMAIN_OBJECT_FIELD_REQUIRED`, `DOMAIN_OBJECT_FIELD_INVALID`, and `DOMAIN_OBJECT_STATE_INVALID`.
+- **ERROR-DOMAIN-COMMON-001** **[REQUIRED][TOPIC]** — Prefix shared domain errors with `DOMAIN_`; fix local code `000` as `DOMAIN_ENTITY_ID_INVALID`.
 - **ERROR-AGGREGATE-001** **[REQUIRED][TOPIC]** — Prefix aggregate errors with the aggregate name; the first two are `{AGGREGATE}_NOT_FOUND` and `{AGGREGATE}_ALREADY_EXISTS`.
 - **ERROR-ENUM-PLACEMENT-001** **[REQUIRED][TOPIC]** — Error enums live in the module of the layer that throws them: domain error enums in domain, application error enums in application, and infrastructure error enums in the owning infrastructure module.
 - **ERROR-ENUM-NAMING-001** **[REQUIRED][TOPIC]** — Organize and name error enums by owning aggregate, technical mechanism, or the shared-domain segment; do not create one enum mixing code segments from different layers.

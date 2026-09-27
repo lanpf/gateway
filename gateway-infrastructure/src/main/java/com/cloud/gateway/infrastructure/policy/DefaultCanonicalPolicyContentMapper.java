@@ -17,35 +17,35 @@ import java.util.stream.Collectors;
 
 @lombok.RequiredArgsConstructor
 public final class DefaultCanonicalPolicyContentMapper implements CanonicalPolicyContentMapper {
-    private final CapabilityCompositionStorageMapper policies;
+    private final CapabilityCompositionStorageMapper mapper;
     private static final String MATCHER_SEPARATOR = " ";
 
     @Override
-    public CanonicalPolicyContent toCanonical(IngressContent source) {
-        return new CanonicalPolicyContent(
-                source.endpointRegistry().values().stream()
+    public CanonicalIngressContent toCanonical(IngressContent source) {
+        return new CanonicalIngressContent(
+                source.endpoints().values().stream()
                         .sorted(Comparator.comparing(definition -> definition.endpointId().value()))
                         .map(this::endpoint)
                         .toList(),
-                source.clientRegistry().values().stream().collect(Collectors.toMap(
+                source.clients().values().stream().collect(Collectors.toMap(
                         client -> client.clientId().value(),
                         this::client,
                         (left, right) -> left,
                         TreeMap::new)),
-                source.appRegistry().values().stream().collect(Collectors.toMap(
+                source.apps().values().stream().collect(Collectors.toMap(
                         app -> app.appId().value(),
                         this::app,
                         (left, right) -> left,
                         TreeMap::new)),
-                policies.toStored(source.capabilityComposition()));
+                mapper.toStored(source.capabilities()));
     }
 
-    private CanonicalPolicyContent.Endpoint endpoint(Endpoint source) {
+    private CanonicalIngressContent.Endpoint endpoint(Endpoint source) {
         List<String> matchers = source.matchers().stream()
                 .map(matcher -> matcher.httpMethod() + MATCHER_SEPARATOR + matcher.pathPattern())
                 .sorted()
                 .toList();
-        return new CanonicalPolicyContent.Endpoint(
+        return new CanonicalIngressContent.Endpoint(
                 source.routeId().value(),
                 source.endpointId().value(),
                 matchers,
@@ -55,32 +55,32 @@ public final class DefaultCanonicalPolicyContentMapper implements CanonicalPolic
                 endpointAccess(source.access()));
     }
 
-    private CanonicalPolicyContent.EndpointAccess endpointAccess(EndpointAccess source) {
-        return new CanonicalPolicyContent.EndpointAccess(
+    private CanonicalIngressContent.EndpointAccess endpointAccess(EndpointAccess source) {
+        return new CanonicalIngressContent.EndpointAccess(
                 source.clientVerificationRequirement(),
                 source.subjectAuthenticationRequirement(),
                 sorted(source.requiredScopes(), Function.identity()),
                 sorted(source.requiredAudiences(), Function.identity()));
     }
 
-    private CanonicalPolicyContent.App app(App source) {
-        return new CanonicalPolicyContent.App(
+    private CanonicalIngressContent.App app(App source) {
+        return new CanonicalIngressContent.App(
                 source.appId().value(),
                 source.status(),
                 source.platform(),
                 sorted(source.access().allowedOrigins(), Function.identity()));
     }
 
-    private CanonicalPolicyContent.Client client(Client source) {
-        return new CanonicalPolicyContent.Client(
+    private CanonicalIngressContent.Client client(Client source) {
+        return new CanonicalIngressContent.Client(
                 sorted(source.access().allowedApps(), AppId::value),
                 source.clientId().value(),
                 source.status(),
                 credentials(source.clientId().value(), source.access().credentials()));
     }
 
-    private CanonicalPolicyContent.Credential credential(String clientId, Credential source) {
-        return new CanonicalPolicyContent.Credential(
+    private CanonicalIngressContent.Credential credential(String clientId, Credential source) {
+        return new CanonicalIngressContent.Credential(
                 clientId,
                 source.credentialId().value(),
                 source.expiresAt().toString(),
@@ -93,8 +93,8 @@ public final class DefaultCanonicalPolicyContentMapper implements CanonicalPolic
         return source.stream().map(valueMapper).sorted().toList();
     }
 
-    private CanonicalPolicyContent.ClientCredentials credentials(String clientId, Credentials source) {
-        return source == null ? null : new CanonicalPolicyContent.ClientCredentials(
+    private CanonicalIngressContent.ClientCredentials credentials(String clientId, Credentials source) {
+        return source == null ? null : new CanonicalIngressContent.ClientCredentials(
                 credential(clientId, source.activeCredential()),
                 source.graceCredential() == null ? null : credential(clientId, source.graceCredential()));
     }

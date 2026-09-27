@@ -2,8 +2,8 @@ package com.cloud.gateway.application.ingress;
 
 import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointMatch;
-import com.cloud.gateway.domain.policy.execution.CapabilityContext;
-import com.cloud.gateway.domain.policy.execution.CapabilitySlot;
+import com.cloud.gateway.domain.capability.runtime.CapabilityContext;
+import com.cloud.gateway.domain.capability.runtime.CapabilitySlot;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ public final class AdmissionStageCommandService {
             CapabilityContext context = new CapabilityContext(CapabilitySlot.POST_AUTH, prepared.evidence(),
                     endpoint, allowed.decision().grantedContext());
             CapabilityExecutionCommand capabilityCommand = new CapabilityExecutionCommand(
-                    prepared.snapshot().content().capabilityComposition(), context, prepared.execution().executed());
+                    prepared.snapshot().content().capabilities(), context, prepared.execution().executed());
             task.finish(task.track(capabilities.execute(capabilityCommand))
                     .thenApply(output -> new AdmissionStageOutput(allowed, output.capabilities(), output.execution())));
         } catch (RuntimeException failure) {

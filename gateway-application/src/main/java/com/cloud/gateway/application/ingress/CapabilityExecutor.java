@@ -1,7 +1,7 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.policy.execution.CapabilityOutcome;
-import com.cloud.gateway.domain.policy.execution.CapabilityUnit;
+import com.cloud.gateway.domain.capability.runtime.CapabilityOutcome;
+import com.cloud.gateway.domain.capability.runtime.CapabilityUnit;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 

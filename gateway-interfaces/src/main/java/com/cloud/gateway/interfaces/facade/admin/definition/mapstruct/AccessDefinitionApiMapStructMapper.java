@@ -9,14 +9,14 @@ import com.cloud.gateway.domain.client.*;
 import com.cloud.gateway.domain.common.StringEntityId;
 import com.cloud.gateway.domain.endpoint.*;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
-import com.cloud.gateway.interfaces.config.GatewayMapperConfig;
 import com.cloud.gateway.interfaces.facade.admin.definition.AccessDefinitionApiMapper;
 import java.util.Collection;
 import java.util.Set;
+import com.cloud.framework.core.mapper.MapStructConfig;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(config = GatewayMapperConfig.class)
+@Mapper(config = MapStructConfig.class)
 public abstract class AccessDefinitionApiMapStructMapper implements AccessDefinitionApiMapper {
     @Override public abstract SaveAppAccessCommand toCommand(SaveAppApiCommand source);
     @Override public abstract SaveClientAccessCommand toCommand(SaveClientApiCommand source);

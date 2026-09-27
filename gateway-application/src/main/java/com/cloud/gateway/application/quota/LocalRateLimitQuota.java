@@ -1,7 +1,7 @@
 package com.cloud.gateway.application.quota;
 
-import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitRule;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 
 /** Bounded emergency quota; never claims a cluster-wide EXACT guarantee. */
 @FunctionalInterface

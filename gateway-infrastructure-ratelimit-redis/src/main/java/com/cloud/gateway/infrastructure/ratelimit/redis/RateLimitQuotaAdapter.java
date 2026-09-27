@@ -1,8 +1,8 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
-import com.cloud.gateway.domain.policy.capability.RateLimitDecision;
-import com.cloud.gateway.domain.policy.capability.RateLimitRule;
-import com.cloud.gateway.domain.policy.capability.RateLimitQuota;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;

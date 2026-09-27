@@ -1,6 +1,6 @@
 package com.cloud.gateway.infrastructure.policy.config;
 
-import com.cloud.gateway.domain.policy.header.HeaderRules;
+import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
 
 import com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService;
 import com.cloud.gateway.infrastructure.policy.properties.PropertiesCapabilityCompositionDefinitionRepository;
@@ -60,17 +60,18 @@ import com.cloud.gateway.infrastructure.policy.AccessSnapshotDocumentMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
 
+@org.springframework.context.annotation.Import(CapabilityCodecConfiguration.class)
 @AutoConfiguration
 @ComponentScan(basePackageClasses = ClientPropertiesMapStructMapper.class)
 @AutoConfigureAfter(name = {
         "com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyAutoConfiguration",
         "com.cloud.gateway.infrastructure.coordination.redis.config.RedisPolicyCoordinationAutoConfiguration"
 })
-@EnableConfigurationProperties({GatewayPolicyDefinitionProperties.class, GatewayHeaderProperties.class})
+@EnableConfigurationProperties({GatewayPolicyDefinitionProperties.class, HeaderAdmissionProperties.class})
 public class PolicyInfrastructureAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    HeaderRules headerRules(GatewayHeaderProperties properties) {
+    HeaderAdmissionRules headerRules(HeaderAdmissionProperties properties) {
         return properties.toRules();
     }
     @Bean
@@ -107,7 +108,7 @@ public class PolicyInfrastructureAutoConfiguration {
             StoredAccessSnapshotMapper mapper,
             AccessSnapshotHasher hasher,
             ObjectMapper objectMapper,
-            HeaderRules headerRules
+            HeaderAdmissionRules headerRules
     ) {
         return new StoredAccessSnapshotCodec(mapper, hasher, objectMapper, headerRules);
     }
@@ -117,7 +118,7 @@ public class PolicyInfrastructureAutoConfiguration {
     StoredPolicyDefinitionCodec storedPolicyDefinitionCodec(
             StoredAccessSnapshotMapper mapper,
             ObjectMapper objectMapper,
-            HeaderRules headerRules
+            HeaderAdmissionRules headerRules
     ) {
         return new StoredPolicyDefinitionCodec(mapper, objectMapper, headerRules);
     }
@@ -164,8 +165,8 @@ public class PolicyInfrastructureAutoConfiguration {
             AccessPublishLock.class})
     CapabilityCompositionCommandService policyConfigCommandService(
             WritableCapabilityCompositionDefinitionRepository repository, AccessRollbackState rollbackState,
-            AccessPublishLock publishLock, HeaderRules headerRules) {
-        return new CapabilityCompositionCommandService(repository, rollbackState, publishLock, headerRules);
+            AccessPublishLock publishLock, HeaderAdmissionRules headerRules, com.cloud.gateway.domain.capability.configuration.CapabilityConfigRegistry capabilities) {
+        return new CapabilityCompositionCommandService(repository, rollbackState, publishLock, headerRules, capabilities);
     }
 
     @Bean
@@ -184,8 +185,8 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    AccessSnapshotAssembler accessSnapshotAssembler(AccessSnapshotHasher hasher, HeaderRules headerRules) {
-        return new AccessSnapshotAssembler(hasher, headerRules);
+    AccessSnapshotAssembler accessSnapshotAssembler(AccessSnapshotHasher hasher, HeaderAdmissionRules headerRules, com.cloud.gateway.domain.capability.configuration.CapabilityConfigRegistry capabilities) {
+        return new AccessSnapshotAssembler(hasher, headerRules, capabilities);
     }
 
     @Bean

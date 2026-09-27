@@ -1,6 +1,7 @@
 package com.cloud.gateway.interfaces.rest;
 
 import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_APP;
+import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICY_CONFIGURATION;
 import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_CLIENT_ACCESS;
 import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_CLIENT_CREDENTIAL;
 import static com.cloud.gateway.api.constants.GatewayPathApiConstants.ADMIN_POLICIES_ENDPOINT_ACCESS;
@@ -14,58 +15,61 @@ import com.cloud.gateway.api.facade.admin.definition.SetEndpointStatusApiCommand
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Content and status writes of the access definitions; absent in read-only deployments. */
-@RequestMapping
-@ResponseBody
+@RestController
 @RequiredArgsConstructor
 public class GatewayAccessDefinitionCommandController {
     private final AccessDefinitionCommandFacade facade;
     private final GatewayPolicyAdminRestMapper mapper;
 
+    @PutMapping(ADMIN_POLICY_CONFIGURATION)
+    public Result<DefinitionSaveApiOutput> saveCapabilityComposition(
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SaveCapabilityComposition request) {
+        return facade.saveCapabilityComposition(mapper.toCommand(request));
+    }
+
     @PutMapping(ADMIN_POLICIES_APP)
     public Result<DefinitionSaveApiOutput> saveApp(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveAppAccess request) {
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SaveAppAccess request) {
         return facade.saveApp(mapper.toCommand(request));
     }
 
     @PutMapping(ADMIN_POLICIES_CLIENT_ACCESS)
     public Result<DefinitionSaveApiOutput> saveClient(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveClientAccess request) {
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SaveClientAccess request) {
         return facade.saveClient(mapper.toCommand(request));
     }
 
     @PutMapping(ADMIN_POLICIES_CLIENT_CREDENTIAL)
     public Result<DefinitionSaveApiOutput> saveClientCredential(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveClientCredential request) {
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SaveClientCredential request) {
         return facade.saveClientCredential(mapper.toCommand(request));
     }
 
     @PutMapping(ADMIN_POLICIES_ENDPOINT_ACCESS)
     public Result<DefinitionSaveApiOutput> saveEndpoint(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SaveEndpointAccess request) {
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SaveEndpointAccess request) {
         return facade.saveEndpoint(mapper.toCommand(request));
     }
 
     @PutMapping(ADMIN_POLICIES_APP + "/status")
     public Result<DefinitionSaveApiOutput> setAppStatus(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SetAppStatus request) {
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SetAppStatus request) {
         SetAppStatusApiCommand command = mapper.toCommand(request);
         return facade.setAppStatus(command);
     }
 
     @PutMapping(ADMIN_POLICIES_CLIENT_ACCESS + "/status")
     public Result<DefinitionSaveApiOutput> setClientStatus(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SetClientStatus request) {
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SetClientStatus request) {
         return facade.setClientStatus(mapper.toCommand(request));
     }
 
     @PutMapping(ADMIN_POLICIES_ENDPOINT_ACCESS + "/status")
     public Result<DefinitionSaveApiOutput> setEndpointStatus(
-            @Valid @RequestBody GatewayPolicyAdminRequest.SetEndpointStatus request) {
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SetEndpointStatus request) {
         return facade.setEndpointStatus(mapper.toCommand(request));
     }
 }

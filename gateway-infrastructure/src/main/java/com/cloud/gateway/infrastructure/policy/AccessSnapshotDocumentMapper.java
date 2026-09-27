@@ -11,7 +11,7 @@ import java.util.Map;
 public interface AccessSnapshotDocumentMapper {
     StoredAccessSnapshot snapshot(IngressSnapshot source, List<StoredAccessSnapshot.Endpoint> endpoints,
             Map<String, StoredAccessSnapshot.App> apps, Map<String, StoredAccessSnapshot.Client> clients,
-            com.cloud.gateway.domain.policy.bundle.CapabilityComposition policies);
+            com.cloud.gateway.domain.capability.configuration.CapabilityComposition policies);
     StoredAccessSnapshot.App app(App source);
     StoredAccessSnapshot.Client client(Client source);
     StoredAccessSnapshot.Endpoint endpoint(Endpoint source);

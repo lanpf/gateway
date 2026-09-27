@@ -3,7 +3,6 @@ package com.cloud.gateway.domain.ingress.access;
 import com.cloud.gateway.domain.ingress.snapshot.*;
 
 import com.cloud.framework.core.SubjectType;
-import com.cloud.gateway.domain.ingress.access.app.VerifiedApp;
 import com.cloud.gateway.domain.ingress.access.client.ClientVerificationMode;
 import com.cloud.gateway.domain.ingress.access.client.ClientVerificationOutcome;
 import com.cloud.gateway.domain.ingress.access.client.VerifiedClient;
@@ -33,7 +32,7 @@ import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.policy.bundle.CapabilityComposition;
+import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;

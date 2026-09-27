@@ -1,9 +1,10 @@
 package com.cloud.gateway.domain.ingress.access.client;
 
+import com.cloud.gateway.domain.common.DomainException;
+
 import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.CredentialId;
-import com.cloud.gateway.domain.common.DomainException;
 
 import java.time.Instant;
 

@@ -52,7 +52,7 @@ class AccessSnapshotStoreTest {
 
         assertEquals(true, published);
         await(() -> second.capture().snapshot().version().value() == 2);
-        assertEquals(false, second.capture().snapshot().content().endpointRegistry().values()
+        assertEquals(false, second.capture().snapshot().content().endpoints().values()
                 .iterator().next().enabled());
         assertEquals(2, operations.readCount);
     }

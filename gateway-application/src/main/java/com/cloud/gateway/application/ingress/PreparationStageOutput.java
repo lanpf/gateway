@@ -3,7 +3,7 @@ package com.cloud.gateway.application.ingress;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.ingress.access.RequestEvidence;
 import com.cloud.gateway.domain.endpoint.EndpointMatch;
-import com.cloud.gateway.domain.policy.execution.CapabilityExecution;
+import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
 import java.util.Objects;
 
 /** Prepared hands the access stage everything it consumes; Denied terminates at the edge. */

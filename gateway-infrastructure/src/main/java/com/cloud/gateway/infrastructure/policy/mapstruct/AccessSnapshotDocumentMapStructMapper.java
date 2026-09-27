@@ -12,16 +12,20 @@ import com.cloud.gateway.infrastructure.policy.CapabilityCompositionStorageMappe
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshot;
 import java.util.List;
 import java.util.Map;
+import com.cloud.framework.core.mapper.MapStructConfig;
+import org.mapstruct.InjectionStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(config = PolicyStorageMapperConfig.class, uses = CapabilityCompositionStorageMapper.class)
+// Constructor injection keeps the generated Impl directly constructible in unit tests (uses-dependency).
+@Mapper(config = MapStructConfig.class, injectionStrategy = InjectionStrategy.CONSTRUCTOR,
+        uses = CapabilityCompositionStorageMapper.class)
 public abstract class AccessSnapshotDocumentMapStructMapper implements AccessSnapshotDocumentMapper {
     @Override
     @Mapping(target = "snapshotVersion", source = "source.version.value")
     public abstract StoredAccessSnapshot snapshot(IngressSnapshot source,
             List<StoredAccessSnapshot.Endpoint> endpoints, Map<String, StoredAccessSnapshot.App> apps,
-            Map<String, StoredAccessSnapshot.Client> clients, com.cloud.gateway.domain.policy.bundle.CapabilityComposition policies);
+            Map<String, StoredAccessSnapshot.Client> clients, com.cloud.gateway.domain.capability.configuration.CapabilityComposition policies);
     @Override
     @Mapping(target = "allowedOrigins", source = "access.allowedOrigins")
     public abstract StoredAccessSnapshot.App app(App source);

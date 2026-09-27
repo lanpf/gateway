@@ -15,13 +15,14 @@
 
 ## Explicit checks
 
-- **JAVA-VALIDATION-REQUIRE-001** **[REQUIRED][TOPIC]** — A business guard represents an expected business rejection that needs a stable error code; use framework-core `Require` and explicitly supply an exception extending `BaseException`. Do not replace a business exception with `Objects.requireNonNull`, `Validate`, or `Assert`, and do not use `Require` for an ordinary technical precondition.
-- **JAVA-VALIDATION-API-001** **[DEFAULT][TOPIC]** — For API requests, prefer Jakarta Bean Validation for field-shape constraints and use `Require` in API only when the failure is a business error explicitly promised by the API contract.
+- **JAVA-VALIDATION-REQUIRE-001** **[REQUIRED][TOPIC]** — Business checks express expected business rejections and must throw an exception extending framework-core `BaseException` with a stable business code, through a Require exception supplier or an explicit throw. Tool fallback must preserve that meaning; ordinary technical preconditions must not use business exception suppliers.
+- **JAVA-VALIDATION-COLLECTION-ELEMENT-001** **[DEFAULT][TOPIC]** — In modules depending on framework-core, prefer `FrameworkException.missingCollectionElement()` or `FrameworkException.invalidCollectionElement()` for technical checks of null or invalid collection elements.
+- **JAVA-VALIDATION-API-001** **[DEFAULT][TOPIC]** — For API requests, prefer Jakarta Bean Validation for field-shape constraints; perform business checks in API only when the failure is a business error explicitly promised by the API contract.
 - **JAVA-VALIDATION-LAYER-001** **[REQUIRED][TOPIC]** — Validate rules that depend on domain state, persistence data, or use-case context in application or domain rather than moving them to the protocol-binding layer.
 
 ## Exceptions and logging
 
 - **JAVA-EXCEPTION-001** **[REQUIRED][TOPIC]** — Use the framework exception hierarchy for Jakarta Bean Validation failures.
 - **JAVA-EXCEPTION-002** **[REQUIRED][TOPIC]** — A service-defined business exception extends framework-core `BaseException` and must not directly extend `RuntimeException` or another JDK exception type.
-- **JAVA-DOMAIN-GUARD-001** **[REQUIRED][TOPIC]** — A domain-layer null check, precondition, or other guard throws `DomainException`, which extends `BaseException`; do not substitute `IllegalArgumentException`, `IllegalStateException`, or another generic exception.
-- **JAVA-DOMAIN-EXCEPTION-FACTORY-001** **[REQUIRED][TOPIC]** — `DomainException` provides the static factory methods `invalidEntityId()` and `missingField()`.
+- **JAVA-DOMAIN-GUARD-001** **[REQUIRED][TOPIC]** — Guards expressing domain rules or domain validity throw `DomainException` extending `BaseException`, not generic JDK exceptions. Programming errors and technical preconditions inside domain remain technical exceptions; location alone does not make them business failures.
+- **JAVA-DOMAIN-EXCEPTION-FACTORY-001** **[REQUIRED][TOPIC]** — Each domain's `DomainException` provides `invalidEntityId()` for invalid domain entity identifiers. The error-code policy exclusively defines the code allocation for `DOMAIN_ENTITY_ID_INVALID`.

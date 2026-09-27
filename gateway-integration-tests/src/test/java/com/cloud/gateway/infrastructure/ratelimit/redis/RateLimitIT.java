@@ -5,7 +5,14 @@ import com.cloud.gateway.application.quota.QuotaCommandService;
 
 import com.cloud.framework.core.naming.NamespaceResolver;
 import com.cloud.framework.core.naming.Namespaced;
-import com.cloud.gateway.domain.policy.capability.*;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicy;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
+import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
+import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -173,7 +180,7 @@ class RateLimitIT {
         RateLimitRule longWait = rule("long", 1, 1);
         seed(first, shortWait, 0.5, 60);
         seed(first, longWait, 0.5, 60);
-        RateLimitDecision combined = acquire(first, List.of(shortWait, longWait), RedisFailurePolicy.CLOSED);
+        RateLimitDecision combined = acquire(first, List.of(shortWait, longWait), RedisFailureMode.CLOSED);
         assertFalse(combined.allowed());
         assertTrue(combined.retryAfter().compareTo(Duration.ofSeconds(59)) > 0);
         RateLimitDecision shortDecision = second.quota().tryAcquire(shortWait, VALUE);
@@ -196,9 +203,9 @@ class RateLimitIT {
     void shouldFailClosedOrUseBoundedLocalQuotaOnRealRedisError() {
         RateLimitRule rule = rule("wrong-type", 1, 1);
         first.redis().opsForValue().set(first.keys().bucket(rule, VALUE), "invalid-bucket", Duration.ofMinutes(1));
-        assertTrue(acquire(first, List.of(rule), RedisFailurePolicy.CLOSED).unavailable());
-        assertTrue(acquire(first, List.of(rule), RedisFailurePolicy.OPEN_WITH_LOCAL).allowed());
-        RateLimitDecision denied = acquire(first, List.of(rule), RedisFailurePolicy.OPEN_WITH_LOCAL);
+        assertTrue(acquire(first, List.of(rule), RedisFailureMode.CLOSED).unavailable());
+        assertTrue(acquire(first, List.of(rule), RedisFailureMode.OPEN_WITH_LOCAL).allowed());
+        RateLimitDecision denied = acquire(first, List.of(rule), RedisFailureMode.OPEN_WITH_LOCAL);
         assertFalse(denied.allowed());
         assertFalse(denied.unavailable());
         assertTrue(denied.retryAfter().compareTo(Duration.ZERO) > 0);
@@ -244,8 +251,8 @@ class RateLimitIT {
         }
     }
 
-    private static RateLimitDecision acquire(Node node, List<RateLimitRule> rules, RedisFailurePolicy failure) {
-        return node.service().acquire(new QuotaCommand(List.of(new RateLimitRules(rules, failure)),
+    private static RateLimitDecision acquire(Node node, List<RateLimitRule> rules, RedisFailureMode failure) {
+        return node.service().acquire(new QuotaCommand(List.of(new RateLimitPolicy(rules, failure)),
                 Map.of(RateLimitDimension.CLIENT, VALUE), false), new java.util.HashSet<>());
     }
 

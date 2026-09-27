@@ -2,16 +2,17 @@ package com.cloud.gateway.interfaces.rest.mapstruct;
 
 import com.cloud.gateway.api.facade.admin.definition.*;
 import com.cloud.gateway.api.facade.admin.snapshot.*;
-import com.cloud.gateway.interfaces.config.GatewayMapperConfig;
 import com.cloud.gateway.interfaces.rest.GatewayPolicyAdminRequest;
 import com.cloud.gateway.interfaces.rest.GatewayPolicyAdminRestMapper;
 import java.util.Set;
 import java.util.List;
+import com.cloud.framework.core.mapper.MapStructConfig;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(config = GatewayMapperConfig.class)
+@Mapper(config = MapStructConfig.class)
 public abstract class GatewayPolicyAdminRestMapStructMapper implements GatewayPolicyAdminRestMapper {
+    @Override public abstract SaveCapabilityCompositionApiCommand toCommand(GatewayPolicyAdminRequest.SaveCapabilityComposition source);
     @Override
     @Mapping(target = "appId", source = "targetAppId")
     public abstract SaveAppApiCommand toCommand(GatewayPolicyAdminRequest.SaveAppAccess source);

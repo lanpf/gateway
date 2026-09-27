@@ -28,13 +28,13 @@ public final class AccessDefinitions {
     }
 
     void restore(ObservedAccessDefinitions observed, IngressContent target) {
-        restore(endpoints, observed.endpoints(), target.endpointRegistry(),
+        restore(endpoints, observed.endpoints(), target.endpoints(),
                 (left, right) -> left.asMap().equals(right.asMap()));
-        restore(apps, observed.apps(), target.appRegistry(),
+        restore(apps, observed.apps(), target.apps(),
                 (left, right) -> left.asMap().equals(right.asMap()));
-        restore(clients, observed.clients(), target.clientRegistry(),
+        restore(clients, observed.clients(), target.clients(),
                 (left, right) -> left.asMap().equals(right.asMap()));
-        restore(policies, observed.policies(), target.capabilityComposition(), Object::equals);
+        restore(policies, observed.policies(), target.capabilities(), Object::equals);
     }
 
     private <T> void restore(WritableAccessDefinitionRepository<T> repository,
