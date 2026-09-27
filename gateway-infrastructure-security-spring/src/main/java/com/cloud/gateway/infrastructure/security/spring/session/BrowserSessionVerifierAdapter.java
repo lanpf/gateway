@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
@@ -39,6 +40,8 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
 
     private final WebClient webClient;
     private final Clock clock;
+    /** user-auth 依赖故障态门控：进入故障态 WARN 一次、恢复时 INFO 一次，避免逐请求重复记录。 */
+    private final AtomicBoolean degraded = new AtomicBoolean();
 
     @Override
     public CompletionStage<BrowserSessionVerificationOutcome> verify(String sessionToken) {
@@ -53,14 +56,34 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
                 .onErrorResume(WebClientResponseException.class, exception ->
                         Mono.just(responseFailure(exception)))
                 .onErrorResume(WebClientRequestException.class, exception -> {
-                    log.warn("Browser Session verification dependency is unavailable: {}",
-                            exception.getClass().getSimpleName());
+                    reportDegraded(() -> log.warn("Browser Session verification dependency is unavailable: {}",
+                            exception.getClass().getSimpleName()));
                     return Mono.just(BrowserSessionVerificationOutcome.unavailable(
                             SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE));
                 })
                 .onErrorResume(RuntimeException.class, exception ->
                         Mono.just(unavailableInvalidResponse(exception.getClass().getSimpleName())))
+                .map(outcome -> {
+                    if (outcome instanceof BrowserSessionVerificationOutcome.Verified
+                            || outcome instanceof BrowserSessionVerificationOutcome.Invalid) {
+                        reportRecovered();
+                    }
+                    return outcome;
+                })
                 .toFuture();
+    }
+
+    private void reportDegraded(Runnable warning) {
+        if (degraded.compareAndSet(false, true)) {
+            // user-auth 异常文本可能携带会话 key；只记录异常类型/状态码，不落原文（参照 RateLimitQuotaAdapter）。
+            warning.run();
+        }
+    }
+
+    private void reportRecovered() {
+        if (degraded.compareAndSet(true, false)) {
+            log.info("Browser Session verification dependency recovered");
+        }
     }
 
     static BrowserSessionVerificationOutcome subject(
@@ -95,13 +118,13 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
                 now.plus(remainingIdleTtl)));
     }
 
-    private static BrowserSessionVerificationOutcome responseFailure(WebClientResponseException exception) {
+    private BrowserSessionVerificationOutcome responseFailure(WebClientResponseException exception) {
         if (exception.getStatusCode().value() == 401 || exception.getStatusCode().value() == 404) {
             return BrowserSessionVerificationOutcome.invalid();
         }
         if (exception.getStatusCode().is5xxServerError()) {
-            log.warn("Browser Session verification dependency returned status={}",
-                    exception.getStatusCode().value());
+            reportDegraded(() -> log.warn("Browser Session verification dependency returned status={}",
+                    exception.getStatusCode().value()));
             return BrowserSessionVerificationOutcome.unavailable(
                     SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE);
         }

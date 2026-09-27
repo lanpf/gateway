@@ -128,6 +128,32 @@ class BrowserSessionVerifierAdapterTest {
                 unavailable.reason());
     }
 
+    @Test
+    void shouldKeepOutcomeStableAcrossDegradedAndRecoveryCyclesOnSameInstance() {
+        AtomicReference<Mono<ClientResponse>> nextResponse = new AtomicReference<>(Mono.error(
+                WebClientResponseException.create(503, "Unavailable", HttpHeaders.EMPTY, null, null)));
+        WebClient webClient = WebClient.builder()
+                .exchangeFunction(request -> nextResponse.get())
+                .build();
+        BrowserSessionVerifierAdapter verifier = new BrowserSessionVerifierAdapter(
+                webClient, Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertInstanceOf(BrowserSessionVerificationOutcome.Unavailable.class,
+                verifier.verify("client").toCompletableFuture().join());
+        assertInstanceOf(BrowserSessionVerificationOutcome.Unavailable.class,
+                verifier.verify("client").toCompletableFuture().join());
+
+        nextResponse.set(Mono.just(ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .body("{\"code\":\"0\",\"message\":\"SUCCESS\",\"data\":{"
+                        + "\"verified\":true,\"userId\":1001,"
+                        + "\"sessionId\":\"session-1\",\"remainingIdleTtlSeconds\":1800}}")
+                .build()));
+
+        assertInstanceOf(BrowserSessionVerificationOutcome.Verified.class,
+                verifier.verify("client").toCompletableFuture().join());
+    }
+
     private static BrowserSessionVerifierAdapter verifier(WebClient webClient) {
         return new BrowserSessionVerifierAdapter(
                 webClient, Clock.fixed(NOW, ZoneOffset.UTC));
