@@ -1,507 +1,135 @@
 # gateway 职责与交付 · v1
 
-领域模型及 v1 技术方案见 [DOMAIN.md](DOMAIN.md)，运行说明见 [README.md](../README.md)。
+本文是服务边界、跨服务协作、对外保证和交付限制的权威来源。领域判定见 [DOMAIN](DOMAIN.md)，签名与配置表示见 [PROTOCOL](PROTOCOL.md)，专属实现决策见 [DESIGN](DESIGN.md)，运行与验证入口见 [README](../README.md)。
 
 ## 职责边界
 
-gateway 将外部不可信请求转换为受控入口请求。请求生命周期分为两个宏观阶段：**阶段一入口准入**——快照捕获、端点匹配、限流、App/Client/Subject 接入评估、客户端签名验证、Header 安全准备；**阶段二下游治理**——已交付超时与 Header 转发应用。Client 直接承接原业务渠道身份，不增加渠道映射。
+gateway 将外部不可信请求转为受控入口请求，负责身份验证、接入控制、签名防重放、配额与转发治理；各阶段决策以 DOMAIN 为准。Client 承接原业务渠道身份，不增加渠道映射。
 
-账户、登录会话生命周期、Token 签发/撤销、Role/Permission 归 user-auth；资源归属及最终业务授权归对应业务服务。gateway 不查询这些业务数据、不签发 Token、不把入口放行解释为最终授权。
+| gateway 不负责 | 所有者 |
+| --- | --- |
+| 账户、登录会话生命周期、Token 签发/撤销、Role/Permission | user-auth |
+| 资源归属和最终业务授权 | 拥有对应资源的业务服务 |
+| 共享自定义 Header 名称契约 | framework |
+| 网络隔离、代理来源可信配置、指标导出、告警送达与日志采集/留存 | 部署维护方 |
+| 受管理 Definition 身份提供、冲突处理、环境配置初始化 | 配置维护方 |
 
-下游服务不暴露公网；网络策略只允许 gateway 和授权内部工作负载。内部调用仍使用可信内网，不增加 workload identity/delegation。Header 自身不是跨不可信网络的身份凭据。
+入口放行不替代最终业务授权。gateway 不查询业务资源、不签发 Token；认证与配额失败不由下游业务服务补救。
 
 ## 协作契约
 
-- 外部 App/Client 标识使用 gateway v1 协议。App 声明只证明匹配到 ENABLED 配置；可信 ClientId 仅由有效凭据恢复。客户端版本是非可信声明。
-- 有限的共享自定义 Header（CONTEXT/SIGNATURE）由 [framework-core RequestHeader](../../framework/docs/RESPONSIBILITIES.md) 枚举声明。gateway 管理名称扩展和禁止 set/remove 名单；domain 中 TrustedHeaderResolver 仅按固定名称输出六种可信事实，DeclaredHeaderResolver 处理允许保留的 APP_VERSION 声明，格式有效不代表身份可信。interfaces 只负责 HTTP 读取、绑定与写入，两个解析器均不依赖 HTTP。HeaderConfig 使用 trustedHeaders 集合，不支持重命名映射。API、存储和本地配置统一使用枚举选择。
-- AccessGrantedContext 携带 VerifiedApp（appId、platform）、可选的 VerifiedClient（clientId、credentialId、verificationMode、verifiedAt）与可选的完整 AuthenticatedSubject；v1 决定保留 issuer 与 authenticationExpiresAt，不构造裁剪值对象。未验证的 Client 声明不进入上下文；入口获准不替代下游最终业务授权。快照版本记录在 AccessDecision 上。AuthenticatedSubject.authenticationExpiresAt 在 Host 路径来自已认证 Token exp，在 Browser 路径来自收到验证响应时刻加剩余 idle TTL，不是会话绝对期限。
-- gateway.header 的 deny-set／deny-remove 在启动时生成不可变 HeaderConfigRule，按操作独立否决；保存、发布、快照编码/加载均校验配置名称与操作否决名单。HeaderConfig 随快照动态更新，但部署规则当前变更需重启；不提供独立规则热刷新。此限制避免运行请求混用未经联合校验的规则和策略。
-- 未发布阶段直接破坏式更新，不注册历史 Header 名称、LEGACY 分类或兼容映射，也不专门清除历史名称。未验签 Client 声明不能转为可信 CLIENT_ID。user-auth/framework-starter 读取逻辑迁移仍暂缓，现有下游必须迁移后才能按新契约协作；本次不改动这两个工程。历史签名算法按既定需求保留，与 Header 历史名称无关。
-- Host Session 使用 JWT/JWK 或 Reference Token introspection，统一恢复 subjectId/sessionId；验证 issuer、时间、audience、scope 和必需声明。两种技术路径不泄露到领域上下文。
-- 端点的 requiredAudiences/requiredScopes 是可选的附加访问要求（子集 AND 校验），不替代认证阶段校验；管理入口最低要求为 REQUIRED 主体、admin scope 和 gateway audience。
-- Browser Session 的权威协作定义见 [user-auth 职责与协作](../../user-auth/docs/RESPONSIBILITIES.md)，使用 user-auth-api 发布的 Facade 路径与载荷，经受管理 serviceId 的内部实例调用。sessionId 保持现有返回身份；user-auth 管理 idle TTL、绝对期限和父会话。gateway 不刷新 Cookie。
-- Browser Session 无效返回 401，不可达 503，非法响应 502；不可降级为匿名、宿主或缓存身份。非安全请求严格验证 App.allowedOrigins。
-- /api/user-auth/** 与 /admin/user-auth/** 路由剥离服务段；/oauth2/** 与 /.well-known/** 原样转发。/internal/** 不登记也不公开路由。
-- 管理端点要求 HOST_SESSION、admin scope 和 gateway audience。OAuth2 协议端点可按显式策略保留 Authorization；Cookie 只按名称白名单转发。
-- 历史签名算法继续可用；新接入采用 HTTP_REQUEST_SIGNATURE_V1。协议迁移不等于密钥轮换，不允许验签失败降级。
+### 外部客户端与下游服务
+
+客户端以 v1 协议声明 App/Client 并提交所需认证证据，报文见 PROTOCOL。gateway 对原始事实作入口判定，获准后按领域安全计划清除和写入上下文，再转发到登记路由。拒绝不触发下游业务调用。客户端版本是声明，不参与授权；身份可信性以 [领域规则](DOMAIN.md#27-跨模型规则)为准。
+
+下游只接受 gateway 和授权内部工作负载的网络访问，不直接暴露公网。内部调用仍使用可信内网，不增加 workload identity/delegation；Header 本身不是穿越不可信网络的身份凭据。下游拥有最终业务授权，不能把 gateway 的入口身份或 App platform 等属性当作最终资源授权。
+
+### framework 与共享 Header
+
+共享名称由 [framework 职责文档](../../framework/docs/RESPONSIBILITIES.md#framework-core)拥有；gateway 拥有可信取值、清除、字段选择与转发语义，见 [DOMAIN Header 规则](DOMAIN.md#6-header-与信任上下文)。下游消费逻辑由 framework-starter 和相应服务各自迁移，枚举名称更新不自动证明消费侧兼容。
+
+gateway 不登记历史别名、LEGACY 分类或兼容映射，不专门识别/清除历史名称。user-auth/framework-starter 的 Header 消费迁移仍暂缓；现有下游完成迁移后才能按当前契约协作。历史签名计算继续兼容，与 Header 历史名称无关。
+
+### user-auth 协作
+
+Host Session 的签发、撤销及 JWT/introspection 协议由 user-auth 拥有；gateway 验证 Token 后恢复主体事实，接入要求见 DOMAIN。外部 `/api/user-auth/**`、`/admin/user-auth/**` 剥离服务段转发；`/oauth2/**`、`/.well-known/**` 原样转发。`/internal/**` 不登记、不公开路由。
+
+Browser Session 的调用方流程由 gateway 维护：
+
+1. 从请求传输证据取得 Browser Cookie；由接入过程决定是否触发验证，未知/歧义路径不触发。
+2. 经受管理 serviceId 的内部实例，使用 user-auth-api 发布的路径和载荷请求在线验证。
+3. 接纳响应或分类无效、不可达、非法响应，再按 DOMAIN 进行接入与 Origin 判定；失败不转换为匿名、宿主或缓存身份。
+4. 获准后按策略向 user-auth 转发可信上下文及允许的原始 Cookie，响应 Cookie 由 user-auth 拥有，gateway 不刷新 Cookie。
+
+user-auth 持有在线验证端点、会话状态、idle TTL、绝对期限和父会话规则；其完整载荷和消费语义只在 [user-auth 协作契约](../../user-auth/docs/RESPONSIBILITIES.md#browser-session-在线验证端点)维护。gateway 保持返回的 sessionId 身份，不把剩余 idle TTL 当作不会提前撤销的保证。会话结束端点也以 [user-auth 端点契约](../../user-auth/docs/RESPONSIBILITIES.md#browser-session-结束端点契约)为准，不在本工程复制表或消费规则。
+
+### 管理调用方
+
+管理调用需通过 App 接入与管理 Host 身份要求，业务最低授权见 [DOMAIN 管理链](DOMAIN.md#44-管理入口链)。body 的身份声明不能证明权限。管理协议分 Definition/Snapshot、命令/查询四类；正式载荷复用 [gateway-api](../gateway-api/src/main/java/com/cloud/gateway/api/facade/admin)，配置表示和示例见 PROTOCOL。
+
+| 端点/操作 | 对调用方的契约 |
+| --- | --- |
+| PUT /admin/gateway/policies/{app,client-access,endpoint-access} | 保存单条接入内容，返回新 sourceRevision；创建/编辑的状态及凭据保留规则见 DOMAIN。 |
+| PUT /admin/gateway/policies/client-credential | 整体轮换已有 Client 的凭据，返回新 sourceRevision；与接入编辑共享文件修订。 |
+| PUT /admin/gateway/policies/{app,client-access,endpoint-access}/status | 单独切换状态，返回新 sourceRevision。 |
+| PUT /admin/gateway/policies/configuration | 整份保存能力组合，不自动发布；未携带条目从编辑态移除。 |
+| Definition 查询 | 返回集合内容与共享 sourceRevision；未初始化时修订为空，不回显 secretRef。 |
+| POST /admin/gateway/snapshot/publish | 显式发布，内部观察全部 Definition；不要求调用方发布令牌。 |
+| POST /admin/gateway/snapshot/rollback | 指定正数历史版本，恢复后返回快照事实。 |
+| Snapshot 查询 | 返回当前发布事实；从未发布时字段为空。 |
+
+具体路径常量见 [管理路径契约](../gateway-api/src/main/java/com/cloud/gateway/api/constants/GatewayPathApiConstants.java)。本表声明协议意图，**不保证所有 HTTP 入口已可达**；当前验证范围见交付状态。查询与发布/回退的用例和 Facade 存在不能替代 HTTP 可达性验收。
+
+只读部署不提供保存、发布、回退写入口，保留查询用例。保存的文件级 CAS、发布闸门和恢复结果以 [DOMAIN 管理用例](DOMAIN.md#8-管理用例)为准；新 revision 是连续编辑令牌，不是新发布版本。
+
+## 对外保证与限制
+
+### HTTP 失败映射
+
+领域拒绝先按 DOMAIN 判定，适配器再映射 HTTP；状态码不反向定义领域原因。下表记录现有入口投影及其明确限制。
+
+| 结局 | HTTP 表示 |
+| --- | --- |
+| APP_NOT_FOUND、CLIENT_REQUIRED | 400 |
+| ENDPOINT_NOT_FOUND；实际路由与端点 routeId 不一致；准备事实缺失 | 404，未知与歧义端点对外统一 |
+| CLIENT_VERIFICATION_REQUIRED、CLIENT_VERIFICATION_MISMATCH、SUBJECT_REQUIRED、SUBJECT_AUTHENTICATION_REJECTED | 401 |
+| CLIENT_NOT_FOUND、CLIENT_NOT_ALLOWED、CLIENT_VERIFICATION_REJECTED、AUDIENCE_NOT_ALLOWED、SCOPE_NOT_ALLOWED、BROWSER_ORIGIN_NOT_ALLOWED | 403 |
+| CLIENT_VERIFICATION_FAILED、SUBJECT_AUTHENTICATION_UPSTREAM_UNAVAILABLE | 503 |
+| SUBJECT_AUTHENTICATION_RESPONSE_INVALID | 502 |
+| Browser Session 无效 / 不可达 / 非法响应 | 分别 401 / 503 / 502 |
+| 证据 body 超过协议上限 | 413 |
+| 配额超限 | 429，Retry-After 为最大等待时间向上取整秒，至少 1 秒 |
+| 配额依赖不可用且没有允许的应急结果 | 503 |
+| 下游已识别的连接失败 / 超时 | 分别 502 / 504，响应未提交时映射 |
+| 缺失必需 Header 转发计划 | 500，失败关闭 |
+
+整理前签名段笼统约定“凭据缺失或错误返回 401”，但现有签名 Rejected 进入 CLIENT_VERIFICATION_REJECTED 后映射为 403。该原有 401 约定与当前行为的偏差尚未完成契约对齐；上表说明当前投影，预期契约及修复范围仍需确定。
+
+响应已提交时不替换原响应或标准错误体；未分类异常继续传播。业务错误码不通过消息文本识别；管理绑定与校验失败使用既有 framework OBJECT_INVALID，业务冲突保留所属稳定错误。业务号段见 DOMAIN。
+
+### 发布、恢复与运行约束
+
+请求内保持完整单一快照；不同实例可短暂持有相邻版本，不保证全局瞬时撤销。编辑态保存不影响运行请求，显式发布是生效闸门。未知能力或非法快照拒绝加载；无有效远端快照和 LKG 的首次启动失败。
+
+发布/回退的成功输出不是所有实例已切换的保证。超时、SDK false 或取消不证明远端没有提交；调用方失败后先检查 Snapshot 与各 Definition revision，再按当前状态重试。回退部分失败或清除失败时保留阻断，不人工删除以绕过恢复；同目标重试复用检查点，无法自动恢复时由配置维护方处理冲突。业务 SLA 由部署维护方确定，执行预算及租约参数见 DESIGN。
+
+EXACT 依赖共享额度；OPEN_WITH_LOCAL 只提供有界本地应急，不保证集群精确，需要部署告警。管理最低要求在启动校验当前快照，运行期独立执行；启动检查不代表每次发布已完成管理端点专项审查。
+
+Header 策略随快照动态更新；部署否决名单变更当前需重启，不提供独立规则热刷新。部署规则和策略必须联合有效，不能在请求中混用未经校验的组合。只允许快照发布身份写 Snapshot，运行身份只读；仓库不自动升级或覆盖外部 Nacos/Redis 数据。
+
+### 部署与故障处置责任
+
+部署维护方负责限制下游和 internal 网络访问、代理来源可信设置、配置指标导出和告警送达。具体指标名见 [观测设计](DESIGN.md#运行快照恢复与观测)，不以日志代替告警。
+
+刷新持续失败超过两个 recovery-interval、LKG 故障持续、回退阻断未清除或最后成功时间超出允许恢复窗口时应告警。部署日志留存须覆盖至少一次完整故障/恢复周期并满足生产审计要求。gateway 的操作摘要提供目标版本、恢复进度、耗时和结果，不输出 Token、Cookie、密钥或完整载荷。
 
 ## 交付状态
 
-v1 交付聚焦阶段一入口准入：三段式固定管道（准备/接入/准入）、IngressSnapshot 快照与发布、管理面四门面协议（definition/snapshot × command/query）、限流双槽位（EXACT）与 Header 安全准备。Header 转发清除属安全必需，随阶段一交付。
+以下区分现有实现、最近有记录的验证范围和未完成承诺。领域设计成立不代表交付；历史验证记录不能证明当前工作区通过。
 
-阶段一交付入口准入与 EXACT 限流；阶段二交付 `timeout` 与 `headerApply`，在 FORWARD 槽位应用超时预算和 Header 转发计划。CapabilityBundle 已改为开放能力配置集合，当前内建限流、超时与 Header 三项能力。
+| 能力 | 现有实现及验证边界 | 限制/证据 |
+| --- | --- | --- |
+| 入口准入、EXACT、超时与 Header 应用 | 已有固定管线及运行实现；最近有记录的真实请求链和 Redis 场景通过。 | [GatewayPipelineIT](../gateway-integration-tests/docs/GatewayPipelineIT.md)、[RateLimitIT](../gateway-integration-tests/docs/RateLimitIT.md)说明场景；执行结果来源见下文。 |
+| Definition 保存与完整快照校验 | 能力组合 HTTP 保存、Facade、应用和编解码协作已有验证。 | [管理协作场景](../gateway-integration-tests/docs/CapabilityPolicyConfigManagementIT.md)、[能力装配场景](../gateway-integration-tests/docs/CapabilityAssemblyIT.md)。 |
+| Nacos 发布/回退、传播、Redis 协调与重放 | 最近有记录的隔离基础设施场景通过，包含部分恢复和重复触发。 | [Nacos 管理](../gateway-integration-tests/docs/NacosPolicyAdministrationIT.md)、[快照传播](../gateway-integration-tests/docs/AccessSnapshotPropagationIT.md)、[协调](../gateway-integration-tests/docs/RedisPolicyCoordinationIT.md)、[重放](../gateway-integration-tests/docs/RedisReplayGuardIT.md)。 |
+| 管理查询、发布、回退 HTTP 入口 | 用例和 Facade 已实现，HTTP 可达性尚未验收。 | 三个管理查询/快照写入口存在注册缺口；不能用注解形状或用例测试代替可达性证据。 |
+| ANONYMOUS 接纳可信 EXPIRED | 领域有该规则，现有认证入口未提供“其余验证可信且仅过期”的独立分类。 | 不声称真实请求链已支持过期匿名放行，也不放宽 INVALID 拒绝。 |
+| Browser Session 完整协作 | 无效 Cookie 拒绝已有验证；有效 Cookie 会话结束和非法 Origin 验收未完成。 | [BrowserSessionIngressIT](../gateway-integration-tests/docs/BrowserSessionIngressIT.md)受 user-auth 会话签发前置失败阻碍。 |
+| Header 消费互操作 | gateway 输出侧已有实现，user-auth/framework-starter 消费迁移暂缓。 | 完整跨服务验收未通过，不恢复历史 Header 别名。 |
+| 签名拒绝 HTTP 对齐 | 原有 401 约定与当前 403 投影有偏差。 | 见 HTTP 失败映射；契约决策及代码修复另行处理。 |
 
-执行模型只包含 PRE_AUTH、POST_AUTH、FORWARD 三个固定执行点，以及四个端点/获准身份可用性事实。连接/响应超时、总预算、502/504 映射和提交后异常传播由协议适配层处理。CapabilityOutcome 只保留 CONTINUE/STOP 流转处置，不再提供 kind 分类；限流判定与 Header/超时计划仍由各自强类型载荷表达。
+PREALLOCATED、动态插件、任意脚本、最终业务权限判定、全局瞬时撤销不属当前交付。authenticationExpiresAt 暂无后续治理消费者，不增加到期前不会撤销的承诺。
 
-PREALLOCATED、动态插件、任意脚本、业务权限判定、全局瞬时撤销不属于本期能力。
+相邻 framework 职责文档仍使用 wireName/HeaderCategory/PROTOCOL 描述，本地 Header 源码使用 headerName/HeaderType 且不包含该分类；此为所有者文档与实现待核对事项。本工程链接其契约，不复制旧描述或替其修改权威定义。
 
-能力配置分布于 domain.capability.policy 及各能力包，运行模型位于 domain.capability.runtime。有效配置统一为 EffectiveCapabilityPolicies，application 的固定 CapabilityRegistration 每次绑定当前非空 Effective*Policy，生成直接携带 P policy 的请求级 CapabilityPlanningEntry；无状态 Planner 不引用 EffectiveCapabilityPolicies。生效策略通过 Class<P> 类型化读取，结果容器不依赖 Composer，不提供独立 Key；Config、ConfigRule、Composer 与运行能力分别声明 CapabilityId id()，不继承共享身份父接口，Composer 仅声明身份、类型与组合行为，注册时拒绝重复策略类型。同层竞争、引用检查与全量配置校验归 CapabilityPolicyConfigValidator，保存／发布及组装前共用该校验；ConfigRule 只接收各自能力的配置列表，不依赖 PolicyConfig 或 Composer。纯内容校验仅在固定规则实例内弱引用记忆最近成功校验的 PolicyConfig 对象身份，命中不计算内容哈希或获取共享锁；并发未命中允许重复纯校验，失败不缓存，引用校验每次执行。完整快照的编码和 Nacos／LKG 解码均执行包含绑定引用与同层竞争的完整校验。应用服务构造时双向检查运行能力与执行器，生产装配校验配置／运行目录一致；编解码器校验配置／协议目录一致。Bundle 的 API／配置载荷改为 capabilities 容器，旧 schema 不兼容，示例快照摘要已同步更新；执行点、签名、配额键和 Header 安全语义不变。
+### 验证依据
 
-管理端点最低访问要求在启动时对当前快照校验；运行期安全链继续独立执行同一领域最低授权规则。该启动校验不等同于后续每次发布的管理端点配置审查，也不替代运行期纵深保护。
+最近有记录的完整 reactor 验证为 2026-10-09 的 `mvn -B verify`：单元验证完成，部分真实 Nacos/Redis/请求链场景通过，BrowserSessionIngressIT 两项因 user-auth `/api/challenges` 未消费当前 Client Header、channelCode 必填失败而未完成。无效 Cookie 401 已验证。**完整跨服务验收未通过，该记录也不是当前工作区重新验证结果。**
 
-能力组合保存已接入 AccessDefinitionCommandFacade 与 `PUT /admin/gateway/policies/configuration`：整份替换 bundles／bindings，校验注册能力与 Header 准入，复用 revision／回退阻断／CAS 后返回新 sourceRevision。保存不自动发布、不改变运行快照；只读部署不装配该写 Controller。HTTP 与 Nacos 复用注册编解码规则，不另建 HTTP 能力目录。
+原始命令、报告数字、当时限制和历次迁移已保存在本地提交 `da804649f1efd0eeb3e20f3fca6a4268a3d0da75`，可读取：
 
-本轮 HTTP 契约测试发现并修正 Definition 写 Controller 缺少 WebFlux Controller 标记导致的 404，并将它排除在启动组件扫描之外，保留条件装配。其余三个管理 Controller 仍只有 RequestMapping／ResponseBody，存在同类 HTTP 注册缺口，未在本轮扩展修复；发布、回退与查询用例／Facade 已有实现，不代表这些 HTTP 入口已完成可达性验收。
+```bash
+git show da804649f1efd0eeb3e20f3fca6a4268a3d0da75:docs/RESPONSIBILITIES.md
+```
 
-## 发布、回退与恢复运维
-
-application 持有发布／回退的总预算、锁顺序和 checkpoint：回退按 rollback → publish 获取立即失败的锁，历史查找和目标摘要预计算在锁外，锁内重读当前状态。四份 Definition 逐份 CAS，每个已提交 revision 是恢复边界；超时、冲突或清除失败保留持久回退阻断，重试跳过已经一致的内容，继续剩余步骤。不要人工删除阻断来绕过恢复。
-
-运行参数为 gateway.access.operations.timeout（默认 60 秒）、max-blocking-time（默认 10 秒）和 lease-safety-margin（默认 20 秒）。这些是可调整的执行保护参数，业务 SLA 由部署维护方确定。framework.lock.redis.lease-time 必须覆盖三者之和，即当前至少 90 秒，即使启用自动续租也检查这个条件。配置样例显式设定 90 秒租约和 spring.cloud.nacos.config.config-request-timeout=5000；Nacos SDK 写请求与读请求的超时上界必须符合 max-blocking-time，装配时拒绝不满足的配置。Redis 命令与连接超时也必须显式配置为正值且合计不超过该上界，样例分别为 spring.data.redis.timeout=PT5S、connect-timeout=PT2S；不接受客户端隐含的长超时。
-
-预算检查是协作式的：到期后不开始下一次读写，正在执行的同步 SDK 请求等待其自身有界超时返回，额外阻塞受 max-blocking-time 约束。不能把 SDK 超时／false 或取消 Future 当成远端写入已停止。Nacos 3.0.3 可能把传输失败转换为 false；Definition/Snapshot CAS 的原 revision 防止迟到写入覆盖已经推进的 revision，未知结局按失败处理并在重试前读取当前状态，回退绝不据此清除阻断。
-
-历史查询由 history.query-timeout（默认 60 秒）、page-size（1–200）和 max-pages（1–100）共同限制；每次 REST 返回和发起下一条详情查询前检查预算。REST connect/read timeout 仍由 history.rest-client 控制，历史查找不占发布／回退临界区。
-
-基础设施拥有 Nacos 监听、定时刷新和 LKG 重试；恢复失败进入状态时 WARN，持续失败按一分钟窗口汇总，恢复 INFO；异常只记录类型，不记录配置载荷。LKG 写入失败后，即使远端仍为同一快照也会重试保存。陈旧通知按当前版本门控日志。Browser Session 的非法响应和不可达均门控故障／恢复日志，继续 fail-closed。
-
-有 MeterRegistry 时暴露固定标签的 gateway.access.refresh.failures、gateway.access.refresh.last_success_seconds、gateway.access.refresh.degraded、gateway.access.lkg.failures/degraded、gateway.access.stale_notifications，以及 gateway.browser_session.verification.failures/last_success_seconds/degraded。部署维护方需配置：刷新失败持续超过两个 recovery-interval、LKG 故障持续、回退阻断未清除和最后成功时间超出允许恢复窗口时告警；告警送达与日志采集由部署系统负责。操作摘要记录目标版本、已完成 Definition 数、耗时和结果，保留至少一次完整故障与恢复周期；生产日志保留期按部署审计要求配置。失败后先确认 Snapshot 和各 Definition revision，再以同一目标重试；无法自动恢复时保留阻断并由配置维护方处理冲突。
-
-## 验收边界
-
-当前内建 Composer 目录固定登记于 `BuiltInCapabilityCatalog`，不再保留 `CapabilityConfigRegistry`。装配处先从该目录创建共享 CapabilityPolicyConfigValidator，再注入 CapabilityPolicyAssembler；Assembler 的构造参数仅为 Composer 集合和 Validator，并检查两者目录一致。保存、发布和编解码直接依赖同一个 Validator，请求执行通过 Assembler 使用它，Assembler 不创建或对外转发校验器。协议编解码目录按能力 ID 和配置类型与 Validator 核对，不依赖 Composer 实例身份。`validate(policyConfig)` 执行内容校验，按能力类型调用 CapabilityConfigRule，不触发 `compose`；`validate(policyConfig, apps, clients, endpoints)` 额外执行绑定引用、受影响端点和同层竞争检查，用于发布及完整快照编码／加载。HeaderConfigRule 与 RateLimitConfigRule 各自接收完整配置列表，外层不再单独遍历 Header 配置。Bundle 按能力 ID 和配置类型读取，类型检查复用根包 CapabilityConfig 契约，不依赖 Assembler。Composer 接口不变；当前外部组合协议为 bundles／bindings 双 Map，旧 bindings 数组不兼容。
-
-当前模型以以上交付状态及 DOMAIN §5.3 为准；下方按日期保留的演进记录只描述当时实现，不定义当前执行点、事实或框架选型。
-
-### 工程标准 3.1.9 整改（2026-10-09）
-
-本轮只实施已确认的 gateway 整改，不同步标准、不修改相邻服务源码。复查入口保存链（REST → Facade → 应用服务 → 聚合 → Definition CAS）、发布／回退链（总预算、双锁、领域快照校验、Nacos CAS、持久阻断）以及请求执行与恢复适配链；领域决策留在 domain，用例与恢复步骤留在 application，协议绑定与异常翻译留在 interfaces，存储／锁／监听／HTTP 留在 infrastructure，boot 只装配。
-
-| 已确认事项 | 结果与证据 |
-| --- | --- |
-| 聚合与生命周期 | App／Client／Endpoint 改为 final 普通类，Getter 生成 getId，唯一 ID 相等；create／edit／changeStatus／rotateCredentials 承担状态与凭据保留规则。相同 ID 的配置差异由 sameDefinition 判定，用于端点歧义及恢复检查点。见 DOMAIN §2.1、AggregateLifecycleTest、AccessCommandServicesTest。 |
-| 集合与工具 | 执行过程使用可变工作集合；跨边界用 NullSafe 校验元素及不可变复制，排序前校验、JSON 深复制、Header 名称实际规范化保存。Require 参数范围、批量检查、纯谓词和工具优先级按 JAVA-REQUIRE-*／JAVA-CHECK-TOOL-ORDER-001 复核。 |
-| 错误与校验 | 仅追加 103／253／254／613，原代码分配保持不变；业务规则以 DomainException 拒绝，技术 null 仍用 FrameworkException。真实 Facade 代理及 WebFlux 校验边界可执行并统一翻译，rate-limit 模块直接声明 Hibernate Validator。 |
-| 有界发布与恢复 | 锁外做历史／Definition 预检，锁内重验 revision；合作式总预算、逐份 CAS 与恢复阻断、防重复发布、SDK／Redis 单次阻塞和租约关系均有检查。真实 Nacos 场景在已提交首份 Definition 后注入超时，验证保留阻断、重试跳过检查点和重复触发不再发布。 |
-| 可恢复故障观测 | Nacos 刷新与 LKG 故障门控 WARN／恢复 INFO、固定维度指标；同快照 LKG 重试拒绝陈旧版本。Browser 非法响应与不可达均保留 fail-closed 并门控日志。日志仅记录结果及异常类型，不携带配置、Token 或响应载荷。告警与采集由部署维护方拥有。 |
-| 命名与依赖 | 抽象类统一 Abstract 前缀，Nacos 固定请求／响应采用 RequestPayload／ResponsePayload。删除不存在的 CircuitBreaker 自动装配登记及 infrastructure 未用的 caffeine、resilience4j-circuitbreaker 依赖。模块图无环，domain／application 无向外层导入；LayerDependencyTest 与 MapStruct 编译检查通过。 |
-| 测试与文档 | 两组真实跨模块能力协作迁至独立模块并交由 Failsafe；七份场景文档迁至该模块 docs，另补两份新场景文档与模块 README。请求管线装配使用共享 Validator／Assembler，验证当前超时与无效身份不降级；Browser 场景修正可执行包分类器和路由 id，并对进程退出快速失败。ID 来源见 DOMAIN §2.1，协作文档链接指向对方职责文档。 |
-
-适用规则包括 LOMBOK-ENTITY-*、ARCH-RESPONSIBILITY-001／ARCH-DEPENDENCY-AUDIT-001、JAVA-COLLECTION-NULL-EXCEPTION-001、JAVA-BEAN-VALIDATION-EXCEPTION-001、ERROR-STABILITY-001、LOG-RECURRING-CONTROL-001、LOCK-LEASE-BOUND-001／LOCK-CRITICAL-SECTION-001 及 TEST-INTEGRATION-CLASSIFICATION-001／TEST-SCENARIO-DOC-LOCATION-001。构造器与非 Spring 调用路径不能保证代理校验，故保留显式快失败；NullSafe 没有任意 Collection 的复制重载，相关输入先 forEach 校验再由 JDK 复制。动态 JSON 树内的合法 JSON null 保留为协议值，能力节点本身及技术集合 null 元素仍拒绝。上述选择不添加无关模块、ID 生成器、数据库或兼容协议。
-
-验证使用 JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home。最终 `mvn -B verify`：442 项单元全部通过；42 项集成中 40 通过、2 失败、错误与跳过均为 0。失败均为 BrowserSessionIngressIT 的真实会话签发前置步骤：相邻 user-auth 可执行包的 `/api/challenges` 未消费当前 Client Header，channelCode=null 导致必填校验失败，对外返回 100000；成功结束会话与有效 Cookie 的非法 Origin 校验因此未完成。无效 Cookie 返回 401 已通过。未绕过该失败、恢复旧 Header 或修改相邻服务，完整跨服务验收仍未通过。
-
-根 reactor 的编译、单元与 gateway-boot 可执行 Jar 装配成功；真实 Nacos／Redis、请求管线 7 项、能力跨模块 12 项及新增部分恢复／重复触发检查通过。`git diff --check`、本地文档链接、旧错误码保留、模块无环及内层依赖检查通过；所用 Redis 8.4.4、Nacos 3.0.3、MySQL 8.4.10 镜像清单均支持 amd64／arm64。测试创建的容器与服务进程已清理。生产 gateway 日志未见 DEBUG，新增记录不携带敏感载荷；中央脱敏实现由 framework 拥有，本轮未变更。
-
-原有三个管理 Controller 注册缺口及暂缓的 user-auth／framework-starter Header 消费迁移仍为范围外事项；本轮不声称这些入口或完整 Browser 协作已验收。开始实施前工作区已有 346 条状态记录，本次文件大量与其重叠；保留标准文件、原暂存区与其他在途改动，未提交、未推送。仅本次实施差异另保存于仓库外供审阅，不能将整个混合工作区作为本轮提交。
-
-### 能力策略配置命名同步（2026-10-08）
-
-CapabilityComposition 更名为 CapabilityPolicyConfig，CapabilityCompositionValidator 更名为 CapabilityPolicyConfigValidator，表达整份 Bundle／Binding 策略配置及其校验职责。对应 Command、API Command、Mapper、Repository、Properties、Java 方法与测试类同步使用 CapabilityPolicyConfig 词族；请求执行命令、Assembler 与 Validator 的配置变量改为 policyConfig，缓存字段改为 validatedPolicyConfig。当前文档说明整份 CapabilityPolicyConfig 与 Bundle 内单项 CapabilityConfig 的区别，历史记录保留当时名称。
-
-按 develop-service／refactor-service 的 NAME-INTERFACE-001、NAME-MAPPER-001、ARCH-DOMAIN-COHESION-001、ARCH-ORCHESTRATION-COHESION-001 和 ARCH-DEPENDENCY-AUDIT-001 复核保存／发布、编解码和请求执行链路：仅改变 Java 命名与对应 MapStruct 属性目标，领域规则、用例编排、校验实例共享及模块依赖保持不变；受影响 domain/application 源码无外层实现、Spring 或 Reactor 引用。Java 调用方需迁移新名称；HTTP 路径、policies／capabilities／bundles／bindings 字段、本地配置键、Nacos dataId、摘要格式与已发布错误码不变。对本轮修改前内容进行词法比较，Java 差异仅为标识符重命名、匹配的映射属性目标、诊断文本和注释；不增加仅验证重命名的新测试。
-
-显式 Java 17 验证：`mvn -o -B clean test -q` 的 439 项单元／模块契约测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 通过；`git diff --check` 通过。既有集成场景完成名称迁移并编译，未运行真实中间件冒烟；未提交，其他在途修改保留。
-
-### 能力组装与校验依赖拆分（2026-10-08）
-
-CapabilityPolicyAssembler 构造器收敛为 Composer 集合与 CapabilityCompositionValidator，移除 Validator 创建、validate 转发和对外 Composer 查询。装配处从固定 Composer 目录创建共享 Validator，再注入 Assembler；保存、发布、Definition／Snapshot 编解码及 MapStruct 语义校验直接依赖 Validator。Assembler 仍在请求策略组合前校验完整内容，绑定匹配、排序、Bundle 去重与各能力组合语义不变。
-
-Validator.forComposers 从同一 Composer 集合生成配置类型索引，不保存或调用 Composer；累加能力集合仅传入 Validator。Assembler 构造时拒绝 Validator 目录缺项、额外能力或配置类型不同；协议目录按能力 ID 与配置类型检查完整覆盖，不再要求 Composer 实例相同。Java 构造器与工厂调用已迁移，HTTP／Nacos schema、摘要格式和已发布错误码不变。
-
-按 develop-service／refactor-service 的 ARCH-DOMAIN-COHESION-001、ARCH-ORCHESTRATION-COHESION-001、ARCH-SUBSTANTIVE-LAYERING-001、ARCH-DEPENDENCY-AUDIT-001、JAVA-RECORD-002 和 TEST-BEHAVIOR-001 复核保存、发布、快照编码／加载和请求组合调用链：规则仍在 domain，application 继续编排用例，适配器调用共享领域校验，无新增转发层、模块或依赖。POM 生产依赖无循环，受影响 domain/application 源码无外层实现、Spring 或 Reactor 引用；未扩展处理现有管理 HTTP 入口的其他注册缺口。
-
-显式 Java 17 验证：`mvn -o -B -pl gateway-infrastructure -am test -q` 通过；`mvn -o -B clean test -q` 的 439 项单元／模块契约测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 通过；`git diff --check` 通过。新增回归覆盖 Assembler／Validator 目录不一致、协议配置类型不匹配以及显式注入 Validator 的跨入口复用。现有集成场景仅迁移构造器调用并编译，未运行真实中间件冒烟；未提交，其他在途修改保留。
-
-### 能力契约身份解耦与规则命名（2026-10-08）
-
-移除没有独立多态使用场景的 CapabilityIdentity 父接口，CapabilityConfig、CapabilityConfigRule、CapabilityPolicyComposer 与 PlannableCapability 各自声明 CapabilityId id()；共享标识类型及注册一致性检查继续保留。同步单数 ConfigRule 的当前文档、Header 配置注释和测试类名，并迁移 Validator 构造参数顺序调整后的测试调用。
-
-CapabilityPolicyAssembler 的装配结构本轮未调整：它继续匹配可信请求事实、按 Binding 具体程度排序、去重 Bundle 并调用 Composer；accumulatingCapabilities 仍由 Validator 用于排除可累加能力的同层竞争。后续设计建议是由装配处创建共享 Validator，Assembler 接收现成 Validator，仅需校验的调用方直接依赖 Validator；该建议尚未作为已交付行为。
-
-按 develop-service／refactor-service 复核领域职责与依赖方向，无新增模块或依赖，配置协议、业务规则和已发布错误码不变。验证显式使用 Java 17：`mvn -o -B clean test -q` 通过，436 项测试的失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 通过；`git diff --check` 通过。未运行真实中间件冒烟，未提交，其他在途修改保留。
-
-### 能力模型评审整改（2026-10-08）
-
-完整快照编码和解码统一调用 CapabilityCompositionValidator 的四参数完整校验，补齐 Nacos／LKG 加载时的绑定引用、受影响端点和同层竞争检查；摘要正确的非法配置仍拒绝加载。Definition 保存及编解码保留内容校验，允许编辑尚未满足跨 Definition 引用或发布竞争规则的配置。
-
-内容校验缓存改为最近成功 Composition 实例的单项弱引用，命中仅比较对象身份，不调用整份内容 hashCode，也不获取共享锁；并发未命中可重复执行纯校验，失败不缓存、引用检查每次执行。Bundle.find 改为接收能力 ID 和配置类型，配置身份与类型检查复用根包 CapabilityConfig.requireType；移除 Bundle 对 Composer／Assembler 的依赖及 Assembler 原静态检查入口，迁移协议编解码和测试调用。
-
-Planner 分开处理本批次单元一致性与跨槽位执行键去重：同名且相等的单元折叠，同名但载荷或事实依赖不同的单元拒绝，即使已执行或缺少事实也不忽略冲突；校验缺失单元、非法身份及空事实元数据。补充 slots／requiredFacts／units 的不可变与非空契约，迁移 HeaderConfigRules 的列表校验测试。README 修正为四份 Definition，当前验收段移除已退役的 CapabilityCompositionRules 描述。
-
-按 develop-service／refactor-service 的 ARCH-DOMAIN-COHESION-001、ARCH-ORCHESTRATION-COHESION-001、ARCH-DEPENDENCY-AUDIT-001、JAVA-RECORD-002 和 TEST-BEHAVIOR-001 复核：领域规则继续由 domain 持有，application 编排不变，infrastructure 在快照编解码边界调用完整规则；domain 无外层实现、Spring 或 Reactor import，无新增依赖。HTTP／Nacos schema、快照摘要格式、已发布错误码与配额键不变；Java 调用方随 Bundle／类型检查契约一并迁移。
-
-验证均显式使用 Java 17：
-
-- `mvn -o -B -pl gateway-infrastructure -am test -q`：通过。
-- `mvn -o -B clean test -q`：436 项单元／模块契约测试通过，失败、错误、跳过均为 0。
-- `mvn -o -B -pl gateway-boot -am package -DskipTests -q`：启动包构建通过。
-- `git diff --check`：通过。
-
-新增回归覆盖摘要正确但引用非法／同层竞争的快照拒绝、Definition 编辑边界、无内容哈希的实例缓存、Bundle 类型化读取及单元冲突与去重。集成测试仅编译，未运行真实中间件冒烟；未提交，其他在途修改保留。
-
-### 统一复用按键判重工具（2026-09-28）
-
-修复后的 Require.noDuplicates(Collection, keyOperator) 已用于全部纯判重建 Map 的手写实现：CapabilityComposition、CapabilityBundle、CapabilityPolicyAssembler、EffectiveCapabilityPolicies、AggregateRootRegistry、签名验证器、执行器、响应写入器和能力编解码目录，以及存储／API 的规范化标识转换。删除临时 index 工具、重复的集合判重再建 Map 逻辑和旧构件故障注释。返回 Map 为可变容器，保存到模型或服务字段时仍用 Map.copyOf 防御性复制；外层 Mapper 的临时 Map 由领域构造器复制。
-
-按 develop-service 的 JAVA-REQUIRE-PRIORITY-001、JAVA-RECORD-002 与 MAPSTRUCT-SEMANTIC-001 核对：原有领域冲突错误码通过异常供应器保留，key/ID 校验及能力规则不变，结构映射仍由 MapStruct 承担。纯技术性的重复 codec／outcome writer 注册改用 FrameworkException；EndpointMatch 的相同候选折叠与歧义结局不是严格判重，保留原逻辑；已唯一注册数据的排序投影不是判重建索引，不强行替换。
-
-验证时发现本地 Maven JAR 尚未包含源码修复，已在相邻 framework 工程执行 `mvn -o -B -pl framework-core -am install -DskipTests -q`，仅更新本地构件，未修改 framework 源码。下方历史记录中的绕过方案不再用于当前代码。
-
-Java 17 验证：
-- `mvn -o -B -pl gateway-interfaces -am test -q -Dtest=CapabilityCompositionIndexTest,CapabilityCompositionTest,CapabilityExtensionTest,EffectiveCapabilityPoliciesTest,RequestSignatureVerifierRegistryTest,EndpointRegistrySelectionTest,CapabilityRegistrationTest,CapabilityExecutionCommandServiceTest,CapabilityExtensionExecutionTest,CapabilityConfigCodecsTest,CapabilityCompositionStorageTest,CapabilityCompositionManagementTest,CapabilityResponseWriterTest -Dsurefire.failIfNoSpecifiedTests=false`：80 项通过。
-- `mvn -o -B clean test -q -Dmaven.test.failure.ignore=true`：424 项，420 通过、4 项既有空值异常类型失败、0 错误／跳过；不是全量通过，未扩大范围修复 ClientAccess／CredentialForwarding／HeaderConfig。
-- `mvn -o -B -pl gateway-boot -am package -DskipTests -q` 和 `git diff --check` 通过。未运行真实中间件冒烟，未提交。
-
-### 能力组合 record 与双 Map 协议（2026-09-28）
-
-CapabilityComposition 保留 record；公共规范构造器校验 Bundle／Binding 的 key 与对象 ID 一致、空元素与 Bundle 引用，复制为不可变 Map。of(Collection, Collection) 在建立索引前拒绝重复 ID；因当前已安装 framework 的 keyed noDuplicates 重载会拒绝合法首次插入，使用其集合判重重载后建立索引，不修改 framework 工程。无输入顺序语义，匹配和同层竞争规则不变。
-
-StoredCapabilityComposition、管理 API 与本地 Properties 的 bundles／bindings 均使用 Map。存储按 key 稳定排序，保留条目 ID；Mapper 在字符串标识重建时拒绝规范化后的 key 冲突，领域构造器执行 key/ID 一致性校验。HTTP JSON 与 Definition／Snapshot YAML 在解析阶段拒绝重复 key，本地 YAML 复用 Spring 的重复键拒绝。旧 bindings 数组不兼容，示例 Definition／完整 Snapshot 及规范化摘要已更新；开发快照与 LKG 需按新 schema 重建。
-
-按 develop-service / refactor-service 的 JAVA-RECORD-002、JAVA-VALIDATION-002、MAPSTRUCT-CONVERSION-001、MAPSTRUCT-SEMANTIC-001、ARCH-DOMAIN-COHESION-001 复核 HTTP → Facade Mapper → 保存用例 → domain，以及 Properties／存储编解码 → domain 链：结构映射仍由 MapStruct 完成，规则归领域，协议解析归外层，无新增依赖或编排层。同步测试对用户已改名的 HeaderConfigRules.empty() 的调用，不改变其规则。
-
-Java 17 验证：
-
-- `mvn -o -B -pl gateway-interfaces,gateway-infrastructure-persistence-nacos -am test -q -Dtest=CapabilityCompositionIndexTest,CapabilityCompositionTest,CapabilityCompositionConflictTest,CapabilityCompositionRulesTest,CapabilityExtensionTest,CapabilityConfigCodecsTest,CapabilityCompositionStorageTest,CapabilityCompositionManagementTest,CanonicalAccessSnapshotHasherTest,LocalCapabilityCompositionExampleTest,ApiNamingContractTest,StoredPolicyDefinitionCodecTest,StoredAccessSnapshotCodecTest -Dsurefire.failIfNoSpecifiedTests=false`：75 项通过，覆盖构造器／工厂不变量、双 Map 往返、确定性排序、重复协议 key、规范化冲突、旧数组拒绝、本地绑定及示例摘要。
-- `mvn -o -B clean test -q -Dmaven.test.failure.ignore=true`：423 项，419 通过、4 失败、0 错误／跳过。收集全部模块结果，不代表全量通过；失败仍为既有 ClientAccess、CredentialForwarding、HeaderConfig 空元素／空值提前抛 NPE 的异常类型问题，未扩大本次范围修复。
-- `mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。既有集成场景仅做构造入口适配和编译，未运行中间件冒烟；未提交。
-
-### 能力组合条目统一索引（2026-09-28）
-
-CapabilityComposition 的 Bundle／Binding 构造参数统一为 Collection，内部分别按 BundleId／BindingId 判重并保存不可变 Map；拒绝重复身份、空元素及缺失 Bundle 引用，保留 null 集合归一为空集合。使用不可变类限制唯一构造入口，避免 record 的公开 Map 规范构造器绕过 Collection 边界；Lombok 生成 getter 及全字段相等性，条目输入顺序不参与相等判断。Assembler 遍历 Binding values 后显式排序，竞争规则不变。
-
-按照 develop-service / refactor-service 的领域内聚与 MapStruct 边界要求，ID 判重及引用规则仍在 domain；外层映射保留 Bundle 外部 key 与对象 ID 一致性检查，子对象结构映射继续由 MapStruct 生成。HTTP／存储的 bundles 对象、bindings 数组及规范化摘要格式不变，Binding 数组输出仍按 ID 排序。无新增模块依赖，不修改其他在途规则。
-
-Java 17 验证：
-
-- `mvn -o -B -pl gateway-interfaces -am test -q -Dtest=CapabilityCompositionIndexTest,CapabilityCompositionTest,CapabilityCompositionConflictTest,CapabilityCompositionRulesTest,CapabilityExtensionTest,CapabilityConfigCodecsTest,CapabilityCompositionStorageTest,CapabilityCompositionManagementTest,CanonicalAccessSnapshotHasherTest -Dsurefire.failIfNoSpecifiedTests=false`：57 项通过。
-- `mvn -o -B clean test -q -Dmaven.test.failure.ignore=true`：收集全部模块结果，418 项中 414 通过、4 失败、0 错误／跳过；仍为前轮记录的 ClientAccess、CredentialForwarding、HeaderConfig 空值／空元素异常类型问题，不视为全量通过。
-- `mvn -o -B -pl gateway-boot -am package -DskipTests -q` 及 `git diff --check` 通过。既有集成场景仅适配构造器并编译，未运行真实中间件冒烟；未提交。
-
-### 能力组合校验收敛到 Rules（2026-09-28）
-
-新增 CapabilityCompositionRules 契约，HeaderConfigRules 与 RateLimitConfigRules 直接校验完整 CapabilityComposition。Assembler 先检查注册标识及类型，再调用不可变规则列表；删除 compositionValidation Consumer，不新增注册表或转发服务。RateLimitConfig 只维护自身不变量，原跨配置校验迁至 RateLimitConfigRules.validateConfigs，并由 EffectiveRateLimitPolicy 复用。空组合合法，缺失 Composition 拒绝，未绑定节点也参与校验。
-
-保存、发布、Definition／Snapshot 编解码和请求组装统一依赖 Assembler；移除这些调用方的独立 HeaderRules 依赖与逐 Bundle Header 遍历。部署 HeaderConfigRules 在装配时传给 BuiltInCapabilityConfigs.assembler(headerRules)，协议 Mapper 与编解码继续通过同一 Assembler 校验。测试迁移自定义部署名单及当前 Header 前缀，不修改线上格式、摘要、绑定竞争或执行槽位。
-
-按 develop-service / refactor-service 的 ARCH-DOMAIN-COHESION-001、ARCH-SUBSTANTIVE-LAYERING-001 与 ARCH-DEPENDENCY-AUDIT-001 复核：专属规则留在 domain，应用只调用统一规则入口，协议转换继续复用 MapStruct；没有新增模块依赖。当前本地 framework 构件的按键判重仍误拒绝合法注册（相邻源码已修正但构件未同步），Assembler 使用可用的集合判重重载后构造不可变索引；未修改或安装 framework。
-
-验证均使用 Java 17：
-
-- `mvn -o -B -pl gateway-interfaces -am test -q -Dtest=CapabilityCompositionRulesTest,CapabilityExtensionTest,EffectiveCapabilityPoliciesTest,HeaderConfigRulesTest,CapabilityCodecConfigurationTest,CapabilityConfigCodecsTest,HeaderAdmissionCodecTest,CapabilityCompositionStorageTest,AccessCommandServicesTest,CapabilityCompositionManagementTest,AccessStageCommandServiceTest,CapabilityExecutionCommandServiceTest,CapabilityAssemblyTest -Dsurefire.failIfNoSpecifiedTests=false`：100 项定向测试通过。
-- `mvn -o -B clean test -q -Dmaven.test.failure.ignore=true`：为收集全部模块继续执行，412 项中 408 通过、4 失败、0 错误／跳过；不是全量通过。剩余仍为 ClientAccess、CredentialForwarding、HeaderConfig 空值／空元素提前触发 NullPointerException 的四项既有失败，未扩大修改这些规则。
-- `mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。集成测试仅编译，未执行真实中间件冒烟；未提交，其他在途修改保留。
-
-### 能力目录并入策略组装器（2026-09-28）
-
-删除 CapabilityConfigRegistry，将不可变 Composer 目录、注册元数据检查、配置类型检查、同层竞争判定及全量校验分派并入 CapabilityPolicyAssembler。保存、发布、编解码与请求链共用该实例；validate 不调用 compose，assemble 校验完整配置后匹配 Binding 并组装策略。不增加替代注册层，Composer 仍仅声明 capabilityId、configType、policyType、compose；具体能力约束仍由领域模型持有。默认工厂改为 BuiltInCapabilityConfigs.assembler()，HTTP／Nacos 格式与快照摘要不变。
-
-依照 refactor-service / develop-service 的职责与实质分层约束，删除重复目录层，保留领域规则、应用编排和协议转换的边界。基线发现当前 framework 按键 Require.noDuplicates 的插入条件反转，合法元素也被拒绝；本轮在 Assembler 及其产出 EffectiveCapabilityPolicies 中显式按键判重，维持 FrameworkException 校验边界，不修改 framework 或其他在途聚合规则。
-
-验证均显式使用 Java 17：
-
-- `mvn -o -B -pl gateway-interfaces -am test -q -Dtest=CapabilityExtensionTest,EffectiveCapabilityPoliciesTest,CapabilityCompositionTest,CapabilityCompositionConflictTest,CapabilityPlannerTest,TimeoutCapabilityTest,CapabilityExtensionExecutionTest,CapabilityExecutionCommandServiceTest,CapabilityResolutionReuseTest,AccessCommandServicesTest,CapabilityConfigCodecsTest,CapabilityCompositionStorageTest,CapabilityCompositionManagementTest,CapabilityAssemblyTest,IngressFiltersTest -Dsurefire.failIfNoSpecifiedTests=false`：113 项定向测试通过。新增覆盖校验不组装、目录防御性复制、元数据缺失拒绝及请求链复用注入实例。
-- `mvn -o -B clean test -q -Dmaven.test.failure.ignore=true`：为收集全部模块结果继续执行，406 项中 402 通过、4 失败、0 错误／跳过，**不视为全量通过**。剩余为既有 ClientAccess、CredentialForwarding、HeaderConfig 的空元素／空值提前抛出 NullPointerException：CapabilityCompositionValidationTest 两项、ClientAccessTest 一项、HeaderValueRulesTest 一项；未扩大修改这些在途规则。
-- `mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。集成测试仅编译，未执行真实中间件冒烟，未提交。
-
-### 通用领域错误码退役与错误码归属迁移（2026-09-28）
-
-按已确认的重构计划（3.1.7+3.1.8 累积 consumer 变更）执行五项条目。共享领域错误码仅保留 000（实体 ID 非法）；历史编号 1/2/3（DOMAIN_OBJECT_REQUIRED／DOMAIN_OBJECT_INVALID／DOMAIN_OBJECT_abnormal）退役且编号空置不复用，DomainException 仅保留 invalidEntityId()。技术性前置条件统一改用 Require 默认重载并抛出 FrameworkException（197 处供应器 + 36 处直接工厂调用，覆盖 66 个文件）；保留的聚合专属码包括 SIGNATURE_VERIFIER_NOT_FOUND、APP/CLIENT/ENDPOINT 的 NOT_FOUND 与 AMBIGUOUS 系列、ACCESS_SNAPSHOT_INVALID。AggregateRootRegistry.ambiguous() 改为抽象方法，三个子类均持有专属码。管理面原以 800001/800002 返回的错误现为框架技术错误码；边缘入口对畸形证据仍返回 400（IngressPreparationWebFilter 改为按 BaseException 拒绝）。
-
-基础设施错误码按"拥有语义的 module"迁移：702 归 security-spring（SecuritySpringError）、705 归 coordination-redis（CoordinationRedisError）、802 归 persistence-nacos（PersistenceNacosError），编号、消息、语义不变；803 留在基础 infrastructure（共享存储编解码归属），死码 800/801 不动；全库错误码唯一性测试迁至 gateway-boot（唯一可见全部错误枚举的模块）。BrowserSessionVerifierAdapter 对 user-auth 依赖不可用／5xx 的逐请求 WARN 改为状态迁移门控（进入故障态 WARN 一次、恢复 INFO 一次，不落 key 原文）。集成场景文档拆分为 docs/RateLimitIT.md 等七份逐场景文档，README 保留索引与统一执行说明；测试内 Mappers.getMapper 用法与 componentModel=spring 收口一致。
-
-验证（离线构建）：`mvn -o -B clean test -q`：403 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 通过；`git diff --check` 通过。条目 2、5、3、4 及本记录按 pathspec 分别提交；条目 1 因触碰在途未跟踪的能力域文件整体保留在工作区未提交。本轮未运行真实中间件冒烟（Docker 未使用），BrowserSessionIngressIT 协作验收状态不变。
-
-### Composer 接口与配置校验分离（2026-09-28）
-
-CapabilityPolicyComposer 仅保留 capabilityId、configType、policyType、compose；移除 conflictsAtSamePriority、validateConfigurations、checked。删除 EffectiveCapabilityKey，策略容器改用同一注册 Composer 实例读取并检查 policyType，保留标识冒用与错误类型拒绝。本轮优先完成接口定义，CapabilityConfigRegistry 仍保留，未同时合并到 Assembler。
-
-同层竞争按注册时独立声明的 cumulativeCapabilities 判定，默认拒绝同层不同来源竞争，限流明确允许累加。全量约束通过独立 compositionValidation 回调执行，接收不可变完整 Bundle 集合；限流规则身份全局唯一与 EXACT 约束由 RateLimitConfig.validateComposition 承载，同时被生效限流策略复用。保存、发布、存储编解码和请求组装前的全量校验链不变，未命中配置仍校验。不新增 Descriptor／Validator 接口或模块依赖，HTTP／Nacos 字段及快照摘要格式不变。
-
-按 develop-service / refactor-service 的 ARCH-DOMAIN-COHESION-001、ARCH-SUBSTANTIVE-LAYERING-001、ARCH-DEPENDENCY-AUDIT-001 复核能力组装及配置保存／编解码链：业务约束留在领域，协议树转换仍由已有独立 MapStruct 契约及编解码适配器完成，application 不接管规则。范围外的其他管理 Controller HTTP 注册缺口及下游 Header 迁移仍保持原状态。
-
-Java 17 下 `mvn -o -B clean test -q`：401 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。新增测试覆盖未绑定 Bundle 中的重复规则、独立累加声明及防御性复制、全量校验与 compose 分离；现有扩展能力、同层冲突和存储往返测试继续通过。未运行真实中间件冒烟，未提交，其他在途修改保留。
-
-### 策略组装与组合职责收敛（2026-09-27）
-
-CapabilityResolver 更名为 CapabilityPolicyAssembler，CapabilityConfigDefinition 更名为 CapabilityPolicyComposer<C, P>，内建实现为 HeaderPolicyComposer、TimeoutPolicyComposer、RateLimitPolicyComposer。方法分别为 assemble 与 compose。移除 Registry.resolve 中间组装入口及重复的选中配置校验；Assembler 校验完整配置、匹配并去重排序 Bundle、直接调用各 Composer。Registry 保留注册、类型检查和组合约束分派，不再生成策略集合。
-
-为减少层次，Composer 保留必要的类型信息与独立组合校验钩子，不再拆出 Descriptor／Merger／Validator。其 compose 只消费有序配置，不依赖 Bundle、身份或槽位；新增能力仍通过注册扩展，通用容器、Assembler 与 Planner 不增加具体能力分支。HTTP／Nacos 字段、摘要格式、错误码和执行行为保持不变。
-
-按 refactor-service / develop-service 的 ARCH-DOMAIN-COHESION-001、ARCH-SUBSTANTIVE-LAYERING-001、ARCH-DEPENDENCY-AUDIT-001 复查入口→能力应用服务→Assembler／Composer→执行器，以及保存／编解码→Registry 校验链：组合规则留在 domain，应用编排及协议转换归属不变，无新增模块依赖。原有其他管理 Controller 的 HTTP 注册缺口保持范围外，不作扩大修复。
-
-Java 17 下 `mvn -o -B clean test -q`：398 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。扩展能力的策略组装、执行、编解码往返测试继续通过；新增测试覆盖 null 配置不可被覆盖隐藏、未命中 Bundle 仍需校验。集成测试仅编译，未运行真实中间件冒烟；未提交，保留其他在途修改。
-
-### 原始配置与生效策略分离（2026-09-27）
-
-Bundle 保存 RateLimitConfig、HeaderConfig、TimeoutConfig；解析后分别得到 EffectiveRateLimitPolicy、EffectiveHeaderPolicy、EffectiveTimeoutPolicy，由 EffectiveCapabilityPolicies 统一承载。限流保留多组配置及各组故障模式；Header 为单一安全配置；未配置超时由非空策略内部表达，不生成执行单元。Capability 泛型声明对应生效策略，统一使用 PlannableCapability<P>，不增加单槽位／多槽位接口。类型化键按具体策略类校验，移除列表专用键和未检查的泛型转换。
-
-依照 develop-service / refactor-service 保持领域默认值、合并和不变量在 domain，绑定与执行编排在 application，协议适配层仅提取配置应用转发计划。本轮没有新增模块依赖；HTTP／Nacos 结构、管理路径、限流配额键和快照摘要格式不变。
-
-Java 17 下 `mvn -o -B clean test -q`：396 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 及 `git diff --check` 通过。新增 5 项测试覆盖默认策略、限流多组故障模式、单值覆盖、类型和集合不变量、未配置超时不得生成预算。集成测试仅编译，未运行真实中间件冒烟；未提交，保留其他在途修改。
-
-### 能力组合管理保存接入（2026-09-26）
-
-已打通 GatewayAccessDefinitionCommandController → AccessDefinitionCommandFacade.saveCapabilityComposition → CapabilityCompositionApiMapper → CapabilityCompositionCommandService.save。复用现有整体替换、发布锁、回退阻断与 Definition CAS，不新增发布副作用。能力节点复用 CapabilityConfigCodecs，interfaces 单向依赖基础 infrastructure 的共享编解码组件，不依赖 Nacos 等具体存储模块；domain/application 未增加外层依赖。未修改线上错误码或快照摘要格式。
-
-依照 develop-service / refactor-service 的 INTERFACES-RESPONSIBILITY-001、MAPSTRUCT-CONVERSION-001、ARCH-DOMAIN-COHESION-001 与 PACKAGE-DIRECTION-001 核对：HTTP 绑定与错误投影留在 interfaces；结构映射使用独立契约和严格 MapStruct 配置；能力规则留在 domain，保存协调复用 application。为使写入口真正可达，Definition 写 Controller 增加 RestController 标记并从 boot 组件扫描排除；其请求统一使用 ClientRequestBody，确保可信上下文覆盖发生在校验前。
-
-Java 17 下 `mvn -o -B clean test -q`：391 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 及 `git diff --check` 通过。新增 9 项单元／模块契约测试覆盖 HTTP 到保存用例的真实转换链、返回 revision、全量替换、非法能力／字段／标识／Header 拒绝、旧 revision 冲突、回退阻断、Facade 代理校验、可信上下文绑定和可写用例条件装配。HTTP 测试使用内存 WebFlux，不代表完整安全链或真实中间件验收；集成测试仅完成构造器编译适配，未运行冒烟，未提交。
-
-范围外问题：另外三个管理 Controller 的 HTTP 注册缺口保留，详见当前交付状态；本轮没有将其注解形状测试当作 HTTP 可达性证据。
-
-### 开放能力配置集合（2026-09-26）
-
-CapabilityBundle 改为按 CapabilityId 索引的强类型 CapabilityConfig 集合；CapabilityConfigDefinition 持有默认值、合并、同层竞争及跨 Bundle 校验，CapabilityConfigRegistry 负责注册和通用分派。EffectiveCapabilityConfig 通过代码拥有的 EffectiveCapabilityKey 读取；唯一受控的泛型转换位于已逐项校验的列表键中。新增能力不修改 Bundle／Resolver／Planner，只新增能力实现及配置、运行和协议注册。
-
-依照 develop-service / refactor-service 复核 ARCH-DOMAIN-COHESION-001、ARCH-ORCHESTRATION-COHESION-001、PACKAGE-DIRECTION-001、MAPSTRUCT-CONVERSION-001：配置规则留在 domain；application 继续编排解析、规划和执行；协议 DTO 与注册编解码留在 infrastructure，结构投影使用共享配置下的 MapStruct。通用 configuration 包不引用具体能力或默认目录，runtime 不依赖有效配置容器；本轮未新增模块依赖。
-
-Java 17 下 `mvn -o -B clean test -q`：382 项测试通过，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 及 `git diff --check` 通过。新增自定义能力测试覆盖解析、规划执行、存储往返、非法注册／未知配置拒绝及载荷防御性复制。本地配置和 Nacos 示例已迁移 capabilities 结构并更新快照摘要。集成测试仅编译，未运行真实中间件冒烟；未提交。
-
-当时记录的能力组合保存 Facade／Controller 缺口，已由后续本轮管理入口接入工作解决；其 HTTP 交付边界以上方当前状态为准。
-
-### 请求级规划输入与编译断点修复（2026-09-26）
-
-CapabilityPlanningEntry 直接持有能力定义与 N configuration；配置节点遵循不可变契约，允许 null 的能力（当前为 timeout）由自身决定不生成单元。CapabilityPlanner 无状态，按调用传入的 Entry 列表规划，不再依赖 EffectiveCapabilityConfig。固定注册项 CapabilityRegistration 留在 application，绑定当前有效配置后生成请求级 Entry；服务构造时统一校验能力／执行器完整性及重复注册。准备、准入、转发均复用该应用编排，未增加 HTTP 层业务编排或共享请求状态。
-
-一并修复获准处理的在途断点：缺失 Require 引用、残留 DomainRequire、领域异常工厂及错误枚举引用不一致、Header 名称规范化判重返回类型错误。按当前 develop-service 的 JAVA-DOMAIN-GUARD／FACTORY 约束保留领域异常工厂，公共领域错误的原编号 001/002/003 不改义；按键注册表使用 JDK 不可变 Map 收集及明确的重复键拒绝，不依赖有问题的按键判重重载。集合先领域校验再防御性复制，避免非法元素提前变成 JDK 异常。保留已有 name()、record 载体与 Header 前缀等其他在途改动。
-
-按 PACKAGE-DIRECTION-001、ARCH-DOMAIN-COHESION-001、ARCH-ORCHESTRATION-COHESION-001 复核：运行模型与配置组合模型互不引用；领域持有筛选、去重及不变量，应用持有配置绑定和批次执行。真实装配测试覆盖三个能力；新增重叠请求以相反顺序完成的配置隔离验证、随后无超时配置不继承旧预算，以及启动期重复注册／来源缺失拒绝验证。
-
-显式 Java 17 串行执行 `mvn -o -B clean test -q`：**369 项测试全部通过，失败、错误、跳过均为 0**；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 和 `git diff --check` 通过。集成测试只编译，未执行真实中间件冒烟；未提交。
-
-范围外观察：App、Client、Endpoint 当前在途 record 仍使用全字段相等性，尚未落实此前讨论的聚合标识相等性；可能影响同标识不同属性对象的 Set 去重。本轮仅修复其编译／校验，不改动用户选定的聚合载体形态，注册表仍按 ID 显式判重。
-
-### 能力配置与运行模型边界重构（2026-09-23）
-
-composition / execution 分别迁为 configuration / runtime；ResolvedCapabilities 替换为 EffectiveCapabilityConfig，删除 ResolvedCapabilityNodes。CapabilityPlanningEntry 用泛型配对能力及配置来源，CapabilityRegistration 双向检查执行器覆盖；真实装配契约测试验证限流、超时及 Header 三项配置实际进入计划／执行。Resolver 只消费端点与获准身份，FORWARD 复用准入段有效配置。Composition 校验直接接收三个注册表，不反向依赖完整快照；Header 缺失明确拒绝，未配置超时仍不生成单元。
-
-按 refactor-service / develop-service 复核 PACKAGE-DIRECTION-001、ARCH-DOMAIN-COHESION-001、ARCH-ORCHESTRATION-COHESION-001：绑定解析、事实筛选和去重留在 domain；application 编排解析／规划／执行及短路；interfaces 仅装配入口并应用 HTTP 计划。新增依赖守卫覆盖配置及纯规则包不得反向依赖 runtime，配置包不得依赖 snapshot；未增加模块依赖或转发服务。Java 调用方需适配新名称和签名，线上字段、管理路径及规范化摘要不变。
-
-最终显式 Java 17 串行验证：`mvn -o -B clean test -q` 通过 **366 项测试，0 失败、0 错误、0 跳过**；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 通过；`git diff --check` 通过。集成测试模块只编译，未运行真实中间件冒烟；下游 Header 迁移仍暂缓。本轮未提交。
-
-### 执行点与输入事实收敛（2026-09-22）
-
-输入事实收敛为端点与获准身份的可用性，移除恒真或重复的 REQUEST/FORWARD_READY。Context 保留阶段必填约束，事实仅由端点与获准身份推导。现有超时与错误投影继续由接口层处理，CapabilityOutcome 保持不变。按 develop-service 的职责边界检查，domain 保留输入不变量与规划规则，application 保留能力执行编排，interfaces 保留协议错误投影；没有新增模块依赖。
-
-显式 Java 17 执行 `mvn -o -B -pl gateway-interfaces -am clean test` 与 `git diff --check` 均通过。新增测试覆盖匿名获准与可信身份区别、阶段必填项、连接失败 502、传输超时 504、未分类异常与提交后异常传播。未运行全量模块测试或真实中间件冒烟。
-
-### headerApply 能力化与 spring-cloud 组件边界（2026-09-22 续四）
-
-**headerApply 能力化**：`HeaderApplyCapability`（`SingleValuedCapability<HeaderPolicy>`，`FORWARD`，`ONCE_PER_REQUEST`）+ `HeaderApplyCapabilityExecutor`（只把计划带出来）+ `ResolvedCapabilities.nodes()` 映射。**形状与 `timeout` 一致**：单值能力只「声明」，落地动作在拥有请求对象的适配器——领域决定「计划是什么、必须被应用」，适配器决定「怎么改这次请求」。这也是它能留在领域层而不碰 Spring WebFlux 的原因。
-
-**两处刻意的行为变化**：Header 应用从「准入放行后立刻」移到「`FORWARD` 相之后、发起调用之前」，因此 (a) **被拒绝的请求不再被改写**，(b) `FORWARD` 相消费的请求证据仍是**清除前**的。**失败关闭**：`FORWARD` 相未产出计划时返回 500 而非转发；该分支目前不可达（resolver 恒给出默认计划），存在意义是防止将来某次改动把它变成静默泄露。
-
-**验证非空转**：新增适配器用例断言「调用方伪造的身份 Header 在到达下游前被替换为验证值」；反向验证时去掉计划应用，该用例失败（`expected: <[app]> but was: <[forged]>`），确认它真的覆盖了新路径而非恒真。
-
-**spring-cloud 组件边界（设计结论，已写入 DOMAIN §5.3）**：
-
-- SCG 的 **route metadata 超时已接入**：`RouteTimeoutMetadata`（interfaces）在 `FORWARD` 相发起调用前把 `connect`/`read` 写进命中路由的 metadata——`connect-timeout`（毫秒，Netty `CONNECT_TIMEOUT_MILLIS`）与 `response-timeout`（毫秒）；重建路由时保留原有 metadata 与身份，`total` 仍由 Reactor `timeout` 施加。**只实施 `total` 是不够的**：连接建立阶段没有响应头也没有响应体，只有客户端自己的连接超时能终止它，总预算也覆盖连接等待，但不替代独立的连接建立预算。**核实过的 SCG 4.3.5 契约**（旧实现引用的 `RouteMetadataUtils` 仍在 `spring-cloud-gateway-server`，不在 `-webflux`）：connect 侧经数字强制转换（下发 `Integer`），response 侧经 `getLong` 且**负值视为未配置**；connect 的窄化安全由 `TimeoutPolicy` 的取值上限保证（拒绝超过 `Integer.MAX_VALUE` 毫秒），不是一次可能静默截断的转换。另核实：**SCG 自身把响应超时映射为 `ResponseStatusException(504)`**，该超时与 Reactor 总预算超时均映射为 HTTP 504。
-- SCG 的 `RequestRateLimiter`/`RedisRateLimiter` **不要叠加**：单一计数器，没有双槽位、跨阶段去重与稳定配额键，叠加会重复扣减。
-
-验证（显式 Java 17，离线构建）：`mvn -o -B clean test` → BUILD SUCCESS，12 模块全绿，**389 项测试 0 失败 0 错误 0 跳过**（domain 148、application 79、infrastructure 47、interfaces 40，其余模块不变；较上轮 384 增 5 项）。`mvn -o -B -pl gateway-boot -am package -DskipTests` 与 `mvn -o -B -pl gateway-integration-tests -am test-compile -DskipTests` 通过；`git diff --check` 通过。集成测试模块仅编译，未运行真实中间件冒烟——**因此 connect/read 的实际生效只由 metadata 断言覆盖，未在真实 Netty 上验证过超时行为**。
-
-### 适配器夹具、超时端到端验证与能力节点映射缺陷修复（2026-09-22 续二）
-
-**真实缺陷（非测试问题）**：`ResolvedCapabilities.nodes()` 此前只映射 `RateLimitCapability.ID`，超时节点从未进入 `CapabilityNodes`。`TimeoutCapability` 与其执行器虽已在 `IngressWebFluxConfiguration` 注册，但 `CapabilityPlanner.unitsOf` 取到 `null` 后 `TimeoutCapability.units` 返回空列表，`FORWARD` 相恒不产生单元、下游调用不设预算——即「timeout 已生效」在运行链上不成立，只在领域单测自造的 `CapabilityNodes` 里成立。已改为**存在即登记**（`HashMap` + 条件 `put`，因 `CapabilityNodes` 拒绝 null 值；限流仍无条件登记——空规则组是真实答案，不是缺节点）。**教训**：能力注册（planner + executor）不等于能力可达，节点映射是第三个必须对齐的点。
-
-**适配器夹具**（`IngressFiltersTest`）：`endpoint(route)` 拆为 `endpoint(route, requirement)` 并新增 `anonymousEndpoint`；新增 `preparedExchange(endpoint, snapshot)` 夹具写入 `PREPARED` 与 `PREPARATION_COMPLETE`——此前准入测试要么只调准备段，要么在内联构造后走被拒路径，**没有一条能走完准入进入 `FORWARD` 相**；`snapshot` 增加接收 composition 的重载与 `timeoutComposition()`（全局绑定；bundle id 与 binding id 刻意取不同值，两者是不同身份）。`planner()` 夹具把限流与超时一起登记，与运行期装配保持一致（漏登记执行器只在请求到达时才暴露）。
-
-**新增测试**：无超时配置 → 不设预算、正常转发且无状态码（对照基线，否则无法区分「预算生效」与「全部被拒」）；配置超时且 chain 永不完成 → `GATEWAY_TIMEOUT`。领域层 `TimeoutCapabilityTest.shouldReachThePlannerThroughTheResolvedNodes` 钉住「resolver 把 timeout 节点交给 planner」这一配对。
-
-**反向验证**：临时关闭该映射后 `shouldReachThePlannerThroughTheResolvedNodes` 失败（`expected: <1> but was: <0>`），确认新测试非空转，且缺陷定位正确。
-
-**包布局漂移收口**：上一轮 `policy → capability` 的改名走了两跳（`policy/header/*` → `capability/singlevalue/header/*` → `capability/header/*`），**测试树只跟到第二跳**：`capability/singlevalue/{header,resilience}` 下 6 个测试文件仍声明 `package ...capability.plannable.singlevalue.*`（包名与目录均与主源码不符），并残留空的 `capability/plannable/` 测试目录。已把 6 个文件移到与主源码一致的 `capability/{header,resilience}` 并改正包名。**校验**：脚本比对全仓 425 个 Java 文件的包名与所在目录，不一致数 0。**边界**：变的是目录层级，`singlevalue` 仍是叶子、`plannable` 仍不引用 `composition` 这类**依赖方向**结论不变；`ResolvedCapabilities.nodes()` 的映射语义也不变。
-
-本轮不改变 HTTP 路径、JSON 字段、错误码、快照格式或规范化摘要；仅新增测试夹具、新增测试、上述一处映射修复与一次测试目录／包名对齐。
-
-验证（显式 Java 17，离线构建）：`mvn -o -B clean test` → BUILD SUCCESS，12 模块全绿，**333 项测试 0 失败 0 错误 0 跳过**（domain 119、application 74、interfaces 30；较上轮 330 增 3 项）。`mvn -o -B -pl gateway-boot -am package -DskipTests` 与 `mvn -o -B -pl gateway-integration-tests -am test-compile -DskipTests` 通过；`git diff --check` 通过。集成测试模块仅编译，未运行真实中间件冒烟。
-
-### capability 包依赖收口（2026-09-22 续）
-
-**契约类型归位**：`PlannableCapability` 移入 `plannable/`（与其两个子形态同处），`SingleValuedCapability` 移入 `singlevalue/`，家族根 `CapabilityDefinition` 留在 `capability/`。测试树同步对齐主源码布局——此前测试的包名（`capability.header` / `capability.ratelimit` / `capability.resilience`）在重排后已不存在，且 `CapabilityPlannerTest` 的包声明与目录不符。
-
-**断开 `composition ↔ plannable` 包循环**：`PlannableCapability` 改为泛型 `PlannableCapability<N>`，`units(N node, CapabilityContext)` **只收自己的能力节点**；新增 `CapabilityNodes`（按能力标识索引的节点表，由 `composition` 侧通过 `ResolvedCapabilities.nodes()` 构造），`CapabilityPlanner.plan` 改收它。依赖方向因此单向：`composition → {plannable, singlevalue}`，`plannable` 不再触及 `composition`，`singlevalue` 仍是叶子。**收益**：plannable 能力不再被迫知道单值节点的存在，两个分支真正独立。
-
-**为可测试性保留的取舍**：`CapabilityNodes` 是具体类而非接口——泛型抽象方法无法用 lambda 实现，且"只认识真实能力"的查找会让 planner 无法用能力替身测试。缺项返回 null，语义为"该能力本次无配置"，能力须按"无事可做"处理（`RateLimitCapability` 已如此）。一处未检查转换集中在 `CapabilityNodes.node`。
-
-**连带**：`CapabilityExecutionCommandService` 改传 `resolved.nodes()`；`CapabilityExecutionCommandServiceTest` 中「断言 planner 收到与输出同一份节点」的用例改为断言**节点本身**（`assertSame(planned.get(), output.capabilities().rateLimits())`），比原先断言包装对象更精确。
-
-**单值能力并入 plannable 家族（设计调整）**：此前 `SingleValuedCapability` 是与 `plannable` 并列的独立分支，且因 planner 只接受 `PlannableCapability` 而**没有执行路径**。现改为 `SingleValuedCapability<N> extends PlannableCapability<N>`——形态只约束"恰好一个单元、无门控"，不改变机制，因此单值能力同样由 planner 计划、由 `CapabilityExecutor` 执行。
-
-理由：单值能力需要与其它形态完全相同的执行机制（上下文、事实、单元、结局、去重键），唯一区别是没有可选项；为它们另开一条执行路径要多一份契约和一个消费者，而 planner 已经够用。**代价**：放弃"单值不进 planner"这条早先的设计。
-
-**包布局随之收敛**：`singlevalue/` 由 `capability/` 下的并列分支降为 `plannable/singlevalue/`，`SingleValuedCapability` 与另两个形态同置于 `plannable/` 下。最终布局——`CapabilityDefinition`（根）/ `composition/` / `plannable/`（唯一执行家族：三个形态接口 + `execution/` + `ratelimit/` + `singlevalue/`）。DOMAIN §2.6 的「哪些能力进 planner」判据表相应改为「形态只描述单元从哪来」。
-
-验证（显式 Java 17，离线构建）：`mvn -o -B clean test` → BUILD SUCCESS，12 模块全绿，326 项测试 0 失败 0 错误。
-
-### 部署键改名收口与管理路径漂移修复（2026-09-22）
-
-**部署键改名收口**：`policies → capabilities/access` 的更名此前只做了一半——生产默认值与部分测试已改用新名，示例文件、README 与另两处测试资源路径仍是旧名。本轮补齐：示例文件改为 `gateway-access.yaml`、`gateway-app-capabilities.yaml`、`gateway-client-capabilities.yaml`、`gateway-access-configuration.yaml`（`gateway-endpoints.yaml` 不变）；README 同步文件名、配置前缀（`gateway.policy-definition` / `gateway.policy.nacos` → `gateway.access-definition` / `gateway.access.nacos`），并把「不变更部署配置键或 dataId」的过期表述改为实际发生的更名清单。
-
-**管理路径漂移修复（真实缺陷）**：示例与测试中的管理路径被改名 sweep 误改为 `/admin/gateway/capabilities/...`，而权威来源 `GatewayPathApiConstants` 与真实控制器用的是 `/admin/gateway/policies/...`。两侧同改导致测试反而通过，示例则教了一个不存在的路径。已把 2 份示例与测试中的 16 处路径改回 `/policies/...`。**根因无法自动防护**：`gateway-api` 是外层契约，本模块不得依赖（`LayerDependencyTest` 同精神），路径字面量只能手工与常量保持一致——已在两处测试注释中标明这一限制与历史。
-
-**摘要重算**：路径修正后按现有规范化编码重算示例摘要为 `ced1e486ad3b3b142e255e225b7c7c6176a4d909333ee0dd81bb769df9fc7679`（原 `f10716f0...` 对应路径正确但规范化形式未变时的内容；本轮规范化形式亦已变化）。未放宽摘要校验。固定向量测试中的路径篡改断言此前退化为 `replace(A, A)` 空操作（改名 sweep 把两侧改成同一值），已恢复为真正篡改并加注释说明「两侧必须不同，否则摘要守卫从未被执行」。
-
-验证（显式 Java 17，离线构建）：`mvn -o -B clean test` → BUILD SUCCESS，12 模块全绿，326 项测试 0 失败 0 错误。集成测试模块编译通过但未运行。
-
-### Nacos 示例路径与摘要修复
-
-修正两份打包示例中误写的 `/admin/gateway/capabilityComposition/...`，与实际 API 的 `/admin/gateway/policies/...` 路径一致；按现有规范化编码重新计算并同步示例摘要为 `f10716f0b79522fbb277e9961c8bb42d6cbcb958525c92f07176d6ee700aa47c`。未修改规范化算法或放宽摘要校验。固定向量测试增加管理 matcher 全集检查及路径篡改拒绝检查，防止单纯更新摘要掩盖路径漂移。外部开发环境若使用此前错误示例，需同步修正路径及摘要。
-
-显式 Java 17 执行 `mvn -o -B -fae test -q`：323 项测试全部通过，0 失败、0 错误；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。两个既有 Nacos 示例失败已解决，下方失败记录仅代表历史验证。未运行真实中间件冒烟。
-
-### engineering-guidance 3.1.2 API 命名收口
-
-按 refactor-service / develop-service 的 NAME-API-001、JAVA-RECORD-002、MAPSTRUCT-CONVERSION-001 完成三项确认范围：快照命令返回 SnapshotUpdateApiOutput，查询返回 SnapshotApiView；公共嵌套 API 载荷补齐 ApiCommand/ApiView；受影响命令与查询 record 防御性复制集合并保留 null。Java 类型名称变化要求调用方重新编译，HTTP 路径、JSON 字段和嵌套结构、凭据脱敏、存储摘要协议不变。application 的既有命令输出和读取端口不作机械更名，不新增空 Query 或转发服务。
-
-验证（显式 Java 17）：`mvn -o -B -pl gateway-interfaces -am test -q` 通过 213 项测试；`mvn -o -B -pl gateway-boot -am package -DskipTests -q`、`mvn -o -B -pl gateway-integration-tests -am test-compile -DskipTests -q` 通过；`git diff --check` 通过。新增五项契约测试覆盖快照输出／视图序列化、嵌套命令反序列化、Header 未知字段拒绝、集合不可变及空值保留。复查受影响 Controller→Facade→application→端口链，业务决策及编排归属不变，domain/application 未新增 API、Spring 或外层依赖。本轮未执行全量测试或真实中间件冒烟；下述既有 Nacos 示例摘要欠账未纳入整改。
-
-
-### Mapper 契约、结构映射与装配收口（2026-09-19）
-
-按 refactor-service / develop-service 的 MAPSTRUCT-CONVERSION／SEMANTIC／CONTRACT／IMPLEMENTATION／REUSE／CONFIG 规则整改管理面与配置存储链：REST、定义和快照 Facade、Properties 均使用独立契约及抽象 MapStruct 实现，移除 Properties 内嵌字段复制和 Facade 散落的转换。存储投影与显式领域重建分离，canonical 排序、格式与摘要协议不变；凭据查询仍不回显 secretRef。子映射通过 uses 复用，生产 mapper 不再使用 Mappers.getMapper；两外层模块各有严格共享配置，修正管理自动配置的基础设施排序目标，并验证重叠扫描下每个契约只登记一个实例。
-
-本轮不修改 Revision 的初次创建语义、CAS、签名、三段编排或下游迁移；测试仅适配新构造器并补充映射边界。文档仍只有 README.md、docs/DOMAIN.md、docs/RESPONSIBILITIES.md 三份。
-
-验证（显式 Java 17）：`mvn -o -B -pl gateway-infrastructure,gateway-interfaces -am test -q` 通过 243 项测试；新增覆盖目标 AppId、集合隔离及不可变性、空权限集合领域规范化、凭据有效期及脱敏、快照版本、Spring 唯一装配和存储往返摘要一致性。`mvn -o -B -pl gateway-boot -am package -DskipTests -q`、`mvn -o -B -pl gateway-integration-tests -am test-compile -DskipTests -q` 与 `git diff --check` 通过；未运行真实中间件冒烟。
-
-全量 `mvn -o -B test -q` 仍失败于既有 StoredPolicyDefinitionCodecTest / StoredAccessSnapshotCodecTest 示例摘要校验，实际摘要仍为 `b7c4297d6faefd4101d722c8ac0aabb84ade787100f608b0199ac619745c2468`，本轮未重算示例摘要；全量测试不视为通过。
-
-### 通用能力槽位与执行记录（2026-09-19）
-
-当前能力执行边界以本节及 DOMAIN.md 为准，下方记录保留为历史过程。
-
-- domain：CapabilityResolver 统一解析两个槽位，移除限流专用 preAuthRules；CapabilityDefinition 声明槽位、所需事实与重复策略，CapabilityPlanner 生成强类型执行计划并负责跨槽位去重。RateLimitCapability 持有限流维度与单元生成规则。
-- application：准备／准入段只构造槽位上下文并交接产出；CapabilityExecutionCommandService 统一编排解析、规划、批次执行，拒绝短路并传播取消。入口使用 CapabilityExecutionCommand，返回 CapabilityExecutionOutput；解析节点与执行记录来自同一次调用，准入段后续消费 Header 不重新解析。限流批次仍执行全部规则后聚合，不因某条超限而跳过余下规则。
-- interfaces：CapabilityResponseWriter 分发强类型结果投影；两个过滤器不再持有限流执行记录或生成配额维度。缺失拒绝结果投影时关闭请求，不静默放行。
-- 交接：Prepared／AdmissionStageOutput 使用 CapabilityExecution；AdmissionStageCommand 只持有 Allowed，从同一 Prepared 获取累计执行键，删除重复 applied 和旧 QuotaExecution。
-- 本期只登记限流；未知／歧义路径的全局 IP 保护、单请求单快照、签名、Redis 键及快照格式不变。身份绑定 IP 规则在 POST_AUTH 首次执行；不增加文档或模块依赖。
-
-编排收敛复验（显式 Java 17）：`mvn -o -B -pl gateway-interfaces -am clean test -q` 通过 199 项测试，`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 与 `git diff --check` 通过。新增验证覆盖解析结果原样交接、双槽位用例去重、规划异常不触发执行、命令集合不可变及准备段取消传播。按 refactor-service / develop-service 复查 `ARCH-ORCHESTRATION-COHESION-001`、`APPLICATION-COMMAND-001`：解析→规划→执行统一归现有能力服务，阶段只构造上下文并交接 Output；Resolver/Planner 仍是领域规则，不新增转发层或模块依赖。全量 `mvn -o -B test -q` 仍失败于 StoredPolicyDefinitionCodecTest / StoredAccessSnapshotCodecTest 的既有示例摘要不一致，相关在途文件未修改；未运行真实中间件冒烟。
-
-验证（显式 Java 17）：`mvn -o -B -pl gateway-interfaces -am clean test -q` 通过 194 项测试；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 通过；`git diff --check` 通过。新增覆盖第二种测试能力的双槽位／重复策略、事实依赖、身份绑定 IP 延后执行、批次顺序与拒绝短路、执行器登记检查、取消传播及 HTTP 拒绝投影。全量 `mvn -o -B test -q` 仍在下述两项 Nacos 示例摘要测试失败，未修改相关示例或规范化格式；未执行真实中间件冒烟。
-
-### 入口阶段与组合编排分离（2026-09-19）
-
-`AccessSnapshotWebFilter` 更名为 `IngressPreparationWebFilter`，`TrustedRequestContextGlobalFilter` 更名为 `IngressAdmissionGlobalFilter`。前者注入准备段服务；后者注入独立的 `IngressAdmissionCommandService`，不再逐请求创建应用服务。
-
-组合服务持有接入段和准入段，负责拒绝短路及跨阶段取消／异常；AdmissionStageCommandService 不再持有接入段，仅接收 Allowed。组合结果 IngressAdmissionOutput 区分 AccessDenied 与 Evaluated；AdmissionStageOutput 三项均非空，配额拒绝仍是有效评估结果。单快照、认证选择、签名及配额规则不变。
-
-本地入口继续复用准入过滤器；修正 LocalPolicyWebFilter 将 String 与 RouteId 直接比较的问题，改为比较 routeId.value()，补充本地端点确实进入准入、代理端点不提前进入准入的测试。DOMAIN.md 第 4.4 节明确区分管理最低授权检查与通用入口准入，恢复本地复用分支不取消 Spring Security 的独立最低授权要求。
-
-按 refactor-service / develop-service 核对 `ARCH-ORCHESTRATION-COHESION-001`、`INTERFACES-RESPONSIBILITY-001`：顺序与短路属于 application，HTTP 证据、路由核对、响应及 Header 应用保留 interfaces；未增加模块依赖。
-
-本轮验证（显式 Java 17）：`mvn -o -B -pl gateway-interfaces -am clean test -q` 成功，183 项测试全部通过（domain 107、application 64、interfaces 12）；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 成功；`git diff --check` 通过。新增覆盖准备防重入、组合认证／配额取消与异常、拒绝短路、配额拒绝与接入拒绝区分、本地路由识别。
-
-全量 `mvn -o -B test -q` 未通过：未改动的 Nacos 示例摘要断言／加载测试失败，当前规范化摘要为 `b7c4297d6faefd4101d722c8ac0aabb84ade787100f608b0199ac619745c2468`，示例仍为 `5034572782b078b77e6bab3c6ad45bb7b709b4dc64c42394d22e2842e6e8fb87`。本轮未修改规范化格式或重写示例来覆盖其他在途变更；未运行真实中间件冒烟。
-
-### 配置管理边界与准入阶段职责修正（2026-09-19）
-
-当前实现以本节和 DOMAIN.md 为准，下方同日记录保留为历史过程。
-
-- application.access 迁至 application.configuration；领域访问规则迁至 domain.ingress.access，完整入口快照、内容及版本迁至 domain.ingress.snapshot。快照与内容名称为 IngressSnapshot / IngressContent。
-- 发布与回退共用 IngressSnapshotUpdateOutput；锁顺序、CAS、回退阻断与幂等重入不变，外部配置键和 dataId 不变。
-- AccessStageCommandService 只认证并形成访问决策；AdmissionStageCommandService 使用 Allowed 携带的同一 Prepared 解析能力、生成配额维度并执行 post-auth 配额。Header 消费 AdmissionStageOutput.capabilities，不在接入段预先解析。
-- 快照低版本／同版本幂等／同版本冲突／高版本接纳规则由 IngressSnapshot 决定，Nacos 只执行技术切换。
-- Subject 的 OPTIONAL 更名为 ANONYMOUS，现有结果接纳规则不变；Client 的 OPTIONAL 不变。示例重新计算摘要为 `5034572782b078b77e6bab3c6ad45bb7b709b4dc64c42394d22e2842e6e8fb87`，外部开发配置须更新枚举值并重新生成摘要。
-
-安全边界：当前认证适配器未提供“签名及其余认证检查通过、仅过期”的独立 EXPIRED 分类，因此不能将领域对 EXPIRED 的支持描述为请求链已支持过期匿名放行。本轮不改变双凭据选择、失败回退或“已声明 Client 但未提交签名”的既有行为；后者在 OPTIONAL 下不生成可信 Client。
-
-验证（显式 Java 17）：`mvn -o -B clean test -q` 通过 286 项单元／模块契约测试，失败、错误、跳过均为 0；`mvn -o -B -pl gateway-boot -am package -DskipTests -q` 成功；`git diff --check` 通过。集成测试仅编译，未运行真实基础设施冒烟，不改变下游 Header 迁移暂缓状态。
-
-按 refactor-service / develop-service 复核受影响链路：`ARCH-ORCHESTRATION-COHESION-001` 的能力解析编排位于 application；`ARCH-DOMAIN-COHESION-001` 的快照接纳判定位于 domain；`NAME-PACKAGE-001` 的配置／访问／快照边界已区分；domain/application 无外层实现、Spring 或 Reactor import。另修复已有 Capability 仓储调用不存在配置 getter 的编译阻断，使用现有 getter，不改变部署键或 dataId。
-
-### 阶段命名收口与访问段输入收敛（2026-09-19）
-
-本轮把三阶段管道的命名与输入边界收口到一致状态。
-
-**命名**：`IngressAccess*` 简化为 `Access*`（20 个标识）；随后统一用 `Stage` 标记管道阶段——三个服务为 `PreparationStageCommandService` / `AccessStageCommandService` / `AdmissionStageCommandService`，命令与输出同构（`PreparationStageCommand`、`AccessStageCommand`、`PreparationStageOutput`、`AccessStageOutput`、`AdmissionStageOutput`）。`IngressTask`、`IngressStagesTest` 保留 `Ingress` 前缀：裸名 `Task`/`Stages` 过于宽泛，前缀在此是有用限定词。
-
-**输入边界**：确立「command 装事实、方法参数装协作者」的判据。据此 `AccessStageCommand` 由三字段扩为五字段，纳入 `signatureEvidence`（匹配后采集的事实，null 表示未提交签名）与 `applied`（准备段的配额执行记录）；`AccessStageCommandService.evaluate(command, subjectAuth)` 成为接入段唯一入口，内部完成客户端验证、主体认证 join 与接入决策，`authenticateClient` 收为私有；`AdmissionStageCommandService.admit(command, subjectAuth)` 由四参数降为两参数，只负责调用接入段再执行认证后配额。`subjectAuth` 保持 `Supplier` 参数而非进 command：它不是事实，且必须延迟调用以便歧义与未知路径直接拒绝、不触发认证。取消传播经 `IngressTask` 递归级联，行为不变。
-
-**阶段交接**：确立统一规则——**每条边只携带上一段的成功产出，且命令直接包裹它而非重述其字段**。据此 `AccessStageCommand(PreparationStageOutput.Prepared prepared, ClientSignatureEvidence signatureEvidence)`、`AdmissionStageCommand(AccessStageOutput.Allowed access, Set<RateLimitRuleId> applied)`；拒绝不进管道（准备段的拒绝在边缘终止，接入段的拒绝由组合入口直接送终态）。包裹使交接带类型：接入段命令不可能由准备段产出以外的东西构造。`PREPARED` exchange 属性承载 `PreparationStageOutput.Prepared` 本身，取代原先拆散的 `SNAPSHOT`/`ENDPOINT_MATCH`/`EVIDENCE`/`APPLIED_IP_RULES` 四个键。`SNAPSHOT` 一并删除（其唯一消费者只拿它判空）；`ENDPOINT` 保留为唯一匹配端点的非规范化视图，供安全链转换器与本地路由过滤器使用。准入段入口两条：`admit(command)` 为段本体（可独立调用与测试），`admit(accessCommand, subjectAuth)` 为请求路径的组合入口。唯一不沿链走的边是 `applied`（准备段 → 准入段，绕过接入段）——这是刻意的，只有准入段读它。
-
-**产出抽象**：`AccessStageOutput` 的两个变体改为**持有** `AccessDecision` 本身（`Denied(AccessDecision.Denied)`、`Allowed(AccessDecision.Allowed, policy, dimensions)`），取代原先「拒绝包裹决策、允许解包决策」的不对称写法。此前 `Allowed` 丢掉决策、因而丢掉快照版本，违反 2.4「两种结局都携带请求所持快照版本」的约定；现在两个变体都带决策，本类型与 `AccessDecision` 的关系是包含而非平行层级。同时删去 `Allowed.headers`——它恒等于 `policy.headers()`（`CapabilityResolver.resolve` 保证非 null），单列只会制造一份可能与策略不一致的第二值；消费点改为 `allowed.policy().headers()`。顺带修正该类型被打乱的 Javadoc。
-
-**破坏性变更**：五组类型更名；`AccessStageCommand` 与两个服务方法签名变化；`GatewayRequestAttributes` 删去 `SNAPSHOT`/`ENDPOINT_MATCH`/`EVIDENCE`/`APPLIED_IP_RULES`、新增 `PREPARED`；`AccessStageOutput.Allowed` 的组件由 `context` 改为 `decision`（`allowed.decision().grantedContext()`）。
-
-验证（显式 Java 17，离线构建）：`mvn -o -B clean test` → BUILD SUCCESS，12 模块全绿，284 项测试 0 失败。
-
-**待决（已解决）**：本条曾记录 `CapabilityResolver` 的调用点位于接入段、与 DOMAIN 第 1.1/1.3/4.3 节的「准入段」不一致。现已按文档对齐：能力解析由 `CapabilityExecutionCommandService` 在准入段完成，接入段只产出判定与 `Prepared`，DOMAIN §4.3 亦已同步。
-
-### 标识值对象迁移与遗留缺陷修复（2026-09-16）
-
-本轮完成 `Revision` 与 `SnapshotVersion` 值对象在 domain/application/infrastructure 的贯通，并修复此前遗留的五项缺陷。
-
-标识：`Revision(String)` 表示源修订令牌，`SnapshotVersion(long)` 表示正数快照版本（取代原 `AccessSnapshotVersion`）。`RevisionedAccessDefinition`、`RevisionedAccessSnapshot`、`IngressSnapshot.version()`、`WritableAccessDefinitionRepository.compareAndSet`、`AccessSnapshotPublisher.compareAndSet`、`AccessSnapshotHistory.find`、`RollbackAccessSnapshotCommand` 与 editing 层全部命令服务均使用这两个值对象。**边界**：`gateway-api` 的 DTO 保持 `String sourceRevision` 与 `long snapshotVersion` 作为线上协议，转换只在 `gateway-interfaces` 门面内进行。`AccessSnapshotAssembler.assemble` 收 `SnapshotVersion`，版本递增由 `assembleUpdate` 内部完成，调用方不再计算版本；至此应用层与基础设施层不存在裸 `long`/`String` 标识。
-
-缺陷修复：LKG 文件存储改为循环写 + 写后 force + 移动后 fsync 目录，原子移动不受支持时降级为「先复制再 force 目标」；限流适配器新增 `gateway.ratelimit.redis.acquire-timeout`（默认 500ms），以有界线程池 + 超时界定阻塞调用，超时与池满降级为 `unavailable` 交给 RedisFailurePolicy，同时保证非依赖类异常原样抛出；`NacosAccessSnapshotStore.compareAndSet` 在远端 CAS 成功后不再因本地投影失败而向外报错，避免调用方重发；`NacosAccessSnapshotHistory.find` 由引用比较改为值比较。
-
-错误归属：`PolicyYamlCodec` 只报自身层级的 `INFRA_TECH_POLICY_DESERIALIZATION_FAILED`，不区分失败原因；三个 decode 调用点（`NacosAccessSnapshotStore.accept`、`AbstractNacosAccessDefinitionRepository.load`、`NacosAccessSnapshotHistory.find`）各自按语境转换为 `INFRA_ACL_NACOS_CONTENT_INVALID`，领域校验原因作为 cause 保留在堆栈中。基础设施层不重新分类领域异常。
-
-端口命名对齐：`AccessSnapshotProvider.current()` 更名为 `AccessSnapshotCapturer.capture()`，与 DOMAIN.md 第 1.3 节的能力名 `snapshotCapture` 及第 4.1 节准备段第一步同名；捕获现有版本、不创建新版本（创建归 `AccessSnapshotPublisher`），每请求恰好捕获一次。实现类与测试类同步更名为 `PropertiesAccessSnapshotCapturer` / `PropertiesAccessSnapshotCapturerTest`；`NacosAccessSnapshotStore` 同时实现捕获与发布两个端口，名称不变。
-
-**破坏性变更**：规范化内容摘要再次变化，canonical contentHash 为 `fd603a9c3e085bc97c193b2ddf641320c39951cda77f5b64684046399e212a4a`；本地只读配置键由 `gateway.policy-definition` 更名为 `gateway.access-definition`。外部开发快照与本地配置必须同步更新。
-
-验证（显式 Java 17，离线构建）：`mvn -o -B clean test` → BUILD SUCCESS，12 模块全绿，284 项测试 0 失败（domain 106、application 60、infrastructure 35、nacos 21、coordination-redis 3、security-spring 29、replay-redis 4、ratelimit-redis 18、interfaces 8）。集成测试模块编译通过但未运行。
-
-**已知欠账**：gateway-integration-tests 仅完成编译适配，七个场景本轮均未在真实基础设施上运行（Docker 未使用）。
-
-### 在途重构收尾（2026-09-15）
-
-本轮修完上一次重命名重构留下的全部编译阻断。
-
-请求链语义：准备段写入完成标记与已判定匹配结果，接入段消费该结果而不再重新推导；`CapabilityComposition.validate` 接入 `AccessSnapshotAssembler`，发布前校验绑定引用与同层竞争；管理查询端点登记 GET matcher 并由 `ManagementAuthorizationManager` 校验 Host 会话声明；歧义匹配补上 `gateway.ingress.ambiguous_endpoint_match` 低基数指标。
-
-模型对齐：端点接入状态并入端点 Definition（`access` 节点），凭据转发改由 HeaderPolicy 承载；infrastructure 层从 `Map<Id, XAccess>` 端口到 registry 模型；`RateLimitKeyResolver`、`BrowserSessionVerifierAdapter`、`Credential`/`ClientAccess`/`Endpoint` 构造点全部对齐当前领域类型。
-
-验证（显式 Java 17，离线构建）：`mvn -o -B clean test` 下 gateway-domain 106、gateway-application 60、gateway-infrastructure 35、gateway-infrastructure-persistence-nacos 21、gateway-infrastructure-coordination-redis 3、gateway-infrastructure-security-spring 29、gateway-infrastructure-replay-redis 4、gateway-infrastructure-ratelimit-redis 17、gateway-interfaces 8 项测试通过，失败与错误均为 0。示例资源按新 schema 重新生成，canonical contentHash 变更为 `43c00446c56e49ab1a72f5f391c6c528a772b047ad51039b15de406d02b9735f`，外部开发快照必须重新生成。
-
-**已知欠账**：gateway-integration-tests 的七个场景尚未对齐新管理面协议与新端点模型，该模块测试编译未通过，`mvn verify` 仍不可用；本轮未运行任何真实基础设施冒烟（Docker 未使用），因此上述数字只代表单元／模块契约层。另需注意：本地 `~/.m2` 中存在 2026-09-08 安装的 `0.3.0-SNAPSHOT` 陈旧构件，`mvn -pl <模块>` 不带 `-am` 会对其编译，所有局部验证必须带 `-am` 或从根工程执行。
-
-### 两阶段模型与管理面协议文档同步（2026-09-13）
-
-本轮全面重写 DOMAIN.md（两阶段生命周期、三段式入口准入、能力库与固定拓扑）与本文件职责/交付表述；管理面接口定稿为四个门面（IngressAccessDefinition/Snapshot × Command/Query，content-only 保存与独立状态转换，文件级 sourceRevision CAS 语义）。
-
-验证：`mvn test -pl gateway-domain` 通过 107 项测试（0 失败）；`mvn compile -pl gateway-api` 通过；`git diff --check` 通过。domain 内 policy/security 包的历史编译错误已修复（缺失 import、判重条件反转、HeaderRules 规范化存储、HeaderPolicy 空值校验顺序）。当时的欠账是 interfaces/application 尚未对齐新管理面协议、reactor 整体编译未通过；**该欠账已在 2026-09-15 轮次结清**（实测 interfaces 与 application 均能编译并通过各自测试，真正的断裂在 infrastructure 与 nacos），本节描述的是当时状态，不代表当前工作区。
-
-### 接入命名与规则文档同步（2026-09-10）
-
-本轮仅同步已确认设计：AccessGrantedContext 命名及可空子上下文、按主体类型校验认证信息、ClientVerificationMode 的 null/REQUEST_SIGNATURE 语义，以及 Host 端点可不配置 requiredAudiences。领域规则以 [DOMAIN.md](DOMAIN.md) 为准；不新增文档，不修改 Java、配置、测试或其他在途内容。
-
-文档描述的是目标规则，不代表在途适配已完成。本轮只读检查时，EndpointPolicy 仍保留 Host requiredAudiences 非空限制；SubjectContext 尚未按主体类型完成 null 输入归一；ClientVerificationMode 的 API、配置及映射适配仍需同步（旧 IGNORE、必填约束和枚举转换）。本轮不修复这些代码，也不将历史编译或测试结果视为本轮规则已通过验收。
-
-### App 平台更正（2026-09-10）
-
-同一 AppId 的 platform 现允许受管理更正，替代下述历史验证中的平台不变约束；保存、发布、回退及快照接纳使用一致语义。发布后可信平台输出随新快照变化，依赖该字段的下游需评估影响；本次不修改下游或其他在途重构。
-
-Java 17 下 `mvn -pl gateway-application -am compile -q` 及 `git diff --check` 通过。定向测试命令 `mvn -pl gateway-application -am test -Dtest=AppPolicyTest,GatewayPolicySnapshotTest,PolicyCommandServicesTest -Dsurefire.failIfNoSpecifiedTests=false -q` 在 domain 测试编译阶段被已有 ServiceId 类型适配错误阻断，未执行测试；未修改这些在途适配点。
-
-### 本轮职责整改验证（2026-09-09）
-
-以下命令均显式使用 `/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home` 的 Java 17：
-
-- `mvn clean test -q`：391 项单元／模块契约测试通过，失败、错误、跳过均为 0；既有集成测试完成编译适配，但未执行。
-- `mvn -pl gateway-boot -am package -DskipTests -q`：启动包构建通过，不代表真实依赖环境启动验收。
-- `git diff --check` 通过；12 个模块 POM 无依赖循环；domain/application 无 Spring、Reactor 或外层实现 import；生产代码无 var，语法树检查缺失控制流大括号为 0。
-
-回归覆盖当前时刻已过期的历史回退在写入前拒绝、发布成功后凭据过期仍能完成阻断清除、App 平台不变约束、限流全规则执行及统一聚合、未知／歧义路径 IP 保护、准备阶段绕过拒绝、认证及配额取消、Header 校验、Facade 必需参数与生成映射。真实生产 SecurityWebFilterChain 在内存上下文执行，覆盖 JWT／Reference 两种验证适配下的管理 401／403／放行及非 Host 证据选择；没有真实端口或中间件。
-
-本轮未运行真实基础设施冒烟，暂缓的下游 Header 迁移及完整协作验收状态不变。
-
-### 前轮开发验证（2026-09-09，职责复查前）
-
-显式 Java 17：
-
-- `mvn -pl gateway-application,gateway-infrastructure-coordination-redis -am test -q` 通过。
-- `mvn clean test -q`：307 项单元／模块契约测试通过，失败、错误、跳过均为 0。
-- `mvn -pl gateway-boot -am package -DskipTests -q`：启动包构建通过；此命令不执行测试。
-- 静态检查：生产代码无 var、控制流缺失大括号为 0，domain/application 无 Spring/Reactor 或外层实现 import，`git diff --check` 通过。
-
-新增验证覆盖回退前置失败和原有阻断保留、单快照认证及维度解析、延迟认证／取消传播。已有序列化固定向量、Header 准入及签名测试继续通过。开发阶段未运行 smoke；既有集成测试只做类型／构造器编译适配，不视为本轮真实基础设施验收。
-
-### 历史冒烟与未完成协作验收
-
-2026-09-08 最近一次 GatewayPipelineIT 的 5 项真实请求链测试通过；这是历史结果，本轮未重跑。历史完整协作场景最近结果为 27 项通过、1 项失败：BrowserSessionIngressIT 的现有 user-auth 运行包在 `/api/challenges` 未按新 Header 契约恢复 clientAppId/channelCode，必填校验失败。下游 Header 消费迁移仍按用户决定暂缓，未恢复旧 Header 别名，完整协作验收尚未通过。
-
-上述历史结果不替代本轮 smoke。进入冒烟阶段后需复验真实请求链、Nacos 发布／回退和 Redis 协调，再单独评估暂缓的 Browser Session 协作。
-
-- 外部不能绕过入口；未知端点和实际路由不一致拒绝。
-- 伪造身份 Header 清除；未验证 Client 不能匹配可信身份绑定。
-- Bundle 修改仅发布后生效；一个请求只用一个快照；非法配置保留 LKG。
-- 配额按稳定规则执行，热更新不重获满额；Redis 故障语义可验证。
-- 下游超时与响应提交语义正确。
-- 历史签名固定向量不变，新签名覆盖字段篡改和跨实例重放被拒绝。
-- 日志不包含 Token、Cookie、secret 或完整载荷。
+该提交包含原始完整记录；本地未推送的提交不假定可由远端访问。报告位置、环境和执行入口见 [集成测试模块](../gateway-integration-tests/README.md)，场景说明不替代执行报告。后续只更新当前状态及必要证据，不在本文件追加改名、构造器或每轮测试流水账。
