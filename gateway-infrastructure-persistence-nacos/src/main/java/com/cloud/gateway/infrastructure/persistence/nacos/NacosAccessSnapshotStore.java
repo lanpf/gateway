@@ -17,6 +17,10 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.FunctionCounter;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -40,6 +44,15 @@ public final class NacosAccessSnapshotStore
     private final LastKnownGoodAccessSnapshotStore lastKnownGood;
     private final AtomicReference<RevisionedAccessSnapshot> current = new AtomicReference<>();
     private final AtomicBoolean listening = new AtomicBoolean();
+    private final AtomicBoolean degraded = new AtomicBoolean();
+    private final AtomicBoolean lkgDegraded = new AtomicBoolean();
+    private final AtomicLong refreshFailures = new AtomicLong();
+    private final AtomicLong lkgFailures = new AtomicLong();
+    private final AtomicLong staleNotifications = new AtomicLong();
+    private final AtomicLong lastSuccessfulRefreshMillis = new AtomicLong();
+    private final AtomicLong failuresSinceReport = new AtomicLong();
+    private final AtomicLong lastFailureReportNanos = new AtomicLong();
+    private final AtomicReference<com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion> staleReportedVersion = new AtomicReference<>();
     private final Consumer<String> changeCallback = this::scheduleRemoteAccept;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
         Thread thread = new Thread(runnable, "gateway-nacos-access-refresh");
@@ -51,8 +64,7 @@ public final class NacosAccessSnapshotStore
         try {
             connectAndRefresh();
         } catch (RuntimeException exception) {
-            log.warn("Initial Nacos access load failed; attempting last-known-good dataId={} group={}",
-                    properties.getDataId(), properties.getGroup(), exception);
+            reportRefreshFailure("initialize", exception);
             loadLastKnownGood();
         }
         executor.scheduleWithFixedDelay(this::recoverSafely,
@@ -89,9 +101,9 @@ public final class NacosAccessSnapshotStore
         // notification and the periodic recovery loop both re-attempt the local accept.
         try {
             accept(content);
+            reportRecovered();
         } catch (RuntimeException exception) {
-            log.error("Published access snapshot could not be projected locally dataId={} group={}",
-                    properties.getDataId(), properties.getGroup(), exception);
+            reportRefreshFailure("publication_projection", exception);
         }
         return true;
     }
@@ -122,6 +134,7 @@ public final class NacosAccessSnapshotStore
                 throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
             }
             accept(content);
+            reportRecovered();
         } catch (NacosException exception) {
             throw new InfrastructureException(
                     PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE, exception);
@@ -147,9 +160,9 @@ public final class NacosAccessSnapshotStore
                 throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
             }
             accept(content);
+            reportRecovered();
         } catch (RuntimeException exception) {
-            log.error("Nacos access notification failed dataId={} group={}",
-                    properties.getDataId(), properties.getGroup(), exception);
+            reportRefreshFailure("notification", exception);
         }
     }
 
@@ -157,8 +170,7 @@ public final class NacosAccessSnapshotStore
         try {
             connectAndRefresh();
         } catch (RuntimeException exception) {
-            log.error("Nacos access refresh failed dataId={} group={}",
-                    properties.getDataId(), properties.getGroup(), exception);
+            reportRefreshFailure("refresh", exception);
         }
     }
 
@@ -189,6 +201,10 @@ public final class NacosAccessSnapshotStore
             RevisionedAccessSnapshot observed = current.get();
             RevisionedAccessSnapshot accepted = acceptedSnapshot(observed, candidate, sourceRevision);
             if (accepted == observed) {
+                if (lkgDegraded.get() && candidate.version().equals(observed.snapshot().version())
+                        && candidate.contentHash().equals(observed.snapshot().contentHash())) {
+                    saveLastKnownGood(content);
+                }
                 return;
             }
             if (current.compareAndSet(observed, accepted)) {
@@ -203,9 +219,14 @@ public final class NacosAccessSnapshotStore
     private void saveLastKnownGood(String content) {
         try {
             lastKnownGood.save(content);
+            if (lkgDegraded.compareAndSet(true, false)) {
+                log.info("Gateway last-known-good persistence recovered failures={}", lkgFailures.get());
+            }
         } catch (InfrastructureException exception) {
-            log.error("Failed to persist last-known-good gateway access path={}",
-                    properties.getLastKnownGoodLocation(), exception);
+            lkgFailures.incrementAndGet();
+            if (lkgDegraded.compareAndSet(false, true)) {
+                log.warn("Gateway last-known-good persistence degraded exceptionType={}", exception.getClass().getSimpleName());
+            }
         }
     }
 
@@ -222,15 +243,54 @@ public final class NacosAccessSnapshotStore
         }
         return switch (observed.snapshot().acceptanceOf(candidate)) {
             case STALE -> {
-                log.warn("Ignored stale Nacos access snapshot dataId={} group={} currentVersion={} candidateVersion={}",
-                        properties.getDataId(), properties.getGroup(), observed.snapshot().version().value(),
-                        candidate.version().value());
+                staleNotifications.incrementAndGet();
+                var version = observed.snapshot().version();
+                var previous = staleReportedVersion.getAndSet(version);
+                if (!version.equals(previous)) {
+                    log.warn("Ignored stale Nacos access snapshot currentVersion={} candidateVersion={} total={}",
+                            version.value(), candidate.version().value(), staleNotifications.get());
+                }
                 yield observed;
             }
             case UNCHANGED -> new RevisionedAccessSnapshot(observed.snapshot(), sourceRevision);
             case CONFLICT -> throw new InfrastructureException(InfrastructureError.INFRA_ACL_NACOS_CONTENT_INVALID);
             case ADVANCE -> new RevisionedAccessSnapshot(candidate, sourceRevision);
         };
+    }
+
+    public void bindMetrics(MeterRegistry registry) {
+        com.cloud.framework.core.validation.Require.notNull(registry);
+        FunctionCounter.builder("gateway.access.refresh.failures", refreshFailures, AtomicLong::doubleValue).register(registry);
+        FunctionCounter.builder("gateway.access.lkg.failures", lkgFailures, AtomicLong::doubleValue).register(registry);
+        FunctionCounter.builder("gateway.access.stale_notifications", staleNotifications, AtomicLong::doubleValue).register(registry);
+        Gauge.builder("gateway.access.refresh.last_success_seconds", lastSuccessfulRefreshMillis,
+                value -> value.get() / 1000.0).register(registry);
+        Gauge.builder("gateway.access.refresh.degraded", degraded, value -> value.get() ? 1 : 0).register(registry);
+        Gauge.builder("gateway.access.lkg.degraded", lkgDegraded, value -> value.get() ? 1 : 0).register(registry);
+    }
+
+    private void reportRefreshFailure(String operation, RuntimeException exception) {
+        refreshFailures.incrementAndGet();
+        failuresSinceReport.incrementAndGet();
+        long now = System.nanoTime();
+        long previous = lastFailureReportNanos.get();
+        boolean transition = degraded.compareAndSet(false, true);
+        boolean window = now - previous >= TimeUnit.MINUTES.toNanos(1)
+                && lastFailureReportNanos.compareAndSet(previous, now);
+        if (transition || window) {
+            lastFailureReportNanos.set(now);
+            log.warn("Gateway access refresh degraded operation={} failures={} lastSuccessMillis={} exceptionType={}",
+                    operation, failuresSinceReport.getAndSet(0), lastSuccessfulRefreshMillis.get(),
+                    exception.getClass().getSimpleName());
+        }
+    }
+
+    private void reportRecovered() {
+        lastSuccessfulRefreshMillis.set(System.currentTimeMillis());
+        if (degraded.compareAndSet(true, false)) {
+            log.info("Gateway access refresh recovered failures={} total={}",
+                    failuresSinceReport.getAndSet(0), refreshFailures.get());
+        }
     }
 
     static String sourceRevision(String content) {

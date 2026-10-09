@@ -19,11 +19,11 @@ public final class ManagementEndpointContractValidator implements SmartInitializ
     public void afterSingletonsInstantiated() {
         IngressSnapshot snapshot = provider.capture().snapshot();
         for (Endpoint endpoint : snapshot.content().endpoints().asMap().values()) {
-            if (GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.routeId())
-                    || endpoint.matchers().stream().anyMatch(matcher ->
+            if (GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.getRouteId())
+                    || endpoint.getMatchers().stream().anyMatch(matcher ->
                             matcher.pathPattern().equals(GatewayPathApiConstants.ADMIN_BASE_PATH)
                                     || matcher.pathPattern().startsWith(MANAGEMENT_DESCENDANT_PREFIX))) {
-                rules.validatePolicy(endpoint.access());
+                rules.validatePolicy(endpoint.getAccess());
             }
         }
     }

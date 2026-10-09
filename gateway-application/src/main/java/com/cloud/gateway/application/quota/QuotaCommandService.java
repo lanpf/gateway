@@ -4,7 +4,7 @@ import com.cloud.gateway.domain.capability.ratelimit.ApplicableQuota;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRuleId;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitEvaluator;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
+import com.cloud.gateway.application.quota.QuotaAcquirer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -14,8 +14,8 @@ import lombok.RequiredArgsConstructor;
 /** Every applicable rule executes after denial too; there is no cross-key atomicity. */
 @RequiredArgsConstructor
 public final class QuotaCommandService {
-    private final RateLimitQuota quota;
-    private final LocalRateLimitQuota localQuota;
+    private final QuotaAcquirer quota;
+    private final LocalQuotaAcquirer localQuota;
     private final QuotaObserver observer;
 
     /** applied is a mutable request-owned record shared serially across ingress phases. */

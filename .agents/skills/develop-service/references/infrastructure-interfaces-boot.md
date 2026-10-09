@@ -3,10 +3,11 @@
 ## Infrastructure and configuration
 
 - **INFRA-RESPONSIBILITY-001** **[REQUIRED][TOPIC]** — Infrastructure provides repository, ID, event-storage, messaging, scheduling, and other technical adapters and implements ports defined by domain or application without owning domain rules or use-case orchestration.
-- **INFRA-ASYNC-001** **[REQUIRED][TOPIC]** — Adapt domain event storage through the port defined by framework-domain; domain and application must not depend on a concrete domain-event-store implementation. EventStore uses `LongIdGenerator` to assign each persistence envelope a trend-increasing Long ID, and persistence adapters must not inject that technical ID back into the raw domain event.
+- **INFRA-EVENTSTORE-PORT-001** **[REQUIRED][TOPIC]** — Adapt domain-event storage through the framework-domain port; domain and application must not depend on a concrete event-store implementation. Envelope identity follows the domain-event and distributed-ID rules.
 - **INFRA-CONFIG-001** **[REQUIRED][TOPIC]** — For JavaBean configuration binding, collection and nested-object fields are final, expose getters without setters, and begin as empty binding containers without business defaults.
 - **INFRA-CONFIG-002** **[REQUIRED][TOPIC]** — Required configuration collections use `@NotEmpty` so missing configuration fails startup rather than running silently with an empty value.
-- **INFRA-DURATION-001** **[REQUIRED][TOPIC]** — A standalone minimum for `Duration` uses both `@NotNull` and Hibernate Validator `@DurationMin` with explicit units; the module declares `hibernate-validator` directly.
+- **INFRA-DURATION-VALIDATION-001** **[REQUIRED][TOPIC]** — For an independent Duration minimum, use both `@NotNull` and `@DurationMin` with explicit units.
+- **INFRA-DURATION-DEPENDENCY-001** **[REQUIRED][TOPIC]** — A module using `@DurationMin` directly declares `hibernate-validator`.
 - **INFRA-CROSS-FIELD-001** **[REQUIRED][TOPIC]** — Use `@AssertTrue` and similar type-level validation only for relationships between fields.
 - **DEP-BEAN-001** **[REQUIRED][TOPIC]** — Reuse infrastructure Beans supplied by the runtime framework instead of declaring another Bean with the same semantics.
 

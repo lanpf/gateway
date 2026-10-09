@@ -11,6 +11,11 @@
     <artifactId>gateway-integration-tests</artifactId>
     <dependencies>
         <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>com.cloud</groupId>
             <artifactId>gateway-infrastructure-ratelimit-redis</artifactId>
             <scope>test</scope>

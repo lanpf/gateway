@@ -1,10 +1,11 @@
 package com.cloud.gateway.domain.client;
 
+import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.client.Credential;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.client.SignatureContract;
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -22,8 +23,8 @@ class CredentialsTest {
     }
 
     @Test void shouldRejectMissingActiveIncludingGraceOnly() {
-        assertThrows(DomainException.class, () -> new Credentials(null, null));
-        assertThrows(DomainException.class, () -> new Credentials(null,
+        assertThrows(FrameworkException.class, () -> new Credentials(null, null));
+        assertThrows(FrameworkException.class, () -> new Credentials(null,
                 credential("grace", SignatureContract.HTTP_REQUEST_SIGNATURE_V1)));
     }
 

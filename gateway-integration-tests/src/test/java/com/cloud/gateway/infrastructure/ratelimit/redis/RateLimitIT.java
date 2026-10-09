@@ -9,7 +9,7 @@ import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
+import com.cloud.gateway.application.quota.QuotaAcquirer;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
 
@@ -93,7 +93,7 @@ class RateLimitIT {
         var acquisitions = new ArrayList<Future<RateLimitDecision>>();
         try {
             for (int i = 0; i < 24; i++) {
-                RateLimitQuota quota = (i % 2 == 0 ? first : second).quota();
+                QuotaAcquirer quota = (i % 2 == 0 ? first : second).quota();
                 acquisitions.add(executor.submit(() -> {
                     barrier.await(10, TimeUnit.SECONDS);
                     return quota.tryAcquire(rule, VALUE);
@@ -223,7 +223,7 @@ class RateLimitIT {
                 () -> new StringRedisTemplate(context.getBean(LettuceConnectionFactory.class)));
         context.register(RateLimitRedisAutoConfiguration.class);
         context.refresh();
-        return new Node(context.getBean(RateLimitQuota.class), context.getBean(StringRedisTemplate.class),
+        return new Node(context.getBean(QuotaAcquirer.class), context.getBean(StringRedisTemplate.class),
                 context.getBean(RateLimitKeyResolver.class), context.getBean(QuotaCommandService.class));
     }
 
@@ -256,6 +256,6 @@ class RateLimitIT {
                 Map.of(RateLimitDimension.CLIENT, VALUE), false), new java.util.HashSet<>());
     }
 
-    private record Node(RateLimitQuota quota, StringRedisTemplate redis, RateLimitKeyResolver keys,
+    private record Node(QuotaAcquirer quota, StringRedisTemplate redis, RateLimitKeyResolver keys,
             QuotaCommandService service) { }
 }

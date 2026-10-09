@@ -1,5 +1,6 @@
 package com.cloud.gateway.application.ingress;
 
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.ingress.access.RequestEvidence;
 import com.cloud.gateway.domain.endpoint.EndpointMatch;
@@ -14,16 +15,13 @@ public sealed interface PreparationStageOutput {
                     RequestEvidence evidence,
                     CapabilityExecution execution) implements PreparationStageOutput {
         public Prepared {
-            Objects.requireNonNull(snapshot, "snapshot must not be null");
-            Objects.requireNonNull(endpointMatch, "endpointMatch must not be null");
-            Objects.requireNonNull(evidence, "evidence must not be null");
-            Objects.requireNonNull(execution, "execution must not be null");
+            Require.allNotNull(snapshot, endpointMatch, evidence, execution);
         }
     }
 
     record Denied(CapabilityExecution execution) implements PreparationStageOutput {
         public Denied {
-            Objects.requireNonNull(execution, "execution must not be null");
+            Require.notNull(execution);
         }
     }
 }

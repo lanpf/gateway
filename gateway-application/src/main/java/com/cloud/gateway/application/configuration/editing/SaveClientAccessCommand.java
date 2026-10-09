@@ -1,5 +1,6 @@
 package com.cloud.gateway.application.configuration.editing;
 
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.ClientId;
@@ -9,6 +10,6 @@ import java.util.Set;
 public record SaveClientAccessCommand(Revision expectedSourceRevision,
                                       ClientId clientId, Set<AppId> allowedAppIds) {
     public SaveClientAccessCommand {
-        allowedAppIds = allowedAppIds == null ? null : Set.copyOf(allowedAppIds);
+        allowedAppIds = allowedAppIds == null ? null : NullSafe.copyOf(allowedAppIds);
     }
 }

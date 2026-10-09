@@ -1,9 +1,11 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
+
 import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
-import com.cloud.gateway.infrastructure.policy.mapstruct.AccessSnapshotDocumentMapStructMapperImpl;
+import com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityPolicyConfigStorageMapStructMapperImpl;
+import com.cloud.gateway.infrastructure.policy.mapstruct.AbstractAccessSnapshotDocumentMapStructMapperImpl;
 
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
@@ -20,8 +22,8 @@ import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
+import com.cloud.gateway.domain.capability.header.HeaderConfigRule;
 import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,14 +37,12 @@ final class PolicyTestFixtures {
     private PolicyTestFixtures() { }
 
     static com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher() {
-        return new CanonicalAccessSnapshotHasher(new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
+        return new CanonicalAccessSnapshotHasher(new DefaultCanonicalPolicyContentMapper(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
     }
 
     static StoredAccessSnapshotCodec codec() {
-        return new StoredAccessSnapshotCodec(
-                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())))), hasher(), new ObjectMapper().findAndRegisterModules(),
-                HeaderAdmissionRules.registeredOnly());
+        return new StoredAccessSnapshotCodec(new DefaultStoredAccessSnapshotMapper(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AbstractAccessSnapshotDocumentMapStructMapperImpl(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())))), hasher(), new ObjectMapper().findAndRegisterModules(), BuiltInCapabilityCatalog.validator(HeaderConfigRule.empty()));
     }
 
     static IngressSnapshot snapshot(long version, boolean enabled) {
@@ -54,7 +54,7 @@ final class PolicyTestFixtures {
                 new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
                         SubjectAuthenticationRequirement.ANONYMOUS, Set.of(), Set.of()))));
         IngressContent content = new IngressContent(new AppRegistry(List.of()),
-                new ClientRegistry(List.of()), endpoints, CapabilityComposition.empty());
+                new ClientRegistry(List.of()), endpoints, CapabilityPolicyConfig.empty());
         return new IngressSnapshot(new SnapshotVersion(version), content,
                 hasher().hash(content), PUBLISHED_AT.plusSeconds(version));
     }

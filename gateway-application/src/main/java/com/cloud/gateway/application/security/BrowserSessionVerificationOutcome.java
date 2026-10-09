@@ -1,5 +1,6 @@
 package com.cloud.gateway.application.security;
 
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
 import com.cloud.gateway.domain.ingress.access.subject.SubjectAuthenticationFailReason;
 import java.util.Objects;
@@ -8,7 +9,7 @@ import java.util.Objects;
 public sealed interface BrowserSessionVerificationOutcome {
     record Verified(AuthenticatedSubject subject) implements BrowserSessionVerificationOutcome {
         public Verified {
-            Objects.requireNonNull(subject, "subject must not be null");
+            Require.notNull(subject);
         }
     }
 
@@ -17,7 +18,7 @@ public sealed interface BrowserSessionVerificationOutcome {
 
     record Unavailable(SubjectAuthenticationFailReason reason) implements BrowserSessionVerificationOutcome {
         public Unavailable {
-            Objects.requireNonNull(reason, "reason must not be null");
+            Require.notNull(reason);
         }
     }
 

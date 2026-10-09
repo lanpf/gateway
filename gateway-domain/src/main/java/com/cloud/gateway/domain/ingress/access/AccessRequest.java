@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.ingress.access;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
 
@@ -16,7 +15,6 @@ public record AccessRequest(
         boolean unsafe
 ) {
     public AccessRequest {
-        Require.notNull(endpointId, DomainException::missingField);
-        Require.notNull(appId, DomainException::missingField);
+        Require.allNotNull(endpointId, appId);
     }
 }

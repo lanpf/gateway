@@ -33,14 +33,14 @@
 | clientVerification（签名 + 防重放） | 接入段 | 一 | 是 |
 | appAccess / clientAccess / endpointAccess | 接入段 | 一 | 是 |
 | capabilityBinding 解析 | 准备段 / 准入段，统一能力服务按当前可信事实解析 | 一 | 是 |
-| rateLimit（post-auth 槽位，身份维度及新命中的身份绑定 IP 规则） | 准入段 | 一 | 是（EXACT） |
+| rateLimit（post-auth 槽位，身份维度） | 准入段 | 一 | 是（EXACT） |
 | headerPreparation | 准入段 | 一 | 是 |
 | **timeout** | 下游治理（`FORWARD` 相） | 二 | **是** |
 | **headerApply（凭据清除 + 可信写入）** | 下游治理（`FORWARD` 相） | 二 | **是（安全必需）** |
 
 当前可配置能力为 `rateLimit`、`timeout`、`headerApply`。限流在阶段一的 PRE_AUTH / POST_AUTH 槽位执行；超时与 Header 应用在阶段二的 FORWARD 槽位执行。
 
-限流是一个能力、两个槽位：IP 规则最早可在 pre-auth 执行；身份维度或带身份绑定的 IP 规则必须等待 post-auth。同一规则跨阶段最多执行一次，支持两个槽位不代表每条规则执行两次。执行拓扑固定、不可由调用者指定，原因有三：
+限流是一个能力、两个槽位：IP 规则最早可在 pre-auth 执行；身份维度必须等待 post-auth。同一规则跨阶段最多执行一次，支持两个槽位不代表每条规则执行两次。 执行拓扑固定、不可由调用者指定，原因有三：
 
 - **顺序编码安全不变量**，违反时故障静默：Header 写入先于认证即透传伪造身份；IP 限流后置即失去未知路径保护。
 - **能力间存在数据依赖**：认证后能力消费获准上下文，自由排序是幻觉。
@@ -67,6 +67,23 @@
 | EndpointAccess | 端点接入策略：clientVerificationRequirement、subjectAuthenticationRequirement、requiredScopes、requiredAudiences。 |
 | EndpointRegistry | Endpoint 聚合的不可变注册表；重复 EndpointId 或重复 EndpointMatcher 在构造时以 ENDPOINT_AMBIGUOUS 拒绝。 |
 
+App、Client、Endpoint 是不可变普通类聚合，以 Lombok Getter 读取字段，equals/hashCode 仅比较各自唯一 ID。内容编辑保留原状态，Client 接入编辑还保留凭据；创建默认 ENABLED，状态切换和凭据轮换由聚合方法执行。application 负责读取、锁、revision 与 CAS，不再自行决定这些状态保留规则。Java 调用方使用 getId 等生成 Getter；协议中的 appId/clientId/endpointId 由映射契约保持。
+
+配置比较须使用 sameDefinition；身份相等不表示配置一致。EndpointMatch 折叠身份和全部配置都相同的候选，同 ID 的不同匹配器、状态或接入配置仍为 Ambiguous；回退同样按配置决定是否跳过已恢复的 Definition。
+
+标识来源由以下契约约束，不引入数值 ID 生成器：
+
+| 标识 | 来源及维护方 |
+| --- | --- |
+| AppId、ClientId、EndpointId | gateway 受管理 Definition，由配置维护方提供稳定字符串 |
+| CredentialId | Client 凭据配置，由配置维护方提供并在轮换时保持两份 ID 不同 |
+| CapabilityBundleId、CapabilityBindingId、RateLimitRuleId | 策略配置维护方提供；配额规则 ID 跨快照更新保持稳定 |
+| CapabilityId | 代码目录登记；配置只能选择已部署的精确名称 |
+| ServiceId、RouteId | 服务发现与 SCG 路由的部署标识，配置引用其稳定名称 |
+| SubjectId、SessionId | 经过认证的 Token 或 user-auth 验证响应恢复；gateway 不自行生成 |
+
+实体字符串标识继承 AbstractStringEntityId；AbstractLongEntityId 仅保留既有抽象契约，不为当前字符串模型引入发号依赖。
+
 ### 2.2 凭据与签名协议
 
 | 模型 | 定义 |
@@ -80,7 +97,7 @@
 | 模型 | 定义 |
 | --- | --- |
 | SubjectType | HOST_SESSION / BROWSER_SESSION；会话家族由 interfaces 按请求传输证据选择。 |
-| SubjectId / SessionId | 主体标识与会话标识值对象，非空白并去除首尾空白。 |
+| SubjectId / SessionId | 主体标识与会话标识值对象。 |
 | AuthenticatedSubject | 认证成功的主体事实：subjectType、subjectId、sessionId、issuer、audiences、scopes、authenticationExpiresAt。 |
 | SubjectAuthenticationOutcome | Authenticated(subject) / Absent / Rejected(reason) / Failed(reason)。 |
 | SubjectAuthenticationRejectReason | EXPIRED / INVALID。 |
@@ -98,7 +115,7 @@
 | ClientVerificationOutcome | Verified(client) / Absent / Rejected / Failed，与主体认证结局同构。 |
 | AccessEvaluator | 无状态纯规则：依快照与两个验证/认证结局产生 AccessDecision，详见 2.8。 |
 | AccessDecision | Allowed(grantedContext) / Denied(denyReason)；两种结局都携带请求所持 SnapshotVersion。 |
-| AccessDenyReason | 十六种拒绝原因；禁用与不存在共用 NOT_FOUND 系列，不另设禁用原因。 |
+| AccessDenyReason | 十六种拒绝原因；禁用与不存在共用 NOT_FOUND 。 |
 | AccessGrantedContext | 仅含 app（VerifiedApp，必填）、client（VerifiedClient，可空）、subject（AuthenticatedSubject，可空）。 |
 
 ### 2.5 快照与版本
@@ -107,28 +124,28 @@
 | --- | --- |
 | Revision | Definition 文件级源修订令牌，非空白字符串包装；不透明，只用于 CAS 比较。 |
 | SnapshotVersion | 全局发布版本，正数 long 包装；0 非法。 |
-| IngressContent | 快照内容：App / Client / Endpoint 三个注册表与 CapabilityComposition。 |
+| IngressContent | 快照内容：App / Client / Endpoint 三个注册表与 CapabilityPolicyConfig。 |
 | IngressSnapshot | 唯一版本化的不可变入口快照：version、content、contentHash、publishedAt。 |
 
 ### 2.6 能力配置与运行模型
 
 | 模型 | 定义 |
 | --- | --- |
-| CapabilityComposition | 同一快照内 Bundle 与 Binding 的完整配置，负责引用及竞争节点校验。 |
-| CapabilityBundle / CapabilityBundleId | 开放的不可变能力配置集合；入口按 CapabilityId 判重，内部为 Map，每种能力零或一份。 |
+| CapabilityPolicyConfig | 同一快照内 Bundle 与 Binding 的完整配置；普通类保存两份不可变 Map 索引，唯一公共构造器接收 Bundle 与 Binding 集合并按条目自身身份建索引、判重并校验 Binding 引用的 Bundle 存在；跨注册表引用与同层竞争校验收口在 CapabilityPolicyConfigValidator.validate(policyConfig, apps, clients, endpoints)。 |
+| CapabilityBundle / CapabilityBundleId | 开放的不可变能力配置集合；普通类持有按 CapabilityId 的不可变索引，唯一公共构造器接收 Bundle 标识与配置条目集合，按条目自身身份建索引并判重，每种能力零或一份。 |
 | CapabilityBinding / CapabilityBindingId | 按条件（serviceId/endpointId/tags + appId/verifiedClientId/subjectType）把 Bundle 绑定到端点。 |
-| EffectiveCapabilityPolicies | 当前可信事实下的生效策略容器；通过 get(composer) 类型化读取各自的 Effective*Policy，不持有具体能力字段，不携带执行状态或槽位。 |
+| EffectiveCapabilityPolicies | 当前可信事实下的生效策略容器；通过 get(policyType) 类型化读取各自的 Effective*Policy，不持有具体能力字段，不携带执行状态或槽位。 |
 | CapabilityConfig / CapabilityId | 单项不可变能力配置契约与稳定能力标识；配置类型与标识由注册定义校验。 |
-| CapabilityPolicyComposer<C, P> | 仅声明 capabilityId、configType、policyType 与 compose；将有序 Config 组合为对应 Effective*Policy，不承担全量校验或同层冲突判断。 |
-| CapabilityConfigRegistry | 不可变策略组合器注册表，拒绝重复标识、未知能力与错误配置类型；按累加能力集合判定节点竞争，调用独立的全量配置校验，不组装策略。 |
+| CapabilityConfigRule<C> | 能力专属配置规则：声明 id()/configType()，validate(List<C>) 接收同一能力的完整配置列表，不感知 PolicyConfig、Bundle、Binding 或 Composer。 |
+| CapabilityPolicyConfigValidator | 校验整份能力策略配置的 ID／类型、跨配置规则、注册表引用与同层竞争；持有 ConfigRule 和固定注册元数据，不依赖 Assembler。 |
+| CapabilityPolicyComposer<C, P> | 仅声明 id、configType、policyType 与 compose；将有序 Config 组合为对应 Effective*Policy，不承担全量校验或同层冲突判断。 |
 | CapabilityPlanningEntry<P> | 请求级规划输入：PlannableCapability<P> + P policy；仅持有本次非空生效策略，不持有配置来源、快照或读取回调。 |
-| CapabilityPolicyAssembler | 无状态策略组装器；按可信事实匹配并排序 Bundle，直接调用各能力 Composer，组装 EffectiveCapabilityPolicies。 |
+| CapabilityPolicyAssembler | 持有不可变 Composer 目录，委托 Validator 校验，再按可信事实匹配并排序 Bundle，组合 EffectiveCapabilityPolicies；不保存请求状态或校验规则。 |
 | CapabilityContext / CapabilityFact | 当前槽位、请求事实、可空端点及获准上下文；事实可用性由上下文推导，区分尚未认证与接入完成但无主体。 |
-| CapabilityDefinition | 能力标识契约：只声明能力标识，行为由 `PlannableCapability` 回答。 |
 | PlannableCapability | **唯一的规划契约**：声明支持槽位、所需事实、重复策略，并产出强类型执行单元。 |
 | CapabilityUnit | 能力产出的强类型执行单元；单元可额外声明事实依赖，由 planner 逐单元校验。 |
 | CapabilityPlanner / CapabilityPlan | 无状态规划器接收本次请求的 Entry 列表、Context 和已执行键，校验槽位／事实并去重；不引用 EffectiveCapabilityPolicies，也不保存请求配置。 |
-| CapabilityExecution / CapabilityExecutionKey | 累计执行键与当前槽位强类型结果；键为能力标识 + 单元标识，按槽位重复时额外包含槽位。 |
+| CapabilityExecution / CapabilityExecutionKey | 累计执行键与当前槽位强类型结果；键为 `CapabilityId` 能力标识 + 单元标识，按槽位重复时额外包含槽位。 |
 | TimeoutConfig / HeaderConfig | 单值完整配置节点，随 Bundle 整体覆盖，无独立身份、无逐请求决策。 |
 | RateLimitConfig | Bundle 的限流配置节点：规则组 + `RedisFailureMode`；节点内多条 Rule 各自可寻址执行。 |
 | RateLimitRule / RateLimitRuleId | 限流的多值可寻址规则：Rule 有独立身份构成配额键、按维度落到 pre-auth/post-auth 槽位。 |
@@ -264,13 +281,19 @@
 
 ## 3. 能力组合与绑定解析
 
-**两项职责，不增加中间层**：CapabilityPolicyAssembler.assemble(composition, endpoint, granted) 匹配 Binding、按优先级选择并去重 Bundle、提取每种能力的配置，直接调用对应 CapabilityPolicyComposer.compose(List<C>)，最后组装 EffectiveCapabilityPolicies。该容器是本次各能力生效策略的集合，不是执行计划；是否执行仍由 Planner 决定。
+**组合条目统一按身份索引**：CapabilityPolicyConfig 是普通类，保存 Map<CapabilityBundleId, CapabilityBundle> 和 Map<CapabilityBindingId, CapabilityBinding> 两份不可变索引，通过 getBundles() / getBindings() 读取。唯一公共构造器接收 Collection<CapabilityBundle> 与 Collection<CapabilityBinding>，直接按条目自身身份建立索引：元素非空、重复 ID 即使内容相同也拒绝（不静默折叠或覆盖）、null 集合归一为空集合，Binding 引用的 Bundle 必须存在于同一组合；索引经不可变复制并与输入容器隔离。存储／协议边界的来源 key 与还原对象 ID 的一致性由各自的重建转换核对，不属于领域构造器。
 
-CapabilityConfigRegistry 承担代码注册、类型检查及组合合法性校验，不提供策略组装入口。Composer 不接收 Bundle、请求或槽位，只组合有序配置；覆盖、累加与默认值由对应能力决定。接口只保留 capabilityId()、configType()、policyType()、compose(List<C>)，不提供 checked、conflictsAtSamePriority 或 validateConfigurations。compose 接收非空列表（可以为空、元素非空），返回非空不可变策略，策略自身维护组合结果不变量。
+组合相等性与 hashCode 基于两份索引的全部内容，不依赖输入顺序；它不是按单一 ID 比较的聚合根。匹配遍历 Binding 索引的 values，再按 specificity 与 bindingId 显式排序，不以 Map 迭代顺序决定优先级。HTTP／存储统一使用 bundles 与 bindings 两个对象，分别按字符串 ID 索引，条目内保留 bundleId／bindingId。外层语义转换在标识规范化时拒绝重复键，并核对还原对象的 ID 与来源 key 一致。原始 JSON／YAML 的重复 key 在解析阶段拒绝，不能等覆盖后再判重。存储两份 Map 均按 key 稳定排序；bindings 从数组变为对象属于破坏式 schema 更新，规范化摘要随之改变。
 
-注册时独立声明 cumulativeCapabilities：属于该集合的能力允许同层多个配置来源累加，其余能力默认拒绝同层竞争；集合必须是已注册能力标识的子集，不能由业务配置动态修改。独立的 compositionValidation 回调接收完整不可变 Bundle 集合，在类型校验后执行；不按本次请求是否命中过滤，也不通过调用 compose 来替代全量校验。限流由 RateLimitConfig.validateComposition 保证规则 ID 全局唯一及 EXACT 约束；同一规则也用于 EffectiveRateLimitPolicy 构造，分别保护完整配置与本次生效结果。不新增通用校验接口，规则仍由各自领域模型承载。
+**两项职责，不增加中间层**：CapabilityPolicyAssembler.assemble(policyConfig, endpoint, granted) 匹配 Binding、按优先级选择并去重 Bundle、提取每种能力的配置，直接调用对应 CapabilityPolicyComposer.compose(List<C>)，最后组装 EffectiveCapabilityPolicies。该容器是本次各能力生效策略的集合，不是执行计划；是否执行仍由 Planner 决定。
 
-新增能力提供自己的 Config、EffectivePolicy、PolicyComposer 和运行能力／执行器，并登记必要的协议编解码；不修改 Bundle、Assembler、Planner 或有效策略容器。运行目录、配置目录与协议目录的完整性校验继续保留，不增加动态插件发现或单／多槽位继承体系。
+不增加注册层。CapabilityPolicyAssembler 接收 Composer 集合与现成的 CapabilityPolicyConfigValidator，保留目录、匹配与组合职责，在 assemble 前调用内容校验，不负责创建 Validator，也不对外转发 validate。保存、发布和编解码直接依赖同一个 Validator，请求链通过 Assembler 使用它。装配处通过 CapabilityPolicyConfigValidator.forComposers 从同一份 Composer 集合提取能力 ID 到配置 Class 的不可变索引，并传入 ConfigRule 列表与累加能力集合；Validator 不持有或调用 Composer，不依赖 Assembler。Assembler 构造时拒绝与 Validator 目录的能力 ID 集合或配置类型不一致；协议目录也按能力 ID 与配置类型检查完整性，无需通过 Assembler 查询 Composer 对象。每个固定规则 Validator 仅以弱引用记忆最近一次成功校验的 PolicyConfig 对象身份，不比较内容相等性、不计算内容哈希、不使用共享锁；同内容的新实例仍需校验，实例被回收或被另一成功实例替换后再次校验。并发未命中允许重复执行纯校验；失败不缓存，引用校验不缓存且每次执行。Composer 只提供 id()/configType()/policyType()/compose(List<C>)，不感知 Bundle、请求或槽位，不替代完整配置校验。
+
+累加能力集合必须是已注册能力标识的子集，非累加能力在同层存在不同配置来源时拒绝竞争。Validator 先校验完整组合的能力 ID 与配置类型，再按能力提取全部配置（包含未绑定、未命中 Bundle，不去重相同配置），调用 CapabilityConfigRule<C>.validate(List<C>)。ConfigRule 必须声明匹配注册目录的 id()/configType()，每个能力最多一项 ConfigRule，无额外规则的能力无需空实现。列表非 null、不可变且无 null 元素，不承载优先级；没有配置时传空列表。HeaderConfigRule 逐份检查部署限制，RateLimitConfigRule 在全体限流配置之间校验 RuleId 唯一及 EXACT 约束。具体 ConfigRule 不感知 PolicyConfig、Bundle、Binding 或 Composer。生效策略不重复执行配置规则。
+
+新增能力提供自己的 Config、EffectivePolicy、PolicyComposer 和运行能力／执行器，并登记必要的组合 ConfigRule 与协议编解码；不修改 Bundle、Assembler、Planner 或有效策略容器。运行目录、配置目录与协议目录的完整性校验继续保留，不增加动态插件发现或单／多槽位继承体系。
+
+Config 构造器继续保护自身不变量（包括单份限流配置内 RuleId 判重），不接收整个 PolicyConfig 或读取部署 Properties。跨配置和部署准入规则由各自的 *ConfigRule 承担；Composer 仍只负责有序配置组合。保存与发布仅调用统一领域校验，编解码在语义重建／编码边界直接调用共享 Validator，不再维护 Header 专属遍历或经 Assembler 转发校验。绑定引用、范围及同层竞争规则由 CapabilityPolicyConfigValidator.validate(policyConfig, apps, clients, endpoints) 的全量校验承担，PolicyConfig 不再依赖服务。
 
 本组合是数据层组合机制，服务准备段、准入段与转发前的能力节点解析；**三个执行点由 `CapabilityExecutionCommandService` 统一编排**。能力节点既参与发布校验也参与执行。
 
@@ -281,23 +304,25 @@ CapabilityConfigRegistry 承担代码注册、类型检查及组合合法性校�
 | `*Config`（RateLimit / Timeout / Header） | Bundle 的能力配置节点；限流为规则组节点，其余为单值节点 | 每种能力在 Bundle 内恰好零或一份 | 单值节点被 Binding 整体覆盖；限流规则组累加、同 Bundle 去重 |
 | `RateLimitRule` | 可独立执行的可寻址单元 | 有独立身份，构成配额键 | 可累加、跨阶段去重 |
 
-**单值 Config 被覆盖，限流 Config 累加，Rule 被执行**——限流规则组累加而非覆盖，这一差异决定了两个能力族的合并语义不同（见第 4.1 节）。
+**单值 Config 被覆盖，限流 Config 累加，RateLimitRule 被执行**——限流规则组累加而非覆盖，这一差异决定了两个能力族的合并语义不同（见第 4.1 节）。
 
 **命名约定**：治理能力的组合与解析使用 `Capability*` 词族，解析结果使用 `EffectiveCapabilityPolicies`。类型后缀在全领域统一为固定家族，**同一种后缀必须是同一种含义**：
 
 | 后缀 / 前缀 | 含义 | 成员 |
 | --- | --- | --- |
-| 前缀 `Capability*` | **组合与执行机制**——绑定、解析、规划及执行记录 | `CapabilityComposition`、`CapabilityBundle`、`CapabilityBinding`、`CapabilityPolicyAssembler`；`capability.runtime` 下的槽位、规划与记录模型 |
+| 前缀 `Capability*` | **配置、组合与执行机制**——策略配置、绑定、解析、规划及执行记录 | `CapabilityPolicyConfig`、`CapabilityBundle`、`CapabilityBinding`、`CapabilityPolicyAssembler`；`capability.runtime` 下的槽位、规划与记录模型 |
 | `EffectiveCapabilityPolicies` | **解析结果**——当前请求适用的能力配置 | 累加后的限流规则组，以及覆盖解析后的超时、Header 节点 |
-| 后缀 `*Config` | **快照内能力配置节点**（Bundle 中当前登记的类型化节点，随快照发布） | `RateLimitConfig`、`TimeoutConfig`、`HeaderConfig` |
+| 后缀 `*Config` | **快照内配置**——整份能力策略配置，或 Bundle 中登记的单项能力配置节点，随快照发布 | `CapabilityPolicyConfig`、`RateLimitConfig`、`TimeoutConfig`、`HeaderConfig` |
 | 后缀 `*Rule` / `*RuleId` | **单条规则及其标识**（有独立身份，构成配额键） | `RateLimitRule`、`RateLimitRuleId` |
+| 后缀 `*Quota` | **配额值对象**——选定的规则、维度取值与故障方式，不执行；执行端口用角色命名（application 的 `QuotaAcquirer`） | `ApplicableQuota` |
 | 后缀 `*Mode` | **行为选择枚举** | `RedisFailureMode`、`RateLimitMode`、`ClientVerificationMode`、`CookieForwardingMode`、`AuthorizationHeaderForwardingMode` |
-| 后缀 `*Rules` | **非快照内容的规则判定器**——静态谓词或携带少量参数，职责是判定/校验，不随快照发布 | `SubjectAccessRules`、`HeaderValueRules`、`SignatureAuthenticationRules`、`ManagementAccessRules`、`HeaderAdmissionRules` |
+| 后缀 `*ConfigRule` | **能力配置判定器**——接收同一能力的完整配置列表，校验跨配置或部署准入约束，不属于快照内容 | `CapabilityConfigRule`、`HeaderConfigRule`、`RateLimitConfigRule` |
+| 后缀 `*Rules` | **非快照内容的规则判定器**——静态谓词或携带少量参数，职责是判定/校验，不随快照发布 | `SubjectAccessRules`、`SignatureAuthenticationRules`、`ManagementAccessRules` |
 | 后缀 `*Evaluator` | **决策引擎**——消费多方证据，产出 Decision 对象 | `AccessEvaluator`、`RateLimitEvaluator` |
 
 与治理无关的同名标识**不属于本词族**，读到时按各自领域理解：`LocalPolicyWebFilter` / `PolicyAwareBearerTokenConverter` 中的 Policy 指"本次请求的准入策略"。
 
-**配置统一使用 `*Config` 后缀**：Bundle 保存原始配置，解析器输出对应的 `Effective*Policy`。Header 与 Timeout 整体覆盖；限流累加各命中 Bundle 的配置，每份 RateLimitConfig 保留规则组与 RedisFailureMode，不能扁平化后丢失各组的故障处理方式。
+**配置统一使用 `*Config` 后缀**：CapabilityPolicyConfig 表达整份策略配置，包含 Bundle 定义与 Binding 绑定；CapabilityConfig 契约仅用于 Bundle 内的单项能力节点，CapabilityPolicyConfig 不实现它。Bundle 保存原始配置，解析器输出对应的 `Effective*Policy`。Header 与 Timeout 整体覆盖；限流累加各命中 Bundle 的配置，每份 RateLimitConfig 保留规则组与 RedisFailureMode，不能扁平化后丢失各组的故障处理方式。
 
 **Bundle 不封闭枚举能力**。各配置实现 CapabilityConfig，按 CapabilityId 注册；当前内建 RateLimitConfig、TimeoutConfig、HeaderConfig。新增能力不修改 Bundle、Binding、有效配置容器或通用 Assembler／Planner，而是新增策略组合器、强类型执行契约与外层编解码注册。执行点和安全顺序仍由代码固定，不支持动态下载或配置 Java 类名。
 
@@ -305,13 +330,15 @@ CapabilityConfigRegistry 承担代码注册、类型检查及组合合法性校�
 
 | 原始配置 | 生效策略 | 未命中配置 |
 | --- | --- | --- |
-| HeaderConfig | EffectiveHeaderPolicy(HeaderConfig config) | 安全默认配置，config 必填 |
+| HeaderConfig | EffectiveHeaderPolicy(HeaderConfig config) | 安全默认配置（全部可信字段 + 全剥离凭据），config 必填 |
 | RateLimitConfig | EffectiveRateLimitPolicy(List<RateLimitConfig> configs) | 不可变空集合；元素非空，各组保留故障模式 |
 | TimeoutConfig | EffectiveTimeoutPolicy(TimeoutConfig config) | 非空策略内 config 为 null，configured() 为 false，不生成单元 |
 
 生效策略均非空，不持久化、不参与快照摘要。超时 Unit／Outcome 必须携带非空 config，不能将未配置状态作为执行预算。
 
-**类型化访问边界**：EffectiveCapabilityPolicies 保存 Composer 与生效策略的配对，通过 get(composer) 读取，例如 get(HeaderPolicyComposer.INSTANCE)。删除独立 EffectiveCapabilityKey；Composer 的 policyType() 提供运行时类型检查，读取还要求同一注册实例，不能用同标识的另一个 Composer 冒充。配置标识与类型检查收口在 Registry.requireConfig，Bundle 提取与协议编解码复用它，Composer 不提供类型转换方法。集合由对应策略防御性复制；Composer 必须无状态，类型元数据固定，配置与生效策略遵循不可变契约。
+**类型化访问边界**：EffectiveCapabilityPolicies 保存声明的 Class<P> 与生效策略 P，按策略类型索引，通过 get(EffectiveHeaderPolicy.class) 等方式读取，不持有或依赖 Composer。按精确声明类型查询，不扫描继承关系；缺失类型拒绝。Assembler 注册时拒绝重复能力 ID 和重复策略类型，组装时拒绝 null 或与 policyType() 不符的产出，容器也拒绝重复类型。每种能力拥有独立生效策略类型；不增加 CapabilityPolicy 标记接口、Key 或 Registry。配置标识与类型检查由根包 CapabilityConfig.requireType(id, configType, config) 承担，Bundle.find(id, configType) 与协议编解码复用它；Bundle 不依赖 Composer 或 Assembler，缺失节点返回空，已存在但类型不匹配的节点拒绝。Composer 无状态，类型元数据固定，配置与生效策略不可变。
+
+内置能力 ID 由 BuiltInCapabilityCatalog 的 HEADER_APPLY、RATE_LIMIT、TIMEOUT 统一声明，配置与运行能力不再依赖具体 Composer 获取身份。CapabilityId 仍为开放值对象，扩展能力自行声明稳定 ID。CapabilityConfig、CapabilityConfigRule、CapabilityPolicyComposer 与 PlannableCapability 分别声明 CapabilityId id()，不继承共享身份父接口；四个契约各自表达配置归属、校验对象、组合对象和规划能力，通过注册检查保证标识一致。HTTP／存储中的能力名称不变。
 
 `CapabilityBinding` 通过 `bundleId` 引用同一快照内的 `CapabilityBundle`。编辑 Bundle 不影响运行请求，显式发布后影响全部引用它的 Binding；运行时不查询最新编辑态。
 
@@ -323,10 +350,10 @@ CapabilityConfigRegistry 承担代码注册、类型检查及组合合法性校�
 
 **发布校验**：
 
-- 校验引用、范围与受影响端点；通过配置注册表拒绝未知能力、配置类型不匹配及能力专属的跨 Bundle 约束。
+- 校验引用、范围与受影响端点；通过 Assembler 拒绝未知能力、配置类型不匹配及能力专属的跨 Bundle 约束。
 - 同层可同时命中且竞争同一节点的**不同 Bundle** 拒绝发布；**同一 Bundle 被多条绑定重复命中不算冲突**——两次引用的是同一配置来源，无论哪条胜出，请求解析到的节点完全相同，因此按幂等处理。这也与限流「同一 Bundle 只执行一次」的方向一致。
 - 限流累加而非覆盖，同一 Bundle 重复引用只执行一次限流。重复 Bundle 在解析列表中保留最具体的命中位置，确保其单值节点仍可覆盖较宽泛配置。
-- 限流规则标识全局唯一等规则由 RateLimitConfig.validateComposition 校验，通过默认目录登记到全量校验路径；不写死于通用 Composition 或 Registry。
+- 限流规则标识全局唯一等规则由 RateLimitConfigRule 校验，通过默认目录登记到全量校验路径；不写死于通用 PolicyConfig 或 Assembler。
 
 **省略能力键**表示不声明该能力；显式 null 节点非法，不能用空值关闭继承能力。需要例外时应收窄上层绑定范围或调整受管理标签。
 
@@ -358,8 +385,8 @@ CapabilityConfigRegistry 承担代码注册、类型检查及组合合法性校�
    - 歧义：同 id 但内容分歧、或两个不同端点命中。
    - 保护范围：只有唯一候选贡献端点级保护；歧义与未知走全局规则，不向调用方泄露差异。
 3. **能力执行（PRE_AUTH 槽位）**：
-   - 入口：准备段只构造 `CapabilityExecutionCommand(composition, context, executed)` 并调用 `CapabilityExecutionCommandService.execute(command)`；配置来自已捕获快照，首次执行键为空。以下解析、规划与执行均由该应用服务统一编排，阶段不分别持有 Assembler/Planner。
-   - 解析：`CapabilityPolicyAssembler.assemble(composition, endpoint, granted)` 只使用当前可信事实；认证前不使用声明 App/Client 作为绑定条件。null 端点仅匹配全局无身份绑定。
+   - 入口：准备段只构造 `CapabilityExecutionCommand(policyConfig, context, executed)` 并调用 `CapabilityExecutionCommandService.execute(command)`；配置来自已捕获快照，首次执行键为空。以下解析、规划与执行均由该应用服务统一编排，阶段不分别持有 Assembler/Planner。
+   - 解析：`CapabilityPolicyAssembler.assemble(policyConfig, endpoint, granted)` 只使用当前可信事实；认证前不使用声明 App/Client 作为绑定条件。null 端点仅匹配全局无身份绑定。
    - 规划：`CapabilityPlanner` 检查能力声明的槽位与所需事实，再选择执行单元；`RateLimitCapability` 只产生可用 IP 规则的强类型单元。
    - 执行：按固定注册顺序执行批次；能力内部聚合，能力之间遇拒绝短路，取消沿协作链传播。统一返回 `CapabilityExecutionOutput(capabilities, execution)`，包含本次解析结果及执行记录；拒绝同样保留解析结果，异常不伪造允许输出。
 
@@ -372,7 +399,7 @@ CapabilityConfigRegistry 承担代码注册、类型检查及组合合法性校�
 | 交付模式 | 只交付 EXACT；PREALLOCATED 为后续模式，不允许启用或静默替换 |
 | 扣减 | Redis 原子令牌桶，每次扣减共享额度 |
 | 多规则 | 多条适用规则全部执行，相同维度不能只执行第一条 |
-| 槽位覆盖 | 认证前 IP 保护覆盖未知路径；认证后执行身份维度及新匹配的身份绑定 IP 规则 |
+| 槽位覆盖 | 认证前 IP 保护覆盖未知路径；认证后执行身份维度规则 |
 | 维度约束 | 公开 App 声明不能作为唯一防滥用维度 |
 | 超限 | 429 + Retry-After |
 | Redis 故障 | 按策略 CLOSED（503）或 OPEN_WITH_LOCAL（有界本地配额、告警，不承诺集群精确） |
@@ -395,7 +422,7 @@ CapabilityConfigRegistry 承担代码注册、类型检查及组合合法性校�
 | `Denied` | execution | 请求在边缘终止；当前限流投影为 429/503，不存在交接 |
 
 - `execution` 是 `CapabilityExecution`：累计 `Set<CapabilityExecutionKey> executed` 与当前槽位 `List<CapabilityOutcome> outcomes`。限流结果为 `RateLimitCapability.Outcome`，过滤器通过注册的结果投影输出 HTTP，不识别规则和槽位。
-- 规则身份为值对象 `RateLimitRuleId`（与 AppId/ClientId 同款），不再使用裸 String。
+- 规则身份为值对象 `RateLimitRuleId`（与 AppId/ClientId 同款），能力标识为 `CapabilityId`，执行键不再使用裸 String。
 - 交接硬规则：接入段命令由 `Prepared` 构造；接口层不得重新采集事实或重读快照。
 - SCG 路由核对发生在交接路径上、接入段之前（interfaces 职责）：唯一候选的 routeId 必须等于 SCG 实际命中路由 id，不一致拒绝。
 - 请求取消经 `IngressTask` 级联终止未完成的限流协作。
@@ -459,13 +486,13 @@ domain 定义签名原文、输入格式、候选选择、时间窗口和防重�
 
 Allowed 包裹同一 Prepared，保留快照、请求事实与通用执行记录；接入段不修改记录，准入段从 `prepared.execution().executed()` 获取已执行键，不另传一份 applied。
 
-准入段只有 `AdmissionStageCommandService.admit(AdmissionStageCommand)` 一个入口，输入只来自接入段的成功产出；不依赖 AccessStageCommandService，也不重新认证。它构造 POST_AUTH 的 CapabilityContext，并将同一快照的 composition 及 Prepared 的执行键交给 CapabilityExecutionCommandService；阶段不再分别调用解析器与规划器。
+准入段只有 `AdmissionStageCommandService.admit(AdmissionStageCommand)` 一个入口，输入只来自接入段的成功产出；不依赖 AccessStageCommandService，也不重新认证。它构造 POST_AUTH 的 CapabilityContext，并将同一快照的 policyConfig 及 Prepared 的执行键交给 CapabilityExecutionCommandService；阶段不再分别调用解析器与规划器。
 
 - **能力绑定解析（capabilityBinding）**：以获准上下文与端点解析 EffectiveCapabilityPolicies；Header 默认继承在 domain 完成（默认凭据转发为全剥离，无端点级默认值）。超时与 Header 节点随后进入 `FORWARD` 相执行（见 §5.1、§5.2）。
 - **能力执行（POST_AUTH 槽位）**：统一能力服务内部使用同一解析器与规划器；限流定义依据获准事实生成 App、已验证 Client、Subject、Endpoint 以及新匹配 IP 单元，通用规划器排除已执行键。维度生成不属于阶段服务。
 - **headerPreparation**：按命中的 HeaderConfig 定稿凭据清除计划与可信 Header 取值；固定安全规则不可关闭：先删除所有受保护字段，再写验证结果；来源缺失则不写入。语义详见第 6 节。
 
-`AdmissionStageOutput(Allowed access, capabilities, execution)` 的三项均必填，只表达实际执行过准入段的评估结果；execution 仍可能拒绝。Header 生效策略由 `capabilities.get(HeaderPolicyComposer.INSTANCE)` 唯一承载，不复制第二份；FORWARD 的 Header 能力据此产出转发计划，获准上下文与原始证据保留在 access 中。
+`AdmissionStageOutput(Allowed access, capabilities, execution)` 的三项均必填，只表达实际执行过准入段的评估结果；execution 仍可能拒绝。Header 生效策略由 `capabilities.get(EffectiveHeaderPolicy.class)` 唯一承载，不复制第二份；FORWARD 的 Header 能力据此产出转发计划，获准上下文与原始证据保留在 access 中。
 
 capabilities 与 execution 直接取自同一次 `CapabilityExecutionOutput`；Header 后续消费不重新解析。能力命令的三个字段均必填，执行键集合允许为空并防御性复制。Assembler/Planner 继续保留 domain 纯规则职责；应用服务只统一调用顺序、批次执行及取消／异常，不引入额外转发服务。
 
@@ -526,9 +553,11 @@ evidence 对所有上下文必填，因此不提供恒真的 REQUEST；执行点
 
 匿名放行具有 ACCESS_GRANTED，但可以没有 VERIFIED_CLIENT 和 AUTHENTICATED_SUBJECT。可选事实缺失时，对应能力或单元不适用，规划器跳过；阶段必需输入缺失时，Context 构造失败，不能通过跳过安全能力继续转发。默认 `requiredFacts()` 为空集合，表示除上下文不变量外无附加输入要求；非空集合为 AND 条件。能力专属业务判定不属于 Fact。
 
+**执行定义与单元契约**：slots 为非空不可变集合，requiredFacts 为非 null 不可变集合，均不含 null 元素；units 返回非 null 不可变列表且不含 null 单元。unitId 为非空白、在能力内唯一寻址的身份，同一请求跨槽位保持稳定；单元相等性须覆盖载荷和事实依赖。本次生成的相等同名单元可折叠，同名但载荷或事实依赖不同的单元必须拒绝，即使该键已经执行或其事实尚不可用也不能静默跳过。该检查与跨槽位的已执行键去重分别处理。
+
 **规划与执行**：`PlannableCapability` 是唯一规划契约，声明 slots、requiredFacts、repeat 并产生 units。planner 按固定顺序检查事实和执行键；应用服务先校验完整计划与执行器类型，再执行批次、处理拒绝及取消。限流位于 PRE_AUTH/POST_AUTH；超时预算和 Header 应用计划位于 FORWARD。同一规则跨阶段去重，Header 计划缺失时接口层失败关闭。
 
-**配置与计划分离**：Assembler 只接收 composition、endpoint、granted，不依赖 CapabilityContext 或 Slot。EffectiveCapabilityPolicies 表示本次生效策略，CapabilityPlan 表示当前执行点的执行单元。application 的 `CapabilityRegistration<P>` 配对能力与 `Function<EffectiveCapabilityPolicies, P>`；每次规划绑定当前策略，生成直接持有非空 P policy 的请求级 Entry，再交给 domain Planner。策略来源通过已注册 Composer 类型化读取显式传入的容器，不读最新快照、ThreadLocal 或共享可变字段；不缓存请求级 Entry，不使用 Supplier 捕获请求。未配置状态在具体策略内部表达，不能用空 Entry 跳过安全能力。
+**配置与计划分离**：Assembler 只接收 policyConfig、endpoint、granted，不依赖 CapabilityContext 或 Slot。EffectiveCapabilityPolicies 表示本次生效策略，CapabilityPlan 表示当前执行点的执行单元。application 的 `CapabilityRegistration<P>` 配对能力与 `Function<EffectiveCapabilityPolicies, P>`；每次规划绑定当前策略，生成直接持有非空 P policy 的请求级 Entry，再交给 domain Planner。策略来源通过策略 Class 类型化读取显式传入的容器，不读最新快照、ThreadLocal 或共享可变字段；不缓存请求级 Entry，不使用 Supplier 捕获请求。未配置状态在具体策略内部表达，不能用空 Entry 跳过安全能力。
 
 **不划分单槽位／多槽位接口**：配置数量、单元数量与槽位数量相互独立。限流 List 表达配置累加，不表达执行阶段；Header 单 Config 表达整体覆盖。统一 PlannableCapability<P> 通过 slots() 声明槽位，units(policy, context) 生成单元，Planner 负责事实筛选及去重。
 
@@ -560,12 +589,16 @@ evidence 对所有上下文必填，因此不提供恒真的 REQUEST；执行点
 
 默认删除凭据。构造时校验：HTTP token、名称长度 128、值长度 4096、控制字符、大小写重复、跨操作冲突；允许空字符串值；普通 set/remove 目标不得是已登记的 `RequestHeader` 名称。
 
+**未命中任何 `HeaderConfig` 时的默认计划**是 `HeaderConfig.defaults()`：可信字段选择全部受支持输出，凭据转发全剥离。headerApply 的目的就是向下游建立可信身份上下文（§5.2，安全必需项），凭据清除随之默认开启，因此默认计划下发全部已验证身份；需要收窄时在 Bundle 显式声明更小的 `trustedHeaders` 集合，整体覆盖语义不变。
+
+`HeaderConfig` 将普通 `setHeaders` 的 key 与 `removeHeaders` 的元素统一规范化为小写后保存为不可变集合；规范化后的重名即使值相同也拒绝，不覆盖或折叠。名称首尾空白仍非法；值不修剪、不变更大小写。值校验内嵌于构造逻辑，在不可变复制之前执行；不保留独立 HeaderValueRules。仅名称大小写不同的配置具有相同领域表示、相等性与规范化序列化结果。`trustedHeaders` 继续使用 RequestHeader 枚举。
+
 **framework-core RequestHeader**：
 
 - 只登记有限的共享自定义 Header（CONTEXT、SIGNATURE），不登记 Host、Content-Length 等标准协议字段。
 - 不设 LEGACY 分类或历史名称别名。
 - 字符串消费点使用 `headerName()`；`fromName(name)` 验证 HTTP token 后忽略大小写查找，不修剪非法空白；`fromType(HeaderType)` 派生不可变集合。
-- gateway `HeaderAdmissionRules` 独立校验配置名称并规范化，不能将 `fromName` 返回空误判为合法名称。
+- gateway `HeaderConfigRule` 独立校验配置名称并规范化。
 
 **trustedHeaders 的固定输出**由 `TrustedHeaderResolver` 统一解析，写入其 `headerName`，禁止重命名映射：
 
@@ -577,25 +610,27 @@ evidence 对所有上下文必填，因此不提供恒真的 REQUEST；执行点
 
 APP_VERSION 和 SIGNATURE 字段不可选择。framework 不依赖网关上下文。动态更新只改变固定可信字段的选择和普通字段操作，不提供名称映射。
 
-**HeaderAdmissionRules**（不可变部署准入规则，`*Rules` 家族：非快照内容的判定器）：
+Header 值解析统一位于 domain 的 capability.header 包：TrustedHeaderResolver 从 AccessGrantedContext 生成可信值；DeclaredHeaderResolver 接收 RequestHeader 与原始字符串，仅解析明确支持的声明字段，当前只支持 APP_VERSION（1–64 个 ASCII 字母、数字或 `._+-`）。缺失、非法或不支持的声明返回空，不修剪、不作为认证证明。两者均提供 supports、supportedHeaders 与 resolve，不依赖 HTTP 类型。interfaces 负责读取请求及绑定／写入，两个入口复用同一声明解析器；可信字段不允许回退到声明值。Trusted／Declared 表示值来源，而非 RequestHeader 的永久分类。
 
-- 配置名称在构造时规范化为小写存储；非法 token 字符、超长名称及大小写不同的重复名称拒绝。
-- 名称准入为部署扩展名单 `headers` 与 `X-Gateway-` 前缀。
-- 已登记的 `RequestHeader`（身份与签名字段）永远不能作为普通 set/remove 目标，部署扩展名单也不能放宽。
-- `forbiddenSetHeaders` / `forbiddenRemoveHeaders` 独立否决对应操作。
+**HeaderConfigRule**（不可变部署否决规则，`*ConfigRule` 家族：非快照内容的判定器，由 `gateway.header` 的 `deny-set` / `deny-remove` 在启动时生成）：
+
+- deny 名单在构造时经 `RequestHeader.normalizeName` 校验并规范化为小写存储；非法 token 字符、超长名称在构造即拒绝，重复名称折叠为同一项。
+- 普通 set/remove 目标在 `HeaderConfig` 构造期即拒绝已登记的 `RequestHeader`（身份与签名字段），部署配置不能放宽；`HeaderConfigRule` 独立复核同一约束。
+- `deny-set` / `deny-remove` 按操作独立否决；名单之外的合法 token 名称均可作为普通 set/remove 目标。不设部署扩展名单或网关前缀准入。
 - 规则不写入业务快照或其内容摘要。
 - 当前规则在启动期固定，`HeaderConfig` 随快照动态更新；不通过异步修改 Properties 放宽运行请求。未来若支持规则刷新须先校验当前策略并整体切换。
+- 运行期写入前，入站 `X-GW-` 前缀 Header 与全部已登记 `RequestHeader` 一律清除再按计划写入（见 §5.2），客户端不能借网关命名空间伪造身份。
 
 **其余约束**：校验名称、重复目标、CR/LF、长度和协议控制字段；未验证 Client 声明不写 CLIENT_ID；不提供历史名称识别、专门清除或兼容转换，历史名称与其他未注册自定义名称一样处理。
 
 ## 7. 快照与发布
 
-**入口快照 `IngressSnapshot`** 由 `SnapshotVersion`、`IngressContent`（App/Client/Endpoint 注册表与 CapabilityComposition）、`contentHash` 与 `publishedAt` 构成，不可变。它服务整个入口管道，而非仅 access 阶段，因此使用 Ingress 前缀。
+**入口快照 `IngressSnapshot`** 由 `SnapshotVersion`、`IngressContent`（App/Client/Endpoint 注册表与 CapabilityPolicyConfig）、`contentHash` 与 `publishedAt` 构成，不可变。它服务整个入口管道，而非仅 access 阶段，因此使用 Ingress 前缀。
 
 - `contentHash` 计算规范化业务内容，不含版本和 `publishedAt`。
 - 一个请求只读取一次快照。
 
-**快照构造即全量校验**：
+**快照自身的构造不变量**：
 
 - Client 引用的 App 必须已登记。
 - active 与 grace 凭据都必须在 `publishedAt` 时刻处于有效期内。
@@ -603,7 +638,7 @@ APP_VERSION 和 SIGNATURE 字段不可选择。framework 不依赖网关上下�
 - `credentials` 为 null 的 Client 跳过凭据校验。
 - 任何校验失败以 `ACCESS_SNAPSHOT_INVALID` 拒绝，配置错误不静默降级。
 
-Bundle、Binding 与 Header 组合由 `CapabilityComposition` 建模，发布前对照同一内容校验绑定引用（`AppId`、已验证 `ClientId` 必须存在）与同层竞争节点冲突。
+Bundle、Binding 与 Header 组合由 `CapabilityPolicyConfig` 建模。内容校验 `validate(policyConfig)` 检查注册能力、配置类型及能力专属规则，适用于 Definition 保存、编解码和请求组装。完整校验 `validate(policyConfig, apps, clients, endpoints)` 还检查同一内容中的绑定引用（`AppId`、已验证 `ClientId` 必须存在）、受影响端点及同层竞争节点冲突；发布组装、完整快照编码和解码均须执行完整校验，Nacos／LKG 解码成功后才允许切换运行快照。快照构造器只持有上述自身不变量，不替代完整组合校验；摘要正确也不能替代配置有效性校验。
 
 **Definition 保存与发布**：
 
@@ -628,7 +663,7 @@ Bundle、Binding 与 Header 组合由 `CapabilityComposition` 建模，发布前
 
 **回退顺序（rollback → publish）**：
 
-- 先验证目标存在、HeaderAdmissionRules 和完整发布有效性，再于首次恢复写入前激活阻断。
+- 先验证目标存在、HeaderConfigRule 和完整发布有效性，再于首次恢复写入前激活阻断。
 - 发布前取一次业务时间校验凭据有效期；历史凭据已过期则在写入前拒绝。
 - 前置失败不新增阻断，也不清除上次恢复遗留的阻断。
 - 每份成功恢复的 Definition CAS 都是重试检查点；部分失败保持阻断。
@@ -666,8 +701,8 @@ Bundle、Binding 与 Header 组合由 `CapabilityComposition` 建模，发布前
 
 - `saveApp`/`saveClient`/`saveEndpoint`：单条内容 upsert，不含 status。创建以 ENABLED 初始化，已有实体的 status 不被 save 改变——发布才是生效闸门，"预置配置、暂不发布"即预置工作流。saveClient 只动接入设置、绝不触碰凭据；saveClientCredential 整对轮换（grace 缺省即清除），要求 Client 已存在，凭据不随接入编辑往返。
 - `setAppStatus`/`setClientStatus`/`setEndpointStatus`：唯一的上线/下线入口，载荷仅 id + status，与内容编辑分属不同授权与审计事件。
-- `saveCapabilityComposition`：完整替换能力组合 Definition，输入沿用 `SaveCapabilityCompositionApiCommand(expectedSourceRevision, policies)`，`policies` 包含完整 bundles／bindings。Bundle 内为 `capabilities` 对象，按注册标识解码为强类型配置。允许空 bundles + 空 bindings 清空编辑态；不提供单个 Bundle 的 PATCH 或运行时插件安装。
-- 能力组合保存前校验 Bundle 键与 bundleId 一致、规范化标识判重、Binding 引用、能力类型与专属跨 Bundle 约束，以及 Header 部署准入；对 App／Client／Endpoint 的跨 Definition 引用及同层重叠绑定竞争仍在发布时以完整内容校验。保存成功只返回 DefinitionSaveApiOutput(sourceRevision)，不产生新 snapshotVersion，不改变已捕获快照。
+- `saveCapabilityPolicyConfig`：完整替换能力组合 Definition，输入沿用 `SaveCapabilityPolicyConfigApiCommand(expectedSourceRevision, policies)`，`policies` 包含完整 bundles／bindings。Bundle 内为 `capabilities` 对象，按注册标识解码为强类型配置。允许空 bundles + 空 bindings 清空编辑态；不提供单个 Bundle 的 PATCH 或运行时插件安装。
+- 能力组合保存前校验 Bundle／Binding 键与各自 ID 一致、规范化标识判重、Binding 引用、能力类型与专属跨 Bundle 约束，以及 Header 部署准入；对 App／Client／Endpoint 的跨 Definition 引用及同层重叠绑定竞争仍在发布时以完整内容校验。保存成功只返回 DefinitionSaveApiOutput(sourceRevision)，不产生新 snapshotVersion，不改变已捕获快照。
 - 删除不提供：下线一律走 status；物理清理与批量迁移走 Nacos 侧整体重建 Definition（绕过 API，令牌随之变化，之后经发布生效）。
 - `expectedSourceRevision`：当前管理命令要求非空白且必须与最近读取或保存返回的令牌一致，不提供 null／空令牌创建 Definition 的语义。保存复用 AccessDefinitionWriter：在既有发布锁保护下检查回退阻断、核对 revision 并执行存储 CAS；旧 revision 或 CAS 失败均拒绝，不自动重试覆盖。同一文件的编辑互相冲突，Client 的接入设置与凭据轮换共享文件；不同 Definition 拥有独立 revision。
 
@@ -677,9 +712,9 @@ Bundle、Binding 与 Header 组合由 `CapabilityComposition` 建模，发布前
 
 domain 持有模型与纯规则；application 编排用例与端口；infrastructure 实现安全/存储/配额；interfaces 处理 HTTP 生命周期；boot 装配。不建设动态插件或脚本平台。
 
-包边界：`application.configuration.{definition,editing,publication}` 管理编辑态与发布；`application.ingress` 编排运行期三段；`domain.ingress.access` 持有访问决策和身份事实；`domain.ingress.snapshot` 持有完整快照与版本接纳规则；领域能力模型位于 `domain.capability`（configuration / runtime / ratelimit / resilience / header 按职责分包）。配置管理不再使用含糊的 application.access 包，快照不再混入访问规则包。
+包边界：`application.configuration.{definition,editing,publication}` 管理编辑态与发布；`application.ingress` 编排运行期三段；`domain.ingress.access` 持有访问决策和身份事实；`domain.ingress.snapshot` 持有完整快照与版本接纳规则；领域能力模型位于 `domain.capability`（configuration / runtime / ratelimit / resilience / header / catalog 按职责分包）。配置管理不再使用含糊的 application.access 包，快照不再混入访问规则包。
 
-能力包内：根包持有配置标识与策略组合器契约；configuration 持有 Bundle、Binding、Composition、配置注册表、Assembler 和 EffectiveCapabilityPolicies；runtime 持有能力定义、请求级规划项、上下文、计划、执行记录与具体能力的单元／结局。ratelimit、resilience、header 持有各能力的纯配置、策略组合器及业务规则；catalog 仅组装默认策略组合器目录，通用容器不依赖该目录。runtime 与 configuration 互不引用，都可依赖纯能力模型；由 application.ingress 的 CapabilityRegistration 连接二者。Composition 校验接收 App/Client/Endpoint 注册表及能力配置注册表，不反向依赖包含它的 IngressContent。runtime 仍是纯领域模型，不持有线程、容器或 HTTP 执行器。
+能力包内：根包持有配置标识、CapabilityConfigRule 与策略组合器契约；configuration 持有 Bundle、Binding、PolicyConfig、CapabilityPolicyConfigValidator、Assembler 和 EffectiveCapabilityPolicies；runtime 持有能力定义、请求级规划项、上下文、计划、执行记录与具体能力的单元／结局。ratelimit、resilience、header 持有各能力的纯配置、策略组合器及业务规则；catalog 固定登记内建策略组合器并提供 Validator／Assembler 工厂，运行装配先创建共享 Validator，再注入 Assembler（代码登记，不由快照配置驱动：组合只能使用已登记能力节点，目录本身不随配置变化），通用容器不依赖该目录。runtime 与 configuration 互不引用，都可依赖纯能力模型；由 application.ingress 的 CapabilityRegistration 连接二者。组合的跨注册表引用与同层竞争校验收口在 CapabilityPolicyConfigValidator.validate(policyConfig, apps, clients, endpoints)；CapabilityPolicyConfig 不依赖服务，也不反向依赖包含它的 IngressContent。runtime 仍是纯领域模型，不持有线程、容器或 HTTP 执行器。
 
 **阶段一服务对应**：
 
@@ -717,16 +752,31 @@ domain 持有模型与纯规则；application 编排用例与端口；infrastruc
 
 **开放配置的协议边界**：API Bundle 和存储 Bundle 使用 capabilities 容器；协议树只存在于外层，进入领域前必须按已注册类型解码。CapabilityConfigCodec 绑定策略组合器、存储 DTO 与双向转换；结构投影由 CapabilityNodeStorageMapper 的 MapStruct 实现完成，领域重建显式调用构造规则。未知能力、未知嵌套字段、非对象节点均拒绝，配置不接受任意类名。存储按能力标识排序，各能力的编码契约负责其集合规范化。配置保存、编码／加载和发布都保留能力专属校验及 Header 部署准入。
 
-能力组合保存链为 HTTP Request → GatewayPolicyAdminRestMapper → AccessDefinitionCommandFacade.saveCapabilityComposition → CapabilityCompositionApiMapper → CapabilityCompositionCommandService.save。Controller 只绑定请求并调用 Facade；MapStruct 完成结构映射，标识重建与注册解码为显式语义转换。接口层复用 infrastructure 的共享 CapabilityConfigCodecs，不维护另一套能力类型列表，也不依赖 Nacos 仓储。interfaces → infrastructure 为单向的外层编解码复用，API／domain／application 均不反向依赖该组件。非法 JSON 节点形状／未知能力转换为框架字段校验错误，领域不变量与应用冲突保留各自错误归属。
+能力组合保存链为 HTTP Request → GatewayPolicyAdminRestMapper → AccessDefinitionCommandFacade.saveCapabilityPolicyConfig → CapabilityPolicyConfigApiMapper → CapabilityPolicyConfigCommandService.save。Controller 只绑定请求并调用 Facade；MapStruct 完成结构映射，标识重建与注册解码为显式语义转换。接口层复用 infrastructure 的共享 CapabilityConfigCodecs，不维护另一套能力类型列表，也不依赖 Nacos 仓储。interfaces → infrastructure 为单向的外层编解码复用，API／domain／application 均不反向依赖该组件。非法 JSON 节点形状／未知能力转换为框架字段校验错误，领域不变量与应用冲突保留各自错误归属。
 
 HTTP 与存储节点均按注册的 DTO 严格解码；只有本地 Properties 适配允许把数字索引对象还原为集合。Definition 写请求使用 `@ClientRequestBody`，由 ClientRequestBodyArgumentResolver 读取 body、覆盖可信 Client／会话上下文，再触发校验；避免标准 `@RequestBody` 解析器提前截获请求。body 的同名身份字段不能建立权限。写 Controller 由可写用例条件装配，使用 WebFlux 可识别的 Controller 标记，并从启动组件扫描排除以防越过条件。
 
-当前实现：HTTP 使用 `GatewayPolicyAdminRestMapper`，定义及快照 Facade 分别使用 `AccessDefinitionApiMapper`、`AccessSnapshotApiMapper`；App、Client、Endpoint 和能力组合的 Properties 各有独立转换契约。`DefaultStoredAccessSnapshotMapper` 保留领域重建、路径校验及注册表排序，字段投影委托 `AccessSnapshotDocumentMapper`，后者通过 `uses` 复用 `CapabilityCompositionStorageMapper`。`DefaultCanonicalPolicyContentMapper` 保留规范化编码并注入能力组合 mapper，不自行构造存储 mapper。interfaces 与 infrastructure 分别复用模块内的严格配置，自动配置仅扫描各自 mapper 实现包。
+当前实现：HTTP 使用 `GatewayPolicyAdminRestMapper`，定义及快照 Facade 分别使用 `AccessDefinitionApiMapper`、`AccessSnapshotApiMapper`；App、Client、Endpoint 和能力组合的 Properties 各有独立转换契约。`DefaultStoredAccessSnapshotMapper` 保留领域重建、路径校验及注册表排序，字段投影委托 `AccessSnapshotDocumentMapper`，后者通过 `uses` 复用 `CapabilityPolicyConfigStorageMapper`。`DefaultCanonicalPolicyContentMapper` 保留规范化编码并注入能力组合 mapper，不自行构造存储 mapper。interfaces 与 infrastructure 分别复用模块内的严格配置，自动配置仅扫描各自 mapper 实现包。
 
 领域构造、状态转换、授权决策、签名编码及用例结果的语义组合继续使用显式方法。特别是新建聚合的状态、修改时保留的凭据、Header 默认与可信身份选择，不能由自动映射替代其领域／用例规则。`CapabilityExecutionOutput` 组合本次解析结果和实际执行记录；阶段交接仍保留同一份快照与事实，不为了引入 mapper 而重新解析、复制另一套上下文或增加纯转发层。
 
 ## 10. 错误及破坏式更新
 
-EDGE 前缀 800：000–099 共享领域；100–149 快照；150–199 端点注册；200–249 App；250–299 Client；300–349 签名验证（现有 SIGNATURE_VERIFIER_NOT_FOUND 为 300）；350–599 未分配领域；600–699 应用；700–799 自有技术；800–899 外部适配；900–999 保留。已分配编号与语义不复用。共享领域 000/001/002/003 分别表示实体 ID 非法、对象字段缺失、对象字段非法、对象状态异常；领域校验经 Require 显式提供 DomainException，不因更换校验写法而改变错误归属。
+EDGE 前缀 800：000–099 共享领域；100–149 快照；150–199 端点注册；200–249 App；250–299 Client；300–349 签名验证（现有 SIGNATURE_VERIFIER_NOT_FOUND 为 300）；350–599 未分配领域；600–699 应用；700–799 自有技术；800–899 外部适配；900–999 保留。已分配编号与语义不复用。
+
+基础设施错误枚举按"拥有该语义的 module"声明：`INFRA_TECH_SECRET_NOT_FOUND(702)` 属 security-spring 模块（`SecuritySpringError`）、`INFRA_TECH_POLICY_ROLLBACK_STATE_FAILED(705)` 属 coordination-redis 模块（`CoordinationRedisError`）、`INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE(802)` 属 persistence-nacos 模块（`PersistenceNacosError`）。`INFRA_ACL_NACOS_CONTENT_INVALID(803)` 保留在基础 infrastructure：Nacos 入口策略内容校验由基础 infrastructure 的共享存储编解码机制（`StoredAccessSnapshotCodec`、`EndpointPathPatternValidator`）与 persistence-nacos 模块共同引用，而基础 infrastructure 不得反向依赖具体存储模块。死码 `INFRA_ACL_ACCESS_TOKEN_PROVIDER_UNAVAILABLE(800)`、`INFRA_ACL_BROWSER_SESSION_PROVIDER_UNAVAILABLE(801)` 无抛出点，按错误段归属保留原聚合，不重排。
+
+共享领域仅保留 000（实体 ID 非法，`DomainException.invalidEntityId()`）。历史编号 1/2/3（对象字段缺失、对象字段非法、对象状态异常）已退役且空置不复用；真正的技术性前置条件（缺少内部参数、技术容器的 null 元素／键／值、Java 类型与注册元数据错误）使用技术异常，不占用领域业务错误面；Require.notNull/allNotNull 仅用于构造器或公共方法参数，集合元素通过 NullSafe 检查并抛 FrameworkException。业务不变量失败由领域显式 guard 或 Require 业务异常供应器表达，不能仅因使用了谓词或跨字段判断就归为技术异常。完整快照的绑定引用及同层竞争继续使用 ACCESS_SNAPSHOT_INVALID（102）。
+
+本轮在原拥有范围内追加以下错误，不改变任何已有编号或模板：
+
+| 本地码 | 名称 | 语义 |
+| --- | --- | --- |
+| 103 | ACCESS_SNAPSHOT_POLICY_INVALID | 策略业务规则非法，包括重复配置身份、未登记能力、Header 准入、限流约束与超时范围 |
+| 253 | CLIENT_CREDENTIAL_INVALID | 凭据 validFrom 不早于 expiresAt |
+| 254 | CLIENT_CREDENTIAL_ROTATION_INVALID | active/grace 身份重复或签名协议不一致 |
+| 613 | APP_POLICY_OPERATION_TIMED_OUT | 发布／回退预算耗尽；检查当前状态后重试，不保证远端没有提交 |
+
+WebFlux 请求绑定和 Spring 代理的 Bean Validation 失败由统一 GatewayValidationExceptionHandler 翻译为 framework OBJECT_INVALID。受信任 Client 上下文先绑定，再触发请求对象校验；Facade 的接口约束由 @Validated 实现的 Spring 代理执行。
 
 开发阶段允许直接更名 Java/API/配置及重建开发快照，不保留旧 schema 别名层；历史签名算法保留。

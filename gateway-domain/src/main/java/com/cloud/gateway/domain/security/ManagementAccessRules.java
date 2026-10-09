@@ -1,9 +1,8 @@
 package com.cloud.gateway.domain.security;
 
-import com.cloud.framework.core.validation.Require;
-
 import com.cloud.framework.core.SubjectType;
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 
@@ -14,7 +13,7 @@ public record ManagementAccessRules(String audience) {
     public static final String ADMIN_SCOPE = "admin";
 
     public ManagementAccessRules {
-        Require.notBlank(audience, DomainException::invalidObjectField);
+        Require.notBlank(audience);
     }
 
     public boolean allows(SubjectType type, Set<String> scopes, Set<String> audiences) {
@@ -24,11 +23,10 @@ public record ManagementAccessRules(String audience) {
     }
 
     public void validatePolicy(EndpointAccess policy) {
-        Require.notNull(policy, DomainException::missingField);
         if (policy.subjectAuthenticationRequirement() != SubjectAuthenticationRequirement.REQUIRED
                 || !SubjectAccessRules.hasRequiredScopes(policy.requiredScopes(), Set.of(ADMIN_SCOPE))
                 || !SubjectAccessRules.hasRequiredAudiences(policy.requiredAudiences(), Set.of(audience))) {
-            throw DomainException.invalidObjectField();
+            throw FrameworkException.invalidObject();
         }
     }
 }

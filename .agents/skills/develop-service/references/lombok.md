@@ -10,6 +10,7 @@
 
 ## Type-specific use
 
-- **LOMBOK-ENTITY-001** **[REQUIRED][BASELINE]** — Aggregate roots and entities use only `@Getter`, avoid `@Data` and Lombok `@EqualsAndHashCode`, and implement equality explicitly from the unique identifier.
+- **LOMBOK-ENTITY-ACCESS-001** **[REQUIRED][BASELINE]** — Aggregate roots and entities use only `@Getter` for field access; prohibit `@Data` and externally exposed setters without domain behavior.
+- **LOMBOK-ENTITY-EQUALITY-001** **[REQUIRED][BASELINE]** — Implement aggregate-root and entity equality explicitly from unique identity; do not use Lombok `@EqualsAndHashCode`.
 - **LOMBOK-VALUE-001** **[REQUIRED][BASELINE]** — When a value object is an ordinary class, use final fields, getters, an appropriate all-arguments constructor, and full-field equality.
 - **LOMBOK-SPRING-001** **[REQUIRED][BASELINE]** — Spring Beans use final dependencies and constructor injection, normally through `@RequiredArgsConstructor`.

@@ -1,5 +1,6 @@
 package com.cloud.gateway.api.facade.admin.definition;
 
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.framework.core.Request;
 import jakarta.validation.constraints.NotBlank;
 
@@ -19,6 +20,6 @@ public record SaveClientApiCommand(
         Set<@NotBlank String> allowedAppIds
 ) implements Request {
     public SaveClientApiCommand {
-        allowedAppIds = allowedAppIds == null ? null : Set.copyOf(allowedAppIds);
+        allowedAppIds = allowedAppIds == null ? null : NullSafe.copyOf(allowedAppIds);
     }
 }

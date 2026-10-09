@@ -12,7 +12,8 @@
 - **INFRA-PERSISTENCE-001** **[REQUIRED][TOPIC]** — The matching persistence implementation module owns concrete JPA, MyBatis, or MyBatis-Plus repositories, DOs, DO conversion mappers, and SQL/XML loading, assembly, and verification. Physical resource placement follows the layered-service configuration rules.
 - **INFRA-DO-001** **[REQUIRED][TOPIC]** — Do not share DO classes across persistence technologies; each JPA, MyBatis, or MyBatis-Plus implementation module owns its DOs with only that technology's required mapping annotations, and DO names follow the naming rules.
 - **INFRA-MAPPER-001** **[REQUIRED][TOPIC]** — Each persistence implementation module owns the conversion mappers between domain objects or application read models and that technology's DOs; do not place converters that depend on concrete DOs in shared infrastructure.
-- **PERSISTENCE-SELECTION-001** **[REQUIRED][TOPIC]** — Use one persistence technology in each persistence implementation module and assemble only one implementation of a repository in a runtime artifact; alternative JPA, MyBatis, and MyBatis-Plus implementations may live in separate modules.
+- **PERSISTENCE-MODULE-TECHNOLOGY-001** **[REQUIRED][TOPIC]** — Each persistence implementation module uses one technology; alternative JPA, MyBatis, and MyBatis-Plus implementations may exist in distinct modules but never coexist within one implementation module.
+- **PERSISTENCE-RUNTIME-IMPLEMENTATION-001** **[REQUIRED][TOPIC]** — A runtime artifact assembles only one implementation of each repository contract; choose it under the boot packaging-dependency rules.
 - **PERSISTENCE-MYBATIS-COMPAT-001** **[REQUIRED][TOPIC]** — Replacing MyBatis-Plus with MyBatis must preserve the database schema, table and column names, query semantics, and observable repository behavior.
 - **PERSISTENCE-MYBATIS-SQL-001** **[REQUIRED][TOPIC]** — MyBatis and MyBatis-Plus implementations must load the same shared SQL XML fragments from the project-root `config/` directory.
 - **PERSISTENCE-MYBATIS-SQL-002** **[REQUIRED][TOPIC]** — Declare table names, column lists, and reusable predicates only in shared fragments; concrete mapper statements reference them with `<include>` and must not duplicate them across the two implementations.
@@ -22,7 +23,8 @@
 - **PERSISTENCE-TABLE-NAMING-001** **[REQUIRED][TOPIC]** — A persistence mapping may declare a logical table name without runtime prefix or suffix; resolve the physical prefix and suffix through the shared naming strategy and never hard-code a deployment-specific physical table name in business code.
 - **PERSISTENCE-SCHEMA-001** **[REQUIRED][TOPIC]** — Enforce primary keys, business uniqueness, and database-expressible nullability, referential-integrity, and range invariants with schema constraints; application validation and distributed coordination do not replace those constraints, while cross-aggregate, cross-service, and temporal rules remain in domain or application.
 - **PERSISTENCE-SCHEMA-LOCATION-001** **[DEFAULT][TOPIC]** — Prefer the project-root `config/` directory for `schema.sql` and database migration configuration and load it under the layered-service external-resource rules.
-- **PERSISTENCE-SCHEMA-PREFIX-001** **[REQUIRED][TOPIC]** — `schema.sql` must begin with a comment requiring its table prefix and suffix to match runtime configuration; changing the prefix or suffix is a schema change that must update the DDL scripts or migration configuration, not only the runtime configuration.
+- **PERSISTENCE-SCHEMA-PREFIX-COMMENT-001** **[REQUIRED][TOPIC]** — Begin `schema.sql` with a comment requiring table prefix and suffix to match runtime configuration.
+- **PERSISTENCE-SCHEMA-NAMING-CHANGE-001** **[REQUIRED][TOPIC]** — A table-prefix or suffix change is a schema change: update DDL or migration configuration along with runtime settings.
 - **PERSISTENCE-CONCURRENCY-SCENARIO-001** **[REQUIRED][TOPIC]** — Before choosing a concurrency control, assess business risk, actual conflict probability, contention scope, and failure consequences.
 - **PERSISTENCE-CONCURRENCY-LOW-001** **[DEFAULT][TOPIC]** — For a very-low-contention operational API, omit versions, distributed locks, and pessimistic database locks by default.
 - **PERSISTENCE-CONCURRENCY-STATE-001** **[DEFAULT][TOPIC]** — When a business state machine or explicit precondition exists, prefer a conditional update on the current state or business condition.
@@ -31,15 +33,20 @@
 - **PERSISTENCE-CONCURRENCY-VERSION-001** **[DEFAULT][TOPIC]** — Add version-based optimistic concurrency only when residual conflicts still require detection.
 - **PERSISTENCE-CONCURRENCY-TEMPLATE-001** **[REQUIRED][TOPIC]** — Never apply versions, pessimistic database locks, or distributed locks as a default template for every write.
 - **PERSISTENCE-TRANSACTION-001** **[REQUIRED][TOPIC]** — Keep local-database transactions short and limited to necessary reads and writes; do not perform avoidable RPC, direct message publication, long computation, lock waiting, or multi-batch work inside them.
-- **PERSISTENCE-RETRY-001** **[REQUIRED][TOPIC]** — Make every retried write idempotent, classify unique-constraint and optimistic-lock conflicts, deadlocks, and transient connection failures explicitly, and never retry without a bound.
+- **PERSISTENCE-RETRY-IDEMPOTENT-001** **[REQUIRED][TOPIC]** — Every retried write must be idempotent.
+- **PERSISTENCE-RETRY-POLICY-001** **[REQUIRED][TOPIC]** — Explicitly classify unique-constraint and optimistic-lock conflicts, deadlocks, and transient connection failures; bound retry count rather than retrying indefinitely.
 
 ## Queries
 
 - **PERSISTENCE-PAGE-001** **[REQUIRED][TOPIC]** — Paginate with a stable unique order and never rely on unspecified database order.
 - **PERSISTENCE-CURSOR-001** **[DEFAULT][TOPIC]** — Prefer cursors for deep pagination or continuous scans.
-- **PERSISTENCE-QUERY-001** **[REQUIRED][TOPIC]** — Design indexes by access patterns, data scale, and execution plans; verify plans and acceptable performance before adding high-frequency or large-table queries rather than requiring an index per predicate. Prohibit N+1 access and unbounded result sets.
+- **PERSISTENCE-QUERY-PLAN-001** **[REQUIRED][TOPIC]** — Design indexes by access patterns, data scale, and execution plans; verify plans and acceptable performance before high-frequency or large-table queries instead of requiring an index per predicate.
+- **PERSISTENCE-NPLUSONE-001** **[REQUIRED][TOPIC]** — N+1 queries are forbidden.
+- **PERSISTENCE-RESULT-BOUND-001** **[REQUIRED][TOPIC]** — Limit query result scope; unbounded result sets are forbidden.
+- **PERSISTENCE-BATCH-SIZE-001** **[REQUIRED][TOPIC]** — Bound batch read/write size rather than loading all data at once.
 - **PERSISTENCE-JPA-001** **[REQUIRED][TOPIC]** — Do not rely on Open Session in View to hide JPA lazy loading; design aggregate fetch boundaries and read projections explicitly.
-- **PERSISTENCE-MYBATIS-001** **[REQUIRED][TOPIC]** — Configure the MyBatis-Plus database type explicitly and fail on unsupported types; keep custom interceptors ordered and verify they cannot bypass pagination or naming rules.
+- **PERSISTENCE-MYBATIS-DATABASE-TYPE-001** **[REQUIRED][TOPIC]** — Explicitly configure the correct MyBatis-Plus database type; fail startup on unsupported types.
+- **PERSISTENCE-INTERCEPTOR-ORDER-001** **[REQUIRED][TOPIC]** — Keep custom interceptor order deterministic and verify it cannot bypass pagination or naming rules.
 
 ## Unique constraint violations
 
@@ -48,4 +55,5 @@
 - **PERSISTENCE-DATA-INTEGRITY-002** **[REQUIRED][TOPIC]** — After the shared catch, confirm the violation is the intended unique constraint by known constraint name, SQLState/vendor code, or a business-key reread; never classify not-null, foreign-key, or check-constraint violations as duplicate keys.
 - **PERSISTENCE-JPA-FLUSH-001** **[REQUIRED][TOPIC]** — To catch a JPA unique-constraint failure inside an adapter, flush within that catch boundary; otherwise translate the deferred exception at a boundary that covers transaction commit.
 - **PERSISTENCE-IDEMPOTENT-RECOVERY-001** **[REQUIRED][TOPIC]** — After a unique-constraint failure, never reread and report idempotent success using a failed or rollback-only transaction or an unreliable persistence context. Especially after JPA/Hibernate persistence exceptions, end the failed transaction before verifying existing outcomes through a valid new transaction or independent query boundary. A nested call inside the failed transaction alone is not recovery; propagate verification failures.
-- **PERSISTENCE-DUPLICATE-LOG-001** **[REQUIRED][TOPIC]** — Record unique-constraint conflicts once at the translation boundary with constraint/scene, sanitized business key, and outcome. Severity, recurring-event aggregation, and audit exceptions follow the logging rules; rethrow unknown or unclassified integrity failures.
+- **PERSISTENCE-CONFLICT-LOG-001** **[REQUIRED][TOPIC]** — Record known uniqueness-conflict outcomes once at the translation boundary with constraint/scene, sanitized business key, and outcome; severity, aggregation, and audit exceptions follow logging rules.
+- **PERSISTENCE-UNKNOWN-INTEGRITY-001** **[REQUIRED][TOPIC]** — Propagate unknown or unclassified integrity failures rather than treating them as business uniqueness conflicts or idempotent success.

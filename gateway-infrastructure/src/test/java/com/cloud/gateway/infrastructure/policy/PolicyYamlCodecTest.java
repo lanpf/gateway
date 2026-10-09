@@ -44,7 +44,7 @@ class PolicyYamlCodecTest {
                 () -> codec.decodeValue("value: expected\nunknown: rejected"));
     }
 
-    private static final class TestPolicyYamlCodec extends PolicyYamlCodec {
+    private static final class TestPolicyYamlCodec extends AbstractPolicyYamlCodec {
         private static final TypeReference<Map<String, String>> MAP_TYPE = new TypeReference<>() { };
 
         private TestPolicyYamlCodec(ObjectMapper source) {

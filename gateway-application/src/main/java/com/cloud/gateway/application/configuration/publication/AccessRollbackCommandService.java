@@ -7,7 +7,9 @@ import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RequiredArgsConstructor
 public final class AccessRollbackCommandService {
     private final AccessDefinitions definitions;
@@ -18,18 +20,37 @@ public final class AccessRollbackCommandService {
     private final AccessSnapshotHasher hasher;
     private final AccessPublishLock publishLock;
     private final AccessRollbackLock rollbackLock;
+    private final AccessOperationBudget budget;
 
     public IngressSnapshotUpdateOutput rollback(RollbackAccessSnapshotCommand command) {
-        return rollbackLock.execute(() -> publishLock.execute(() -> restore(command.targetSnapshotVersion())));
+        AccessOperationBudget.Deadline deadline = budget.start();
+        long started = System.nanoTime();
+        try {
+            IngressSnapshot target = history.find(command.targetSnapshotVersion()).orElseThrow(
+                    () -> new ApplicationException(ApplicationError.APP_POLICY_SNAPSHOT_HISTORY_NOT_FOUND));
+            String targetHash = hasher.hash(target.content());
+            deadline.check();
+            IngressSnapshotUpdateOutput output = rollbackLock.execute(
+                    () -> publishLock.execute(() -> restore(target, targetHash, deadline)));
+            log.info("Access rollback completed targetVersion={} definitions={} durationMillis={}",
+                    command.targetSnapshotVersion().value(), deadline.getCompletedDefinitions(),
+                    (System.nanoTime() - started) / 1_000_000);
+            return output;
+        } catch (RuntimeException exception) {
+            log.warn("Access rollback failed targetVersion={} definitions={} durationMillis={} exceptionType={}",
+                    command.targetSnapshotVersion().value(), deadline.getCompletedDefinitions(),
+                    (System.nanoTime() - started) / 1_000_000, exception.getClass().getSimpleName());
+            throw exception;
+        }
     }
 
-    private IngressSnapshotUpdateOutput restore(SnapshotVersion targetVersion) {
+    private IngressSnapshotUpdateOutput restore(IngressSnapshot target, String targetHash,
+                                                AccessOperationBudget.Deadline deadline) {
+        deadline.check();
         // Preflight neither creates a block nor clears a block left by a previous recovery.
-        IngressSnapshot target = history.find(targetVersion).orElseThrow(
-                () -> new ApplicationException(ApplicationError.APP_POLICY_SNAPSHOT_HISTORY_NOT_FOUND));
-        ObservedAccessDefinitions observed = definitions.load();
+        ObservedAccessDefinitions observed = definitions.load(deadline);
         RevisionedAccessSnapshot snapshot = provider.capture();
-        String targetHash = hasher.hash(target.content());
+        deadline.check();
         boolean alreadyPublished = targetHash.equals(snapshot.snapshot().contentHash());
         IngressSnapshot candidate = null;
         if (alreadyPublished) {
@@ -40,10 +61,12 @@ public final class AccessRollbackCommandService {
             // Any new publication is fully checked at one current time before recovery writes.
             candidate = publication.prepare(snapshot, target.content());
         }
+        deadline.check();
         rollbackState.activate();
         // Each successful definition CAS is a checkpoint; failures deliberately retain the block.
-        definitions.restore(observed, target.content());
-        IngressContent restored = definitions.load().toContent();
+        definitions.restore(observed, target.content(), deadline);
+        IngressContent restored = definitions.load(deadline).toContent();
+        deadline.check();
         if (!targetHash.equals(hasher.hash(restored))) {
             throw new ApplicationException(ApplicationError.APP_POLICY_DEFINITION_UPDATE_CONFLICT);
         }
@@ -51,6 +74,8 @@ public final class AccessRollbackCommandService {
                 ? new IngressSnapshotUpdateOutput(snapshot.snapshot().version(), targetHash,
                         snapshot.snapshot().publishedAt())
                 : publication.publish(snapshot, candidate);
+        // If a write took the remaining budget, retain the durable block for reconciliation.
+        deadline.check();
         rollbackState.clear();
         return output;
     }

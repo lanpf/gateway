@@ -1,12 +1,10 @@
 package com.cloud.gateway.domain.endpoint;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
+import com.cloud.framework.core.util.NullSafe;
 
 import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Classification of transport-matched candidates; path grammar is an adapter fact, the winner
@@ -18,7 +16,7 @@ public sealed interface EndpointMatch {
 
     record Unique(Endpoint endpoint) implements EndpointMatch {
         public Unique {
-            Require.notNull(endpoint, DomainException::missingField);
+            Require.notNull(endpoint);
         }
     }
 
@@ -28,17 +26,13 @@ public sealed interface EndpointMatch {
     record Ambiguous() implements EndpointMatch { }
 
     static EndpointMatch of(Collection<Endpoint> candidates) {
-        Require.notNull(candidates, DomainException::missingField);
-
-        Map<EndpointId, Endpoint> indexed = new LinkedHashMap<>();
-        for (Endpoint candidate : candidates) {
-            Require.notNull(candidate, DomainException::missingField);
-            Endpoint present = indexed.putIfAbsent(candidate.id(), candidate);
-            if (present != null && !present.equals(candidate) || indexed.size() > 1) {
-                return new Ambiguous();
-            }
+        Require.notNull(candidates);
+        NullSafe.forEach(candidates);
+        var checked = java.util.List.copyOf(candidates);
+        if (checked.isEmpty()) {
+            return new None();
         }
-
-        return indexed.isEmpty() ? new None() : new Unique(indexed.values().iterator().next());
+        Endpoint first = checked.get(0);
+        return checked.stream().allMatch(first::sameDefinition) ? new Unique(first) : new Ambiguous();
     }
 }

@@ -2,7 +2,7 @@ package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
 import com.cloud.gateway.domain.capability.runtime.CapabilityOutcome;
-import java.util.HashMap;
+import com.cloud.framework.core.validation.Require;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -14,13 +14,7 @@ public final class CapabilityResponseWriter {
     private final Map<Class<?>, CapabilityOutcomeWriter<?>> writers;
 
     public CapabilityResponseWriter(List<CapabilityOutcomeWriter<?>> writers) {
-        Map<Class<?>, CapabilityOutcomeWriter<?>> registered = new HashMap<>();
-        for (CapabilityOutcomeWriter<?> writer : writers) {
-            if (registered.putIfAbsent(writer.outcomeType(), writer) != null) {
-                throw new IllegalArgumentException("duplicate capability outcome writer");
-            }
-        }
-        this.writers = Map.copyOf(registered);
+        this.writers = Map.copyOf(Require.noDuplicates(writers, CapabilityOutcomeWriter::outcomeType));
     }
 
     public Mono<Boolean> respond(ServerWebExchange exchange, CapabilityExecution execution) {

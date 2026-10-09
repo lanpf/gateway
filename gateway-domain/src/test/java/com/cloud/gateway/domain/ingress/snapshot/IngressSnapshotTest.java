@@ -3,7 +3,7 @@ package com.cloud.gateway.domain.ingress.snapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.cloud.gateway.domain.app.App;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.app.AppAccess;
@@ -122,7 +122,7 @@ class IngressSnapshotTest {
                 new AppRegistry(List.of(new App(new AppId("app"), "APP", AppStatus.ENABLED, new AppAccess(Set.of())))),
                 new ClientRegistry(List.of(clients)),
                 new EndpointRegistry(List.of(endpoint())),
-                CapabilityComposition.empty());
+                CapabilityPolicyConfig.empty());
     }
 
     private static IngressSnapshot snapshot(IngressContent content) {

@@ -17,6 +17,10 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.Gauge;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
@@ -42,6 +46,8 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
     private final Clock clock;
     /** user-auth 依赖故障态门控：进入故障态 WARN 一次、恢复时 INFO 一次，避免逐请求重复记录。 */
     private final AtomicBoolean degraded = new AtomicBoolean();
+    private final AtomicLong failures = new AtomicLong();
+    private final AtomicLong lastSuccessMillis = new AtomicLong();
 
     @Override
     public CompletionStage<BrowserSessionVerificationOutcome> verify(String sessionToken) {
@@ -52,7 +58,7 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
                 .retrieve()
                 .bodyToMono(VERIFY_RESPONSE_TYPE)
                 .map(payload -> subject(payload, clock.instant()))
-                .switchIfEmpty(Mono.fromSupplier(() -> unavailableInvalidResponse("empty response")))
+                .switchIfEmpty(Mono.fromSupplier(BrowserSessionVerifierAdapter::invalidResponse))
                 .onErrorResume(WebClientResponseException.class, exception ->
                         Mono.just(responseFailure(exception)))
                 .onErrorResume(WebClientRequestException.class, exception -> {
@@ -62,8 +68,12 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
                             SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE));
                 })
                 .onErrorResume(RuntimeException.class, exception ->
-                        Mono.just(unavailableInvalidResponse(exception.getClass().getSimpleName())))
+                        Mono.just(invalidResponse()))
                 .map(outcome -> {
+                    if (outcome instanceof BrowserSessionVerificationOutcome.Unavailable unavailable) {
+                        failures.incrementAndGet();
+                        reportDegraded(() -> log.warn("Browser Session verification dependency degraded reason={}", unavailable.reason()));
+                    }
                     if (outcome instanceof BrowserSessionVerificationOutcome.Verified
                             || outcome instanceof BrowserSessionVerificationOutcome.Invalid) {
                         reportRecovered();
@@ -73,14 +83,23 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
                 .toFuture();
     }
 
+    public void bindMetrics(MeterRegistry registry) {
+        com.cloud.framework.core.validation.Require.notNull(registry);
+        FunctionCounter.builder("gateway.browser_session.verification.failures", failures, AtomicLong::doubleValue).register(registry);
+        Gauge.builder("gateway.browser_session.verification.last_success_seconds", lastSuccessMillis,
+                value -> value.get() / 1000.0).register(registry);
+        Gauge.builder("gateway.browser_session.verification.degraded", degraded, value -> value.get() ? 1 : 0).register(registry);
+    }
+
     private void reportDegraded(Runnable warning) {
         if (degraded.compareAndSet(false, true)) {
-            // user-auth 异常文本可能携带会话 key；只记录异常类型/状态码，不落原文（参照 RateLimitQuotaAdapter）。
+            // user-auth 异常文本可能携带会话 key；只记录异常类型/状态码，不落原文（参照 RedisQuotaAcquirer）。
             warning.run();
         }
     }
 
     private void reportRecovered() {
+        lastSuccessMillis.set(clock.millis());
         if (degraded.compareAndSet(true, false)) {
             log.info("Browser Session verification dependency recovered");
         }
@@ -89,13 +108,13 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
     static BrowserSessionVerificationOutcome subject(
             Result<VerifyBrowserSessionApiCommandOutput> payload, Instant now) {
         if (payload == null) {
-            return unavailableInvalidResponse("missing response");
+            return invalidResponse();
         }
         if (!payload.isSuccess()) {
-            return unavailableInvalidResponse("unsuccessful response code " + payload.code());
+            return invalidResponse();
         }
         if (payload.data() == null) {
-            return unavailableInvalidResponse("missing payload data");
+            return invalidResponse();
         }
         VerifyBrowserSessionApiCommandOutput data = payload.data();
         if (!data.verified()) {
@@ -105,7 +124,7 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
                 || !StringUtils.hasText(data.sessionId())
                 || data.remainingIdleTtlSeconds() == null
                 || data.remainingIdleTtlSeconds() <= 0) {
-            return unavailableInvalidResponse("invalid verified session fields");
+            return invalidResponse();
         }
         Duration remainingIdleTtl = Duration.ofSeconds(data.remainingIdleTtlSeconds());
         return BrowserSessionVerificationOutcome.verified(new AuthenticatedSubject(
@@ -128,11 +147,10 @@ public final class BrowserSessionVerifierAdapter implements BrowserSessionVerifi
             return BrowserSessionVerificationOutcome.unavailable(
                     SubjectAuthenticationFailReason.UPSTREAM_UNAVAILABLE);
         }
-        return unavailableInvalidResponse("unexpected HTTP status " + exception.getStatusCode().value());
+        return invalidResponse();
     }
 
-    private static BrowserSessionVerificationOutcome unavailableInvalidResponse(String reason) {
-        log.warn("Browser Session verification returned an invalid response: {}", reason);
+    private static BrowserSessionVerificationOutcome invalidResponse() {
         return BrowserSessionVerificationOutcome.unavailable(
                 SubjectAuthenticationFailReason.RESPONSE_INVALID);
     }

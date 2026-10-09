@@ -1,5 +1,7 @@
 package com.cloud.gateway.application.configuration.editing;
 
+import com.cloud.framework.core.util.NullSafe;
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
@@ -24,7 +26,8 @@ public record SaveEndpointAccessCommand(Revision expectedSourceRevision,
                                         Set<String> requiredScopes,
                                         Set<String> requiredAudiences) {
     public SaveEndpointAccessCommand {
-        matchers = List.copyOf(matchers);
-        tags = tags == null ? Set.of() : Set.copyOf(tags);
+        Require.notNull(matchers);
+        matchers = NullSafe.copyOf(matchers);
+        tags = tags == null ? Set.of() : NullSafe.copyOf(tags);
     }
 }

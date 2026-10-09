@@ -32,7 +32,7 @@ import com.cloud.gateway.domain.endpoint.EndpointId;
 import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
@@ -205,7 +205,7 @@ class AccessEvaluatorTest {
         IngressSnapshot snapshot = new IngressSnapshot(new SnapshotVersion(7),
                 new IngressContent(new AppRegistry(List.of(app(), otherApp)),
                         new ClientRegistry(List.of(client(), otherAppClient)),
-                        new EndpointRegistry(List.of(endpoint(ENDPOINT_ID, route()))), CapabilityComposition.empty()),
+                        new EndpointRegistry(List.of(endpoint(ENDPOINT_ID, route()))), CapabilityPolicyConfig.empty()),
                 "content-hash", PUBLISHED_AT);
 
         AccessDecision.Denied denied = assertInstanceOf(AccessDecision.Denied.class,
@@ -356,7 +356,7 @@ class AccessEvaluatorTest {
     private static IngressSnapshot snapshot(Endpoint endpoint) {
         return new IngressSnapshot(new SnapshotVersion(7),
                 new IngressContent(new AppRegistry(List.of(app())), new ClientRegistry(List.of(client())),
-                        new EndpointRegistry(List.of(endpoint)), CapabilityComposition.empty()),
+                        new EndpointRegistry(List.of(endpoint)), CapabilityPolicyConfig.empty()),
                 "content-hash", PUBLISHED_AT);
     }
 

@@ -10,7 +10,7 @@ import com.cloud.gateway.domain.ingress.access.client.VerifiedClient;
 import com.cloud.gateway.domain.ingress.access.subject.AuthenticatedSubject;
 import com.cloud.gateway.domain.ingress.access.subject.SessionId;
 import com.cloud.gateway.domain.ingress.access.subject.SubjectId;
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.client.ClientId;
@@ -91,7 +91,7 @@ class TrustedHeaderResolverTest {
     void shouldReturnEmptyForNullSourceAndRejectMissingContext() {
         assertFalse(TrustedHeaderResolver.supports(null));
         assertEquals(Optional.empty(), TrustedHeaderResolver.resolve(null, authenticatedContext()));
-        assertThrows(DomainException.class, () -> TrustedHeaderResolver.resolve(RequestHeader.APP_ID, null));
+        assertThrows(FrameworkException.class, () -> TrustedHeaderResolver.resolve(RequestHeader.APP_ID, null));
     }
 
     private static AccessGrantedContext authenticatedContext() {

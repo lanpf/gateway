@@ -7,7 +7,7 @@ import com.cloud.framework.core.ChannelContext;
 import com.cloud.framework.core.ClientRequest;
 import com.cloud.gateway.interfaces.webflux.GatewayRequestAttributes;
 import com.cloud.gateway.domain.ingress.access.AccessGrantedContext;
-import com.cloud.gateway.interfaces.header.RequestHeaderValueAdapter;
+import com.cloud.gateway.domain.capability.header.DeclaredHeaderResolver;
 import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.List;
@@ -67,7 +67,7 @@ public final class ClientRequestBodyArgumentResolver extends AbstractMessageRead
         request.setClientAppId(context == null ? null : context.app().appId().value());
         request.setClientPlatform(context == null ? null : context.app().platform());
         String version = exchange.getRequest().getHeaders().getFirst(RequestHeader.APP_VERSION.headerName());
-        request.setClientVersion(RequestHeaderValueAdapter.sanitizedAppVersion(version).orElse(null));
+        request.setClientVersion(DeclaredHeaderResolver.resolve(RequestHeader.APP_VERSION, version).orElse(null));
         if (request instanceof ChannelContext channelContext) {
             channelContext.setChannelCode(context == null || context.client() == null ? null
                     : context.client().clientId().value());

@@ -28,14 +28,12 @@ public final class EndpointAccessCommandService {
     /** Content-only upsert: creation initializes status to ENABLED, updates preserve the existing status. */
     public Revision save(SaveEndpointAccessCommand command) {
         return writer.update(repository, command.expectedSourceRevision(), current -> {
-            EndpointStatus status = current.find(command.endpointId())
-                    .map(Endpoint::status)
-                    .orElse(EndpointStatus.ENABLED);
-
             EndpointAccess access = new EndpointAccess(command.clientVerificationRequirement(),
                     command.subjectAuthenticationRequirement(), command.requiredScopes(), command.requiredAudiences());
-            Endpoint next = new Endpoint(command.endpointId(), command.serviceId(), command.routeId(),
-                            command.matchers(), command.tags(), status, access);
+            Endpoint next = current.find(command.endpointId())
+                    .map(existing -> existing.edit(command.serviceId(), command.routeId(), command.matchers(), command.tags(), access))
+                    .orElseGet(() -> Endpoint.create(command.endpointId(), command.serviceId(), command.routeId(),
+                            command.matchers(), command.tags(), access));
             return withEndpoint(current, next);
         });
     }
@@ -44,15 +42,14 @@ public final class EndpointAccessCommandService {
     public Revision setEndpointStatus(SetEndpointStatusCommand command) {
         return writer.update(repository, command.expectedSourceRevision(), current -> {
             Endpoint existing = current.find(command.endpointId()).orElseThrow(() -> new DomainException(DomainError.ENDPOINT_NOT_FOUND));
-            Endpoint next = new Endpoint(existing.endpointId(), existing.serviceId(), existing.routeId(),
-                    existing.matchers(), existing.tags(), command.status(), existing.access());
+            Endpoint next = existing.changeStatus(command.status());
             return withEndpoint(current, next);
         });
     }
 
     private static EndpointRegistry withEndpoint(EndpointRegistry current, Endpoint next) {
         Map<EndpointId, Endpoint> updated = new LinkedHashMap<>(current.asMap());
-        updated.put(next.endpointId(), next);
+        updated.put(next.getId(), next);
         return new EndpointRegistry(updated.values());
     }
 }

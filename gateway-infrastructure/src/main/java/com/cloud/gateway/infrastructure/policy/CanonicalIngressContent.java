@@ -1,5 +1,7 @@
 package com.cloud.gateway.infrastructure.policy;
 
+import com.cloud.framework.core.util.NullSafe;
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.client.ClientStatus;
@@ -15,18 +17,19 @@ import java.util.Map;
         "clients",
         "apps",
         "endpoints",
-        "capabilities"
+        "policyConfig"
 })
 public record CanonicalIngressContent(
         List<Endpoint> endpoints,
         Map<String, Client> clients,
         Map<String, App> apps,
-        StoredCapabilityComposition capabilities
+        StoredCapabilityPolicyConfig capabilities
 ) {
     public CanonicalIngressContent {
-        endpoints = List.copyOf(endpoints);
-        clients = Map.copyOf(clients);
-        apps = Map.copyOf(apps);
+        Require.allNotNull(endpoints, clients, apps);
+        endpoints = NullSafe.copyOf(endpoints);
+        clients = NullSafe.copyOf(clients);
+        apps = NullSafe.copyOf(apps);
     }
 
     @JsonPropertyOrder({
@@ -48,8 +51,9 @@ public record CanonicalIngressContent(
             EndpointAccess access
     ) {
         public Endpoint {
-            tags = List.copyOf(tags);
-            matchers = List.copyOf(matchers);
+            Require.allNotNull(tags, matchers);
+            tags = NullSafe.copyOf(tags);
+            matchers = NullSafe.copyOf(matchers);
         }
     }
 
@@ -66,8 +70,9 @@ public record CanonicalIngressContent(
             List<String> requiredAudiences
     ) {
         public EndpointAccess {
-            requiredScopes = List.copyOf(requiredScopes);
-            requiredAudiences = List.copyOf(requiredAudiences);
+            Require.allNotNull(requiredScopes, requiredAudiences);
+            requiredScopes = NullSafe.copyOf(requiredScopes);
+            requiredAudiences = NullSafe.copyOf(requiredAudiences);
         }
     }
 
@@ -84,7 +89,8 @@ public record CanonicalIngressContent(
             @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> allowedOrigins
     ) {
         public App {
-            allowedOrigins = List.copyOf(allowedOrigins);
+            Require.notNull(allowedOrigins);
+            allowedOrigins = NullSafe.copyOf(allowedOrigins);
         }
     }
 
@@ -96,7 +102,8 @@ public record CanonicalIngressContent(
     })
     public record Client(List<String> allowedAppIds, String clientId, ClientStatus status, ClientCredentials credentials) {
         public Client {
-            allowedAppIds = List.copyOf(allowedAppIds);
+            Require.notNull(allowedAppIds);
+            allowedAppIds = NullSafe.copyOf(allowedAppIds);
         }
     }
 

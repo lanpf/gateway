@@ -36,13 +36,18 @@
 - **PACKAGE-CROSS-CAPABILITY-001** **[REQUIRED][TOPIC]** — Cross-capability reuse must use a stable port, contract, or explicit shared component; do not couple capabilities through another feature package's implementation classes, database DOs, or mappers.
 - **PACKAGE-GRANULARITY-001** **[DEFAULT][TOPIC]** — Create a subpackage only when its types form a clear responsibility boundary; do not create a package for a single type merely for visual symmetry, and split oversized packages by capability or reason for change rather than mechanically by class name.
 - **PACKAGE-VISIBILITY-001** **[REQUIRED][TOPIC]** — Keep implementation types package-private by default; declare a type `public` only when cross-package, cross-module, or framework assembly requires it, and give every public type an explicit contract or adapter responsibility.
-- **PACKAGE-TEST-001** **[DEFAULT][TOPIC]** — Mirror production package paths in tests; keep test helpers in test source sets or test-support packages and never package them as production code or make production code depend on them.
+- **PACKAGE-TEST-MIRROR-001** **[DEFAULT][TOPIC]** — Mirror production package paths in tests by default.
+- **PACKAGE-TEST-ISOLATION-001** **[REQUIRED][TOPIC]** — Keep test helpers in test sources or test-support packages; never place them in production packages or make production code depend on them.
 
 ## Dependency direction
 
-- **ARCH-DEP-API-001** **[REQUIRED][TOPIC]** — API does not depend on business implementations; domain does not depend on other business layers; application depends on domain.
+- **ARCH-DEP-API-CONTRACT-001** **[REQUIRED][TOPIC]** — API must not depend on business implementations.
+- **ARCH-DEP-DOMAIN-001** **[REQUIRED][TOPIC]** — Domain must not depend on other business layers.
+- **ARCH-DEP-APPLICATION-001** **[REQUIRED][TOPIC]** — Application depends on domain; any additional contract dependencies follow the application boundary rules.
 - **ARCH-DEP-INFRA-001** **[REQUIRED][TOPIC]** — Infrastructure implements domain and application ports; concrete persistence, scheduler, and message modules depend on infrastructure.
-- **ARCH-DEP-OUTER-001** **[REQUIRED][TOPIC]** — Interfaces depends on API and application, OpenFeign client depends on API, and boot performs final assembly.
+- **ARCH-DEP-INTERFACES-001** **[REQUIRED][TOPIC]** — Interfaces depends on API and application.
+- **ARCH-DEP-CLIENT-001** **[REQUIRED][TOPIC]** — OpenFeign client depends on API.
+- **ARCH-DEP-BOOT-001** **[REQUIRED][TOPIC]** — Boot depends on modules required for runtime assembly and performs final assembly only.
 - **ARCH-DEP-INTEGRATION-TESTS-001** **[REQUIRED][TOPIC]** — Integration-tests may depend on boot and observed service modules in test scope only; those verification dependencies never participate in production dependency direction.
 - **ARCH-DEP-INWARD-001** **[REQUIRED][TOPIC]** — No inner module may depend on outer protocol types, persistence objects, concrete technologies, or boot.
 
@@ -60,6 +65,8 @@
 - **ARCH-PROJECT-CONFIG-003** **[DEFAULT][TOPIC]** — Prefer the project-root `config/` directory for project-level application configuration, MyBatis SQL/XML, database schema or migrations, Dubbo XML, and other independently updateable resources.
 - **ARCH-PROJECT-CONFIG-PACKAGING-001** **[REQUIRED][TOPIC]** — Do not package an independently updateable configuration resource in a module artifact merely because that module assembles the capability.
 - **ARCH-PROJECT-CONFIG-COMPAT-001** **[REQUIRED][TOPIC]** — Associate external SQL, mappings, schema, and other configuration resources with application versions and verify compatibility before deployment; independent deployment never removes code-version compatibility requirements.
-- **ARCH-PROJECT-CONFIG-002** **[REQUIRED][TOPIC]** — Load root-level `config/` resources explicitly through Spring or technology-specific location settings and make build, deployment, and local startup provide and validate them; package a resource under a module only when external loading is unsupported, code and resource versions are inseparable, or the artifact must be self-contained.
+- **ARCH-CONFIG-LOAD-001** **[REQUIRED][TOPIC]** — Explicitly load root-level `config/` resources through `spring.config.location`, `spring.config.additional-location`, `spring.config.import`, technology-specific location settings, or equivalent startup parameters.
+- **ARCH-CONFIG-VERIFY-001** **[REQUIRED][TOPIC]** — Build, deployment, and local startup must provide required external resources and verify expected failure for missing or invalid configuration.
+- **ARCH-CONFIG-CLASSPATH-EXCEPTION-001** **[REQUIRED][TOPIC]** — Package resources in module `src/main/resources` only when external loading is unsupported, resource/code versions or classpaths are inseparable, or deployment cannot provide an artifact's mandatory self-contained resources. Development convenience alone is not sufficient.
 - **CONFIG-DEFAULT-001** **[REQUIRED][TOPIC]** — When a `*Properties` type already provides a default value and the configuration file does not change it, the configuration file must not restate the property; configuration files carry only explicit decisions that differ from code defaults and externally varying values.
 - **CONFIG-PLACEHOLDER-001** **[REQUIRED][TOPIC]** — Configuration properties must not introduce environment-variable placeholders by default and must not require the deployment environment to provide a variable by default; when injection is genuinely needed, the deployment configuration or a dedicated profile carries it, and a missing value must fail fast.

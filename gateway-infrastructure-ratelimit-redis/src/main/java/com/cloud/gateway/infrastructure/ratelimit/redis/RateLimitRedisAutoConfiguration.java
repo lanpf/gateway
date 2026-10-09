@@ -2,8 +2,8 @@ package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.framework.core.naming.NamespaceResolver;
 import com.cloud.framework.core.naming.NamespacedResourceNameResolver;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
-import com.cloud.gateway.application.quota.LocalRateLimitQuota;
+import com.cloud.gateway.application.quota.QuotaAcquirer;
+import com.cloud.gateway.application.quota.LocalQuotaAcquirer;
 import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.application.quota.QuotaObserver;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -29,16 +29,16 @@ public class RateLimitRedisAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(RateLimitQuota.class)
-    RateLimitQuota rateLimitQuota(RedisTokenBucketLimiter limiter, RateLimitKeyResolver keyResolver,
+    @ConditionalOnMissingBean(QuotaAcquirer.class)
+    QuotaAcquirer rateLimitQuota(RedisTokenBucketLimiter limiter, RateLimitKeyResolver keyResolver,
                                   RedisRateLimitProperties properties) {
-        return new RateLimitQuotaAdapter(limiter, keyResolver, properties.getAcquireTimeout());
+        return new RedisQuotaAcquirer(limiter, keyResolver, properties.getAcquireTimeout());
     }
 
     @Bean
-    @ConditionalOnMissingBean(LocalRateLimitQuota.class)
-    LocalRateLimitQuota localRateLimitQuota(RateLimitKeyResolver keyResolver, RedisRateLimitProperties properties) {
-        return new LocalRateLimitQuotaAdapter(keyResolver, properties);
+    @ConditionalOnMissingBean(LocalQuotaAcquirer.class)
+    LocalQuotaAcquirer localQuotaAcquirer(RateLimitKeyResolver keyResolver, RedisRateLimitProperties properties) {
+        return new LocalTokenBucketQuotaAcquirer(keyResolver, properties);
     }
 
     @Bean
@@ -50,7 +50,7 @@ public class RateLimitRedisAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(QuotaCommandService.class)
-    QuotaCommandService quotaCommandService(RateLimitQuota quota, LocalRateLimitQuota local, QuotaObserver observer) {
+    QuotaCommandService quotaCommandService(QuotaAcquirer quota, LocalQuotaAcquirer local, QuotaObserver observer) {
         return new QuotaCommandService(quota, local, observer);
     }
 }

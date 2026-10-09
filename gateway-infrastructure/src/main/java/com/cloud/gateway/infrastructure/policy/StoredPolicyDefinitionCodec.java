@@ -1,17 +1,17 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfigValidator;
 
 import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 
-public final class StoredPolicyDefinitionCodec extends PolicyYamlCodec {
+public final class StoredPolicyDefinitionCodec extends AbstractPolicyYamlCodec {
     private static final TypeReference<List<StoredAccessSnapshot.Endpoint>> ENDPOINT_TYPE = new TypeReference<>() { };
     private static final TypeReference<Map<String, StoredAccessSnapshot.App>> APP_TYPE =
             new TypeReference<>() { };
@@ -19,31 +19,28 @@ public final class StoredPolicyDefinitionCodec extends PolicyYamlCodec {
             new TypeReference<>() { };
 
     private final StoredAccessSnapshotMapper mapper;
-    private final HeaderAdmissionRules headerRules;
+    private final CapabilityPolicyConfigValidator validator;
 
     public StoredPolicyDefinitionCodec(StoredAccessSnapshotMapper mapper, ObjectMapper objectMapper,
-            HeaderAdmissionRules headerRules) {
+            CapabilityPolicyConfigValidator validator) {
         super(objectMapper);
         this.mapper = mapper;
-        this.headerRules = headerRules;
+        this.validator = validator;
     }
 
-    public CapabilityComposition decodeCapabilityComposition(String content) {
-        return decode(content, StoredCapabilityComposition.class, stored -> {
-            CapabilityComposition decoded = mapper.toDomainPolicies(stored);
-            validateHeaderAdmission(decoded);
+    public CapabilityPolicyConfig decodeCapabilityPolicyConfig(String content) {
+        return decode(content, StoredCapabilityPolicyConfig.class, stored -> {
+            CapabilityPolicyConfig decoded = mapper.toDomainPolicies(stored);
+            validator.validate(decoded);
             return decoded;
         });
     }
 
-    public String encodeCapabilityComposition(CapabilityComposition definition) {
-        validateHeaderAdmission(definition);
+    public String encodeCapabilityPolicyConfig(CapabilityPolicyConfig definition) {
+        validator.validate(definition);
         return encode(mapper.toStoredPolicies(definition));
     }
 
-    private void validateHeaderAdmission(CapabilityComposition composition) {
-        composition.bundles().values().forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).orElse(null)));
-    }
 
     public EndpointRegistry decodeEndpointRegistry(String content) {
         return decode(content, ENDPOINT_TYPE, mapper::toDomainEndpointRegistry);

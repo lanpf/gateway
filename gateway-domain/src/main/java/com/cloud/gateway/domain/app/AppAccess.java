@@ -2,33 +2,32 @@ package com.cloud.gateway.domain.app;
 
 import com.cloud.framework.core.validation.Require;
 
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.BaseException;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.cloud.framework.core.error.FrameworkException;
 
 public record AppAccess(Set<String> allowedOrigins) {
     public AppAccess {
         allowedOrigins = allowedOrigins == null
                 ? Set.of()
-                : allowedOrigins.stream()
-                .map(AppAccess::normalizeOrigin)
-                .collect(Collectors.toUnmodifiableSet());
+                : allowedOrigins.stream().map(AppAccess::normalizeOrigin).collect(Collectors.toUnmodifiableSet());
     }
 
     boolean allowsOrigin(String origin) {
         try {
             return allowedOrigins.contains(normalizeOrigin(origin));
-        } catch (DomainException exception) {
+        } catch (BaseException exception) {
             return false;
         }
     }
 
     private static String normalizeOrigin(String origin) {
-        String value = Require.notBlank(origin, DomainException::invalidObjectField).trim();
+        String value = Require.notBlank(origin).trim();
         try {
             URI uri = new URI(value);
             String scheme = uri.getScheme();
@@ -39,7 +38,7 @@ public record AppAccess(Set<String> allowedOrigins) {
                     || uri.getRawQuery() != null
                     || uri.getRawFragment() != null
                     || (uri.getRawPath() != null && !uri.getRawPath().isEmpty())) {
-                throw DomainException.invalidObjectField();
+                throw FrameworkException.invalidObject();
             }
             int port = uri.getPort();
             if ((scheme.equalsIgnoreCase("https") && port == 443)
@@ -55,7 +54,7 @@ public record AppAccess(Set<String> allowedOrigins) {
                     null,
                     null).toASCIIString();
         } catch (URISyntaxException exception) {
-            throw DomainException.invalidObjectField();
+            throw FrameworkException.invalidObject();
         }
     }
 }

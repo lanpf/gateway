@@ -22,8 +22,8 @@ public class NacosPolicyProperties {
     @NotBlank private String group = DEFAULT_GROUP;
     @NotBlank private String dataId = DEFAULT_DATA_ID;
     @NotBlank private String endpointDefinitionDataId = "gateway-endpoints.yaml";
-    @NotBlank private String appDefinitionDataId = "gateway-app-capabilities.yaml";
-    @NotBlank private String clientDefinitionDataId = "gateway-client-capabilities.yaml";
+    @NotBlank private String appDefinitionDataId = "gateway-app-policyConfig.yaml";
+    @NotBlank private String clientDefinitionDataId = "gateway-client-policyConfig.yaml";
     @NotBlank private String policyConfigurationDefinitionDataId = "gateway-access-configuration.yaml";
     @NotNull @DurationMin(seconds = 1) private Duration readTimeout = Duration.ofSeconds(5);
     @NotNull @DurationMin(seconds = 1) private Duration recoveryInterval = Duration.ofSeconds(30);

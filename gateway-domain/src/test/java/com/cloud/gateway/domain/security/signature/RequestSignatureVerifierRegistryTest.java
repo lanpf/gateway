@@ -1,6 +1,7 @@
 package com.cloud.gateway.domain.security.signature;
 
 import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import com.cloud.gateway.domain.client.SignatureContract;
 import java.util.Arrays;
 import java.util.List;
@@ -21,7 +22,7 @@ class RequestSignatureVerifierRegistryTest {
     void shouldRejectMissingAndDuplicateContracts() {
         StubVerifier verifier = new StubVerifier(SignatureContract.HTTP_REQUEST_SIGNATURE_V1);
         assertThrows(DomainException.class, () -> new RequestSignatureVerifierRegistry(List.of(verifier)));
-        assertThrows(DomainException.class, () -> new RequestSignatureVerifierRegistry(List.of(verifier, verifier)));
+        assertThrows(FrameworkException.class, () -> new RequestSignatureVerifierRegistry(List.of(verifier, verifier)));
         assertThrows(DomainException.class, () -> new RequestSignatureVerifierRegistry(List.of()));
     }
 

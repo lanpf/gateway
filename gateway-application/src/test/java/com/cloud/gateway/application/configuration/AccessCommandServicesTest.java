@@ -1,8 +1,10 @@
 package com.cloud.gateway.application.configuration;
 
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
+
+import com.cloud.gateway.domain.capability.policy.CapabilityBundle;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundleId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,7 +18,7 @@ import com.cloud.framework.lock.LockExecutor;
 import com.cloud.gateway.application.configuration.publication.RevisionedAccessSnapshot;
 import com.cloud.gateway.application.common.ApplicationException;
 import com.cloud.gateway.application.common.ApplicationError;
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.header.HeaderConfigRule;
 import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
@@ -36,6 +38,7 @@ import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.client.ClientStatus;
 import com.cloud.gateway.domain.client.SignatureContract;
 import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
@@ -45,7 +48,6 @@ import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.app.AppStatus;
 import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.ClientRegistry;
-import com.cloud.gateway.domain.capability.configuration.*;
 import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import java.time.Clock;
 import java.time.Duration;
@@ -70,10 +72,10 @@ class AccessCommandServicesTest {
         IngressContent original = content(true, Map.of(APP_ID, app("WEB")));
         TestStore store = new TestStore(snapshot(1, original), original);
         appService(store).save(new com.cloud.gateway.application.configuration.editing.SaveAppAccessCommand(store.clients.revision(), APP_ID, "IOS", Set.of()));
-        assertEquals("IOS", store.clients.value().find(APP_ID).orElseThrow().platform());
+        assertEquals("IOS", store.clients.value().find(APP_ID).orElseThrow().getPlatform());
         assertEquals(1, store.clients.writeCount);
         assertEquals("WEB", store.capture().snapshot().content().apps().find(APP_ID)
-                .orElseThrow().platform());
+                .orElseThrow().getPlatform());
         assertEquals(0, store.publishCount);
     }
 
@@ -83,15 +85,15 @@ class AccessCommandServicesTest {
         TestStore store = new TestStore(snapshot(1, original), original);
         store.disableApp(APP_ID);
         appService(store).save(new com.cloud.gateway.application.configuration.editing.SaveAppAccessCommand(store.clients.revision(), APP_ID, "IOS", Set.of()));
-        assertEquals(AppStatus.DISABLED, store.clients.value().find(APP_ID).orElseThrow().status());
-        assertEquals("IOS", store.clients.value().find(APP_ID).orElseThrow().platform());
+        assertEquals(AppStatus.DISABLED, store.clients.value().find(APP_ID).orElseThrow().getStatus());
+        assertEquals("IOS", store.clients.value().find(APP_ID).orElseThrow().getPlatform());
     }
 
     @Test
     void shouldCreateAppEnabledWhenSavingNewApp() {
         TestStore store = new TestStore(snapshot(1, content(true)), content(true));
         appService(store).save(new com.cloud.gateway.application.configuration.editing.SaveAppAccessCommand(store.clients.revision(), APP_ID, "IOS", Set.of()));
-        assertEquals(AppStatus.ENABLED, store.clients.value().find(APP_ID).orElseThrow().status());
+        assertEquals(AppStatus.ENABLED, store.clients.value().find(APP_ID).orElseThrow().getStatus());
     }
 
     @Test
@@ -102,8 +104,8 @@ class AccessCommandServicesTest {
         snapshotService(store, com.cloud.gateway.application.configuration.publication.AccessSnapshotHistory.empty()).publish(new com.cloud.gateway.application.configuration.publication.PublishAccessSnapshotCommand());
         assertEquals(1, store.publishCount);
         assertEquals(2, store.capture().snapshot().version().value());
-        assertEquals("IOS", store.capture().snapshot().content().apps().find(APP_ID).orElseThrow().platform());
-        assertEquals("WEB", original.apps().find(APP_ID).orElseThrow().platform());
+        assertEquals("IOS", store.capture().snapshot().content().apps().find(APP_ID).orElseThrow().getPlatform());
+        assertEquals("WEB", original.apps().find(APP_ID).orElseThrow().getPlatform());
     }
 
     @Test
@@ -121,7 +123,7 @@ class AccessCommandServicesTest {
             assertEquals(1, store.endpoints.writeCount);
             assertEquals(1, store.publishCount);
             assertEquals(web.apps().asMap(), store.clients.value().asMap());
-            assertEquals("WEB", store.capture().snapshot().content().apps().find(APP_ID).orElseThrow().platform());
+            assertEquals("WEB", store.capture().snapshot().content().apps().find(APP_ID).orElseThrow().getPlatform());
             assertEquals(3, store.capture().snapshot().version().value());
         }
     }
@@ -179,7 +181,7 @@ class AccessCommandServicesTest {
         Client client = new Client(CLIENT_ID, ClientStatus.ENABLED,
                 new ClientAccess(Set.of(), new Credentials(active, grace)));
         return new IngressContent(base.apps(), new ClientRegistry(List.of(client)),
-                base.endpoints(), base.capabilities());
+                base.endpoints(), base.policyConfig());
     }
 
     @Test
@@ -189,7 +191,7 @@ class AccessCommandServicesTest {
 
         appService(store).save(new com.cloud.gateway.application.configuration.editing.SaveAppAccessCommand(store.clients.revision(), APP_ID, "IOS", Set.of()));
 
-        assertEquals("IOS", store.clients.value().find(APP_ID).orElseThrow().platform());
+        assertEquals("IOS", store.clients.value().find(APP_ID).orElseThrow().getPlatform());
         assertEquals(0, store.endpoints.readCount);
         assertEquals(1, store.clients.readCount);
         assertEquals(0, store.clientAccess.readCount);
@@ -242,7 +244,7 @@ class AccessCommandServicesTest {
 
         assertEquals(3, output.snapshotVersion().value());
         assertFalse(store.active);
-        assertEquals(List.of("rollback", "publish", "rollback", "publish"), store.lockExecutor.scenes);
+        assertEquals(List.of("rollback", "publish"), store.lockExecutor.scenes);
     }
 
     @Test
@@ -275,13 +277,13 @@ class AccessCommandServicesTest {
         HeaderConfig headers =
                 new HeaderConfig(Set.of(), Map.of("X-Unregistered", "value"),
                         Set.of(), null);
-        CapabilityComposition policies = new CapabilityComposition(
-                Map.of(id, new CapabilityBundle(id, java.util.List.of(headers))), List.of());
+        CapabilityPolicyConfig policies = new CapabilityPolicyConfig(java.util.List.of(new CapabilityBundle(id, java.util.List.of(headers))), List.of());
         IngressContent targetContent = withPolicies(content(true), policies);
         IngressSnapshot target = new IngressSnapshot(new SnapshotVersion(1), targetContent,
                 hash(targetContent), CLOCK.instant());
         TestStore store = new TestStore(snapshot(2, content(false)), content(false));
-        assertThrows(DomainException.class, () -> snapshotService(store, version -> Optional.of(target))
+        HeaderConfigRule denied = new HeaderConfigRule(Set.of("x-unregistered"), Set.of());
+        assertThrows(DomainException.class, () -> snapshotService(store, version -> Optional.of(target), CLOCK, denied)
                 .rollback(new com.cloud.gateway.application.configuration.publication.RollbackAccessSnapshotCommand(new SnapshotVersion(1))));
         assertFalse(store.active);
         assertEquals(0, store.endpoints.writeCount);
@@ -394,11 +396,11 @@ class AccessCommandServicesTest {
         Client existing = client("client-a", ClientStatus.ENABLED, Set.of(new AppId("app-a")), original);
         TestStore store = clientStore(existing);
         clientAccessService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientAccessCommand(store.clientAccess.revision(),
-                existing.clientId(), Set.of(new AppId("app-b"))));
-        Client saved = store.clientAccess.value().find(existing.clientId()).orElseThrow();
-        assertEquals(original, saved.access().credentials());
-        assertEquals(ClientStatus.ENABLED, saved.status());
-        assertEquals(Set.of(new AppId("app-b")), saved.access().allowedApps());
+                existing.getId(), Set.of(new AppId("app-b"))));
+        Client saved = store.clientAccess.value().find(existing.getId()).orElseThrow();
+        assertEquals(original, saved.getAccess().credentials());
+        assertEquals(ClientStatus.ENABLED, saved.getStatus());
+        assertEquals(Set.of(new AppId("app-b")), saved.getAccess().allowedApps());
         assertTrue(store.clientAccess.value().find(new ClientId("other-client")).isPresent());
         assertEquals(0, store.publishCount);
         assertEquals(0, store.endpoints.readCount);
@@ -412,11 +414,11 @@ class AccessCommandServicesTest {
         TestStore store = clientStore(existing);
         Credentials replacement = clientCredentials("replacement");
         clientCredentialService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientCredentialCommand(store.clientAccess.revision(),
-                existing.clientId(), replacement));
-        Client saved = store.clientAccess.value().find(existing.clientId()).orElseThrow();
-        assertEquals(replacement, saved.access().credentials());
-        assertEquals(ClientStatus.DISABLED, saved.status());
-        assertEquals(Set.of(new AppId("app-a")), saved.access().allowedApps());
+                existing.getId(), replacement));
+        Client saved = store.clientAccess.value().find(existing.getId()).orElseThrow();
+        assertEquals(replacement, saved.getAccess().credentials());
+        assertEquals(ClientStatus.DISABLED, saved.getStatus());
+        assertEquals(Set.of(new AppId("app-a")), saved.getAccess().allowedApps());
         assertEquals(0, store.publishCount);
         assertTrue(store.clientAccess.value().find(new ClientId("other-client")).isPresent());
     }
@@ -428,20 +430,20 @@ class AccessCommandServicesTest {
         TestStore store = clientStore(existing);
         Revision originalRevision = store.clientAccess.revision();
         clientAccessService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientAccessCommand(originalRevision,
-                existing.clientId(), Set.of()));
+                existing.getId(), Set.of()));
         ApplicationException credentialConflict = assertThrows(ApplicationException.class,
                 () -> clientCredentialService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientCredentialCommand(originalRevision,
-                        existing.clientId(), clientCredentials("replacement"))));
+                        existing.getId(), clientCredentials("replacement"))));
         assertEquals(ApplicationError.APP_POLICY_DEFINITION_UPDATE_CONFLICT.errorCode(), credentialConflict.getErrorCode());
         Revision accessRevision = store.clientAccess.revision();
         clientCredentialService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientCredentialCommand(accessRevision,
-                existing.clientId(), clientCredentials("replacement")));
+                existing.getId(), clientCredentials("replacement")));
         ApplicationException accessConflict = assertThrows(ApplicationException.class,
                 () -> clientAccessService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientAccessCommand(accessRevision,
-                        existing.clientId(), Set.of(new AppId("app-a")))));
+                        existing.getId(), Set.of(new AppId("app-a")))));
         assertEquals(ApplicationError.APP_POLICY_DEFINITION_UPDATE_CONFLICT.errorCode(), accessConflict.getErrorCode());
-        assertEquals(ClientStatus.ENABLED, store.clientAccess.value().find(existing.clientId()).orElseThrow().status());
-        assertEquals(clientCredentials("replacement"), store.clientAccess.value().find(existing.clientId()).orElseThrow().access().credentials());
+        assertEquals(ClientStatus.ENABLED, store.clientAccess.value().find(existing.getId()).orElseThrow().getStatus());
+        assertEquals(clientCredentials("replacement"), store.clientAccess.value().find(existing.getId()).orElseThrow().getAccess().credentials());
         assertEquals(2, store.clientAccess.writeCount);
     }
 
@@ -462,10 +464,10 @@ class AccessCommandServicesTest {
         store.clientAccess.failOnLoad = true;
         ApplicationException accessFailure = assertThrows(ApplicationException.class,
                 () -> clientAccessService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientAccessCommand(store.clientAccess.revision(),
-                        existing.clientId(), Set.of(new AppId("app-a")))));
+                        existing.getId(), Set.of(new AppId("app-a")))));
         ApplicationException credentialFailure = assertThrows(ApplicationException.class,
                 () -> clientCredentialService(store).save(new com.cloud.gateway.application.configuration.editing.SaveClientCredentialCommand(store.clientAccess.revision(),
-                        existing.clientId(), clientCredentials("active"))));
+                        existing.getId(), clientCredentials("active"))));
         assertEquals(ApplicationError.APP_POLICY_ROLLBACK_IN_PROGRESS.errorCode(), accessFailure.getErrorCode());
         assertEquals(ApplicationError.APP_POLICY_ROLLBACK_IN_PROGRESS.errorCode(), credentialFailure.getErrorCode());
         assertEquals(0, store.clientAccess.readCount);
@@ -479,11 +481,11 @@ class AccessCommandServicesTest {
         TestStore store = clientStore(existing);
         store.clientAccess.rejectNextWrite = true;
         assertThrows(ApplicationException.class, () -> clientAccessService(store).save(
-                new com.cloud.gateway.application.configuration.editing.SaveClientAccessCommand(store.clientAccess.revision(), existing.clientId(), Set.of())));
+                new com.cloud.gateway.application.configuration.editing.SaveClientAccessCommand(store.clientAccess.revision(), existing.getId(), Set.of())));
         store.clientAccess.rejectNextWrite = true;
         assertThrows(ApplicationException.class, () -> clientCredentialService(store).save(
-                new com.cloud.gateway.application.configuration.editing.SaveClientCredentialCommand(store.clientAccess.revision(), existing.clientId(), clientCredentials("replacement"))));
-        assertEquals(existing, store.clientAccess.value().find(existing.clientId()).orElseThrow());
+                new com.cloud.gateway.application.configuration.editing.SaveClientCredentialCommand(store.clientAccess.revision(), existing.getId(), clientCredentials("replacement"))));
+        assertEquals(existing, store.clientAccess.value().find(existing.getId()).orElseThrow());
         assertEquals(0, store.clientAccess.writeCount);
     }
 
@@ -499,7 +501,7 @@ class AccessCommandServicesTest {
         IngressContent source = content(true);
         Client other = new Client(new ClientId("other-client"), ClientStatus.ENABLED, new ClientAccess(Set.of(), null));
         return new TestStore(snapshot(1, content(true)), new IngressContent(source.apps(),
-                new ClientRegistry(List.of(client, other)), source.endpoints(), source.capabilities()));
+                new ClientRegistry(List.of(client, other)), source.endpoints(), source.policyConfig()));
     }
 
     private static Credentials clientCredentials(String id) {
@@ -513,76 +515,87 @@ class AccessCommandServicesTest {
     }
 
     private static com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService snapshotService(TestStore store, com.cloud.gateway.application.configuration.publication.AccessSnapshotHistory history, Clock clock) {
+        return snapshotService(store, history, clock, HeaderConfigRule.empty());
+    }
+
+    private static com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService snapshotService(TestStore store, com.cloud.gateway.application.configuration.publication.AccessSnapshotHistory history, Clock clock,
+            HeaderConfigRule rules) {
+        return snapshotService(store, history, clock, rules,
+                new com.cloud.gateway.application.configuration.publication.AccessOperationBudget(Duration.ofSeconds(60), System::nanoTime));
+    }
+
+    private static com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService snapshotService(
+            TestStore store, com.cloud.gateway.application.configuration.publication.AccessSnapshotHistory history, Clock clock,
+            HeaderConfigRule rules, com.cloud.gateway.application.configuration.publication.AccessOperationBudget budget) {
         com.cloud.gateway.application.configuration.publication.AccessDefinitions definitions = new com.cloud.gateway.application.configuration.publication.AccessDefinitions(
                 store.endpoints, store.clients, store.clientAccess, store.policies);
-        HeaderAdmissionRules rules =
-                HeaderAdmissionRules.registeredOnly();
         com.cloud.gateway.application.configuration.publication.AccessSnapshotPublication publication = new com.cloud.gateway.application.configuration.publication.AccessSnapshotPublication(store,
-                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(AccessCommandServicesTest::hash, rules, com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), clock);
+                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(AccessCommandServicesTest::hash, BuiltInCapabilityCatalog.validator(rules)), clock);
         AccessPublishLock publishLock = new AccessPublishLock(store.lockExecutor);
         return new com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService(
                 new com.cloud.gateway.application.configuration.publication.AccessPublicationCommandService(definitions, store, publication, store,
-                        publishLock),
+                        publishLock, budget),
                 new com.cloud.gateway.application.configuration.publication.AccessRollbackCommandService(definitions, store, publication, history, store,
-                        AccessCommandServicesTest::hash, publishLock, new com.cloud.gateway.application.configuration.publication.AccessRollbackLock(store.lockExecutor)));
+                        AccessCommandServicesTest::hash, publishLock, new com.cloud.gateway.application.configuration.publication.AccessRollbackLock(store.lockExecutor),
+                        budget));
     }
 
     private static String hash(IngressContent content) {
         return (content.endpoints().find(new EndpointId("LOGIN")).orElseThrow().enabled() ? "enabled" : "disabled")
-                + (content.apps().asMap().isEmpty() ? "" : content.apps().asMap().toString())
-                + (content.capabilities().bundles().isEmpty() ? "" : content.capabilities().toString());
+                + (content.apps().asMap().isEmpty() ? "" : content.apps().values().stream().map(app -> app.getId().value() + app.getPlatform() + app.getStatus() + app.getAccess()).sorted().toList().toString())
+                + (content.policyConfig().getBundles().isEmpty() ? "" : content.policyConfig().toString());
     }
 
-    private static CapabilityComposition configuredPolicies() {
+    private static CapabilityPolicyConfig configuredPolicies() {
         var id = new CapabilityBundleId("standard");
-        return new CapabilityComposition(Map.of(id, new CapabilityBundle(id, java.util.List.of(new TimeoutConfig(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
+        return new CapabilityPolicyConfig(java.util.List.of(new CapabilityBundle(id, java.util.List.of(new TimeoutConfig(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3))))), List.of());
     }
 
-    private static IngressContent withPolicies(IngressContent source, CapabilityComposition policies) {
+    private static IngressContent withPolicies(IngressContent source, CapabilityPolicyConfig policies) {
         return new IngressContent(source.apps(), source.clients(), source.endpoints(),
                 policies);
     }
 
-    @Test void shouldSaveOnlyCapabilityCompositionWithoutPublishing() {
+    @Test void shouldSaveOnlyCapabilityPolicyConfigWithoutPublishing() {
         var store = new TestStore(snapshot(1, content(true)), content(true));
         store.endpoints.failOnLoad = true;
-        CapabilityComposition policies = configuredPolicies();
-        var service = new com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService(store.policies, store, new AccessPublishLock(store.lockExecutor), HeaderAdmissionRules.registeredOnly(), com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry());
-        service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityCompositionCommand(store.policies.revision(), policies));
+        CapabilityPolicyConfig policies = configuredPolicies();
+        var service = new com.cloud.gateway.application.configuration.editing.CapabilityPolicyConfigCommandService(store.policies, store, new AccessPublishLock(store.lockExecutor), BuiltInCapabilityCatalog.validator(HeaderConfigRule.empty()));
+        service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityPolicyConfigCommand(store.policies.revision(), policies));
         assertEquals(policies, store.policies.value());
         assertEquals(0, store.publishCount);
         assertEquals(0, store.endpoints.readCount);
-        assertThrows(ApplicationException.class, () -> service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityCompositionCommand(new Revision("stale"), policies)));
+        assertThrows(ApplicationException.class, () -> service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityPolicyConfigCommand(new Revision("stale"), policies)));
         store.active = true;
-        assertThrows(ApplicationException.class, () -> service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityCompositionCommand(store.policies.revision(), policies)));
+        assertThrows(ApplicationException.class, () -> service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityPolicyConfigCommand(store.policies.revision(), policies)));
     }
 
-    @Test void shouldPublishCapabilityCompositionOnlyChanges() {
-        CapabilityComposition policies = configuredPolicies();
+    @Test void shouldPublishCapabilityPolicyConfigOnlyChanges() {
+        CapabilityPolicyConfig policies = configuredPolicies();
         var store = new TestStore(snapshot(1, content(true)), withPolicies(content(true), policies));
         snapshotService(store, version -> Optional.empty()).publish(new com.cloud.gateway.application.configuration.publication.PublishAccessSnapshotCommand());
-        assertEquals(policies, store.capture().snapshot().content().capabilities());
+        assertEquals(policies, store.capture().snapshot().content().policyConfig());
         assertEquals(2, store.policies.readCount);
     }
 
-    @Test void shouldRejectUnadmittedHeadersBeforeSavingOrPublishing() {
+    @Test void shouldRejectDeniedHeadersBeforeSavingOrPublishing() {
         var id = new CapabilityBundleId("invalid-header");
         var headers = new HeaderConfig(Set.of(),
                 Map.of("X-Unregistered", "value"), Set.of(), null);
-        var policies = new CapabilityComposition(Map.of(id,
-                new CapabilityBundle(id, java.util.List.of(headers))), List.of());
+        var policies = new CapabilityPolicyConfig(java.util.List.of(new CapabilityBundle(id, java.util.List.of(headers))), List.of());
+        var denied = new HeaderConfigRule(Set.of("x-unregistered"), Set.of());
         var store = new TestStore(snapshot(1, content(true)), content(true));
-        var service = new com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService(store.policies, store, new AccessPublishLock(store.lockExecutor), HeaderAdmissionRules.registeredOnly(), com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry());
-        assertThrows(com.cloud.gateway.domain.common.DomainException.class,
-                () -> service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityCompositionCommand(store.policies.revision(), policies)));
-        assertTrue(store.policies.value().bundles().isEmpty());
+        var service = new com.cloud.gateway.application.configuration.editing.CapabilityPolicyConfigCommandService(store.policies, store, new AccessPublishLock(store.lockExecutor), BuiltInCapabilityCatalog.validator(denied));
+        assertThrows(DomainException.class,
+                () -> service.save(new com.cloud.gateway.application.configuration.editing.SaveCapabilityPolicyConfigCommand(store.policies.revision(), policies)));
+        assertTrue(store.policies.value().getBundles().isEmpty());
         var publicationStore = new TestStore(snapshot(1, content(true)), withPolicies(content(true), policies));
-        assertThrows(com.cloud.gateway.domain.common.DomainException.class,
-                () -> snapshotService(publicationStore, version -> Optional.empty()).publish(new com.cloud.gateway.application.configuration.publication.PublishAccessSnapshotCommand()));
+        assertThrows(DomainException.class,
+                () -> snapshotService(publicationStore, version -> Optional.empty(), CLOCK, denied).publish(new com.cloud.gateway.application.configuration.publication.PublishAccessSnapshotCommand()));
         assertEquals(0, publicationStore.publishCount);
     }
 
-    @Test void shouldRejectCapabilityCompositionRevisionChangeDuringPublish() {
+    @Test void shouldRejectCapabilityPolicyConfigRevisionChangeDuringPublish() {
         var store = new TestStore(snapshot(1, content(true)), withPolicies(content(true), configuredPolicies()));
         store.policies.changeRevisionOnSecondRead = true;
         assertThrows(ApplicationException.class,
@@ -590,7 +603,7 @@ class AccessCommandServicesTest {
         assertEquals(0, store.publishCount);
     }
 
-    @Test void shouldResumeRollbackWhenCapabilityCompositionRestoreFails() {
+    @Test void shouldResumeRollbackWhenCapabilityPolicyConfigRestoreFails() {
         IngressContent targetContent = withPolicies(content(true), configuredPolicies());
         var target = new IngressSnapshot(new SnapshotVersion(1), targetContent, hash(targetContent),
                 CLOCK.instant());
@@ -601,9 +614,60 @@ class AccessCommandServicesTest {
         assertTrue(store.active);
         assertEquals(0, store.publishCount);
         service.rollback(new com.cloud.gateway.application.configuration.publication.RollbackAccessSnapshotCommand(new SnapshotVersion(1)));
-        assertEquals(targetContent.capabilities(), store.capture().snapshot().content().capabilities());
+        assertEquals(targetContent.policyConfig(), store.capture().snapshot().content().policyConfig());
         assertFalse(store.active);
         assertEquals(1, store.policies.writeCount);
+    }
+
+    @Test
+    void shouldKeepCommittedCheckpointAndBlockAfterTimeoutThenResume() {
+        var ticks = new java.util.concurrent.atomic.AtomicLong();
+        var budget = new com.cloud.gateway.application.configuration.publication.AccessOperationBudget(
+                Duration.ofSeconds(1), ticks::get);
+        var target = snapshot(1, content(true));
+        var store = new TestStore(snapshot(2, content(false)), content(false));
+        store.endpoints.afterWrite = () -> ticks.addAndGet(Duration.ofSeconds(2).toNanos());
+        var service = snapshotService(store, version -> Optional.of(target), CLOCK, HeaderConfigRule.empty(), budget);
+        var failure = assertThrows(ApplicationException.class, () -> service.rollback(
+                new com.cloud.gateway.application.configuration.publication.RollbackAccessSnapshotCommand(new SnapshotVersion(1))));
+        assertEquals(ApplicationError.APP_POLICY_OPERATION_TIMED_OUT.errorCode(), failure.getErrorCode());
+        assertTrue(store.active);
+        assertEquals(1, store.endpoints.writeCount);
+        assertEquals(0, store.publishCount);
+        service.rollback(new com.cloud.gateway.application.configuration.publication.RollbackAccessSnapshotCommand(new SnapshotVersion(1)));
+        assertFalse(store.active);
+        assertEquals(1, store.endpoints.writeCount);
+        assertEquals(1, store.publishCount);
+    }
+
+    @Test
+    void shouldStopAfterExpiredHistoryPreflightWithoutAcquiringLocks() {
+        var ticks = new java.util.concurrent.atomic.AtomicLong();
+        var budget = new com.cloud.gateway.application.configuration.publication.AccessOperationBudget(
+                Duration.ofSeconds(1), ticks::get);
+        var store = new TestStore(snapshot(2, content(false)), content(false));
+        var service = snapshotService(store, version -> {
+            assertTrue(store.lockExecutor.scenes.isEmpty());
+            ticks.set(Duration.ofSeconds(2).toNanos());
+            return Optional.of(snapshot(1, content(true)));
+        }, CLOCK, HeaderConfigRule.empty(), budget);
+        assertThrows(ApplicationException.class, () -> service.rollback(
+                new com.cloud.gateway.application.configuration.publication.RollbackAccessSnapshotCommand(new SnapshotVersion(1))));
+        assertTrue(store.lockExecutor.scenes.isEmpty());
+        assertFalse(store.active);
+        assertEquals(0, store.endpoints.writeCount);
+    }
+
+    @Test
+    void shouldRestoreChangedAppContentEvenWhenAggregateIdentityMatches() {
+        var target = snapshot(1, content(true, Map.of(APP_ID, app("WEB"))));
+        var current = content(true, Map.of(APP_ID, app("IOS")));
+        var store = new TestStore(snapshot(2, current), current);
+        snapshotService(store, version -> Optional.of(target)).rollback(
+                new com.cloud.gateway.application.configuration.publication.RollbackAccessSnapshotCommand(new SnapshotVersion(1)));
+        assertEquals("WEB", store.clients.value().find(APP_ID).orElseThrow().getPlatform());
+        assertEquals(1, store.clients.writeCount);
+        assertFalse(store.active);
     }
 
     private static IngressSnapshot snapshot(long version, IngressContent content) {
@@ -622,7 +686,7 @@ class AccessCommandServicesTest {
                 List.of(new EndpointMatcher("POST", "/login")), Set.of(),
                 enabled ? EndpointStatus.ENABLED : EndpointStatus.DISABLED, route())));
         return new IngressContent(new AppRegistry(apps.values()), new ClientRegistry(List.of()),
-                catalog, CapabilityComposition.empty());
+                catalog, CapabilityPolicyConfig.empty());
     }
 
     private static EndpointAccess route() {
@@ -647,6 +711,7 @@ class AccessCommandServicesTest {
         boolean changeRevisionOnSecondRead;
         boolean failOnLoad;
         boolean rejectNextWrite;
+        Runnable afterWrite = () -> { };
 
         TestDefinition(T value) { this.value = value; }
 
@@ -672,6 +737,7 @@ class AccessCommandServicesTest {
             value = next;
             revision++;
             writeCount++;
+            afterWrite.run();
             return revision();
         }
 
@@ -697,9 +763,9 @@ class AccessCommandServicesTest {
         }
     }
 
-    private static final class ConfigurationDefinitions extends TestDefinition<CapabilityComposition>
-            implements com.cloud.gateway.application.configuration.definition.WritableCapabilityCompositionDefinitionRepository {
-        ConfigurationDefinitions(CapabilityComposition value) { super(value); }
+    private static final class ConfigurationDefinitions extends TestDefinition<CapabilityPolicyConfig>
+            implements com.cloud.gateway.application.configuration.definition.WritableCapabilityPolicyConfigDefinitionRepository {
+        ConfigurationDefinitions(CapabilityPolicyConfig value) { super(value); }
     }
 
     private static final class TestStore implements com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer, com.cloud.gateway.application.configuration.publication.AccessSnapshotPublisher,
@@ -719,13 +785,13 @@ class AccessCommandServicesTest {
             endpoints = new EndpointDefinitions(definitions.endpoints());
             clients = new AppDefinitions(definitions.apps());
             clientAccess = new ClientAccessDefinitions(definitions.clients());
-            policies = new ConfigurationDefinitions(definitions.capabilities());
+            policies = new ConfigurationDefinitions(definitions.policyConfig());
         }
 
         private void disableApp(AppId id) {
             App app = clients.value().find(id).orElseThrow();
             Map<AppId, App> updated = new LinkedHashMap<>(clients.value().asMap());
-            updated.put(id, new App(app.appId(), app.platform(), AppStatus.DISABLED, app.access()));
+            updated.put(id, new App(app.getId(), app.getPlatform(), AppStatus.DISABLED, app.getAccess()));
             clients.compareAndSet(clients.revision(), new AppRegistry(updated.values()));
         }
 

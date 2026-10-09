@@ -19,17 +19,17 @@ class LayerDependencyTest {
         Path capability = root.resolve("gateway-domain/src/main/java/com/cloud/gateway/domain/capability");
         try (Stream<Path> files = Files.walk(capability.resolve("runtime"))) {
             for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                assertFalse(Files.readString(file).contains("com.cloud.gateway.domain.capability.configuration"),
+                assertFalse(Files.readString(file).contains("com.cloud.gateway.domain.capability.policy"),
                         () -> file + " must not depend on effective configuration");
             }
         }
-        for (String boundary : List.of("configuration", "ratelimit", "resilience", "header")) {
+        for (String boundary : List.of("policy", "ratelimit", "resilience", "header")) {
             try (Stream<Path> files = Files.walk(capability.resolve(boundary))) {
                 for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
                     String source = Files.readString(file);
                     assertFalse(source.contains("com.cloud.gateway.domain.capability.runtime"),
                             () -> file + " must not depend on runtime");
-                    if (boundary.equals("configuration")) {
+                    if (boundary.equals("policy")) {
                         assertFalse(source.contains("com.cloud.gateway.domain.ingress.snapshot"),
                                 () -> file + " must not depend on its enclosing snapshot");
                     }

@@ -19,7 +19,8 @@ public enum ApplicationError implements BaseError {
     APP_POLICY_ROLLBACK_LOCK_UNAVAILABLE(609, "入口策略回退锁获取失败"),
     APP_POLICY_ROLLBACK_IN_PROGRESS(610, "入口策略处于回退状态"),
     APP_POLICY_SNAPSHOT_PUBLISH_READ_ONLY(611, "入口策略快照发布只读"),
-    APP_POLICY_DEFINITION_READ_ONLY(612, "入口策略定义只读");
+    APP_POLICY_DEFINITION_READ_ONLY(612, "入口策略定义只读"),
+    APP_POLICY_OPERATION_TIMED_OUT(613, "入口策略操作超时，请检查当前状态后重试");
 
     @Getter private final int localCode;
     @Getter private final String message;

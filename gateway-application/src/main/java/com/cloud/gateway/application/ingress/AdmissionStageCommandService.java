@@ -22,7 +22,7 @@ public final class AdmissionStageCommandService {
             CapabilityContext context = new CapabilityContext(CapabilitySlot.POST_AUTH, prepared.evidence(),
                     endpoint, allowed.decision().grantedContext());
             CapabilityExecutionCommand capabilityCommand = new CapabilityExecutionCommand(
-                    prepared.snapshot().content().capabilities(), context, prepared.execution().executed());
+                    prepared.snapshot().content().policyConfig(), context, prepared.execution().executed());
             task.finish(task.track(capabilities.execute(capabilityCommand))
                     .thenApply(output -> new AdmissionStageOutput(allowed, output.capabilities(), output.execution())));
         } catch (RuntimeException failure) {

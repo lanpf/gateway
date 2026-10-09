@@ -1,9 +1,10 @@
 package com.cloud.gateway.infrastructure.policy.config;
 
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.header.HeaderConfigRule;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfigValidator;
 
-import com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService;
-import com.cloud.gateway.infrastructure.policy.properties.PropertiesCapabilityCompositionDefinitionRepository;
+import com.cloud.gateway.application.configuration.editing.CapabilityPolicyConfigCommandService;
+import com.cloud.gateway.infrastructure.policy.properties.PropertiesCapabilityPolicyConfigDefinitionRepository;
 
 import com.cloud.framework.lock.LockExecutor;
 import com.cloud.gateway.application.configuration.definition.ClientAccessDefinitionRepository;
@@ -17,6 +18,7 @@ import com.cloud.gateway.application.configuration.publication.AccessRollbackLoc
 import com.cloud.gateway.application.configuration.publication.AccessRollbackState;
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService;
 import com.cloud.gateway.application.configuration.publication.AccessDefinitions;
+import com.cloud.gateway.application.configuration.publication.AccessOperationBudget;
 import com.cloud.gateway.application.configuration.definition.AccessDefinitionReader;
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler;
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotPublication;
@@ -27,16 +29,16 @@ import com.cloud.gateway.application.configuration.publication.AccessSnapshotHis
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotPublisher;
 import com.cloud.gateway.application.configuration.editing.EndpointAccessCommandService;
-import com.cloud.gateway.application.configuration.definition.CapabilityCompositionDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.CapabilityPolicyConfigDefinitionRepository;
 import com.cloud.gateway.application.configuration.definition.WritableClientAccessDefinitionRepository;
 import com.cloud.gateway.application.configuration.definition.WritableAppAccessDefinitionRepository;
 import com.cloud.gateway.application.configuration.definition.WritableEndpointAccessDefinitionRepository;
-import com.cloud.gateway.application.configuration.definition.WritableCapabilityCompositionDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.WritableCapabilityPolicyConfigDefinitionRepository;
 import com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper;
 import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.ClientPropertiesMapper;
-import com.cloud.gateway.infrastructure.policy.mapstruct.ClientPropertiesMapStructMapper;
-import com.cloud.gateway.infrastructure.policy.CapabilityCompositionPropertiesMapper;
+import com.cloud.gateway.infrastructure.policy.mapstruct.AbstractClientPropertiesMapStructMapper;
+import com.cloud.gateway.infrastructure.policy.CapabilityPolicyConfigPropertiesMapper;
 import com.cloud.gateway.infrastructure.policy.StoredPolicyDefinitionCodec;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper;
@@ -55,23 +57,23 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import com.cloud.gateway.infrastructure.policy.AppPropertiesMapper;
 import com.cloud.gateway.infrastructure.policy.EndpointPropertiesMapper;
-import com.cloud.gateway.infrastructure.policy.CapabilityCompositionStorageMapper;
+import com.cloud.gateway.infrastructure.policy.CapabilityPolicyConfigStorageMapper;
 import com.cloud.gateway.infrastructure.policy.AccessSnapshotDocumentMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
 
 @org.springframework.context.annotation.Import(CapabilityCodecConfiguration.class)
 @AutoConfiguration
-@ComponentScan(basePackageClasses = ClientPropertiesMapStructMapper.class)
+@ComponentScan(basePackageClasses = AbstractClientPropertiesMapStructMapper.class)
 @AutoConfigureAfter(name = {
         "com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyAutoConfiguration",
         "com.cloud.gateway.infrastructure.coordination.redis.config.RedisPolicyCoordinationAutoConfiguration"
 })
-@EnableConfigurationProperties({GatewayPolicyDefinitionProperties.class, HeaderAdmissionProperties.class})
+@EnableConfigurationProperties({GatewayPolicyDefinitionProperties.class, HeaderAdmissionProperties.class, AccessOperationProperties.class})
 public class PolicyInfrastructureAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    HeaderAdmissionRules headerRules(HeaderAdmissionProperties properties) {
+    HeaderConfigRule headerRules(HeaderAdmissionProperties properties) {
         return properties.toRules();
     }
     @Bean
@@ -82,7 +84,7 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    CanonicalPolicyContentMapper canonicalPolicyContentMapper(CapabilityCompositionStorageMapper policies) {
+    CanonicalPolicyContentMapper canonicalPolicyContentMapper(CapabilityPolicyConfigStorageMapper policies) {
         return new DefaultCanonicalPolicyContentMapper(policies);
     }
 
@@ -97,7 +99,7 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    StoredAccessSnapshotMapper storedAccessSnapshotMapper(CapabilityCompositionStorageMapper policies,
+    StoredAccessSnapshotMapper storedAccessSnapshotMapper(CapabilityPolicyConfigStorageMapper policies,
             AccessSnapshotDocumentMapper documents) {
         return new DefaultStoredAccessSnapshotMapper(policies, documents);
     }
@@ -108,9 +110,9 @@ public class PolicyInfrastructureAutoConfiguration {
             StoredAccessSnapshotMapper mapper,
             AccessSnapshotHasher hasher,
             ObjectMapper objectMapper,
-            HeaderAdmissionRules headerRules
+            CapabilityPolicyConfigValidator validator
     ) {
-        return new StoredAccessSnapshotCodec(mapper, hasher, objectMapper, headerRules);
+        return new StoredAccessSnapshotCodec(mapper, hasher, objectMapper, validator);
     }
 
     @Bean
@@ -118,9 +120,9 @@ public class PolicyInfrastructureAutoConfiguration {
     StoredPolicyDefinitionCodec storedPolicyDefinitionCodec(
             StoredAccessSnapshotMapper mapper,
             ObjectMapper objectMapper,
-            HeaderAdmissionRules headerRules
+            CapabilityPolicyConfigValidator validator
     ) {
-        return new StoredPolicyDefinitionCodec(mapper, objectMapper, headerRules);
+        return new StoredPolicyDefinitionCodec(mapper, objectMapper, validator);
     }
 
     @Bean
@@ -153,20 +155,20 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    CapabilityCompositionDefinitionRepository policyConfigDefinitionRepository(
+    CapabilityPolicyConfigDefinitionRepository policyConfigDefinitionRepository(
             GatewayPolicyDefinitionProperties properties, StoredAccessSnapshotMapper mapper,
-            CapabilityCompositionPropertiesMapper policyConfiguration, StoredPolicyDefinitionCodec codec) {
-        return new PropertiesCapabilityCompositionDefinitionRepository(properties, mapper, policyConfiguration, codec);
+            CapabilityPolicyConfigPropertiesMapper policyConfiguration, StoredPolicyDefinitionCodec codec) {
+        return new PropertiesCapabilityPolicyConfigDefinitionRepository(properties, mapper, policyConfiguration, codec);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean({WritableCapabilityCompositionDefinitionRepository.class, AccessRollbackState.class,
+    @ConditionalOnBean({WritableCapabilityPolicyConfigDefinitionRepository.class, AccessRollbackState.class,
             AccessPublishLock.class})
-    CapabilityCompositionCommandService policyConfigCommandService(
-            WritableCapabilityCompositionDefinitionRepository repository, AccessRollbackState rollbackState,
-            AccessPublishLock publishLock, HeaderAdmissionRules headerRules, com.cloud.gateway.domain.capability.configuration.CapabilityConfigRegistry capabilities) {
-        return new CapabilityCompositionCommandService(repository, rollbackState, publishLock, headerRules, capabilities);
+    CapabilityPolicyConfigCommandService policyConfigCommandService(
+            WritableCapabilityPolicyConfigDefinitionRepository repository, AccessRollbackState rollbackState,
+            AccessPublishLock publishLock, CapabilityPolicyConfigValidator validator) {
+        return new CapabilityPolicyConfigCommandService(repository, rollbackState, publishLock, validator);
     }
 
     @Bean
@@ -175,7 +177,7 @@ public class PolicyInfrastructureAutoConfiguration {
             EndpointAccessDefinitionRepository endpoints,
             AppAccessDefinitionRepository apps,
             ClientAccessDefinitionRepository clients,
-            CapabilityCompositionDefinitionRepository policies,
+            CapabilityPolicyConfigDefinitionRepository policies,
             AccessSnapshotAssembler assembler,
             Clock clock
     ) {
@@ -185,8 +187,8 @@ public class PolicyInfrastructureAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    AccessSnapshotAssembler accessSnapshotAssembler(AccessSnapshotHasher hasher, HeaderAdmissionRules headerRules, com.cloud.gateway.domain.capability.configuration.CapabilityConfigRegistry capabilities) {
-        return new AccessSnapshotAssembler(hasher, headerRules, capabilities);
+    AccessSnapshotAssembler accessSnapshotAssembler(AccessSnapshotHasher hasher, CapabilityPolicyConfigValidator validator) {
+        return new AccessSnapshotAssembler(hasher, validator);
     }
 
     @Bean
@@ -257,7 +259,7 @@ public class PolicyInfrastructureAutoConfiguration {
             WritableEndpointAccessDefinitionRepository.class,
             WritableAppAccessDefinitionRepository.class,
             WritableClientAccessDefinitionRepository.class,
-            WritableCapabilityCompositionDefinitionRepository.class,
+            WritableCapabilityPolicyConfigDefinitionRepository.class,
             AccessSnapshotPublisher.class,
             AccessSnapshotHistory.class,
             AccessRollbackState.class,
@@ -268,7 +270,7 @@ public class PolicyInfrastructureAutoConfiguration {
             WritableEndpointAccessDefinitionRepository endpoints,
             WritableAppAccessDefinitionRepository apps,
             WritableClientAccessDefinitionRepository clients,
-            WritableCapabilityCompositionDefinitionRepository policies,
+            WritableCapabilityPolicyConfigDefinitionRepository policies,
             AccessSnapshotCapturer provider,
             AccessSnapshotPublisher publisher,
             AccessSnapshotHistory history,
@@ -277,15 +279,17 @@ public class PolicyInfrastructureAutoConfiguration {
             AccessPublishLock publishLock,
             AccessRollbackLock rollbackLock,
             Clock clock,
-            AccessSnapshotAssembler assembler
+            AccessSnapshotAssembler assembler,
+            AccessOperationProperties operationProperties
     ) {
         AccessDefinitions definitions = new AccessDefinitions(endpoints, apps, clients, policies);
         AccessSnapshotPublication publication =
                 new AccessSnapshotPublication(publisher, assembler, clock);
+        AccessOperationBudget budget = new AccessOperationBudget(operationProperties.getTimeout(), System::nanoTime);
         return new AccessSnapshotCommandService(
                 new AccessPublicationCommandService(definitions, provider, publication, rollbackState,
-                        publishLock),
+                        publishLock, budget),
                 new AccessRollbackCommandService(definitions, provider, publication, history, rollbackState,
-                        hasher, publishLock, rollbackLock));
+                        hasher, publishLock, rollbackLock, budget));
     }
 }

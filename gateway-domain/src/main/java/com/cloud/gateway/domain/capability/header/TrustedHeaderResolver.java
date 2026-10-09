@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.capability.header;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.RequestHeader;
 import com.cloud.framework.core.validation.Require;
@@ -10,32 +9,32 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 /** Only verified context can supply a trusted header; raw request values are never read. */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class TrustedHeaderResolver {
     private static final Map<RequestHeader, Function<AccessGrantedContext, String>> READERS = Map.of(
             RequestHeader.APP_ID, context -> context.app().appId().value(),
             RequestHeader.APP_PLATFORM, context -> context.app().platform(),
-            RequestHeader.CLIENT_ID, context -> context.client() == null ? null
-                    : context.client().clientId().value(),
+            RequestHeader.CLIENT_ID, context -> context.client() == null ? null : context.client().clientId().value(),
             RequestHeader.USER_ID, context -> context.subject() == null ? null : context.subject().subjectId().value(),
             RequestHeader.SESSION_ID, context -> context.subject() == null ? null : context.subject().sessionId().value(),
             RequestHeader.SUBJECT_TYPE, context -> context.subject() == null ? null : context.subject().subjectType().name());
 
-    private TrustedHeaderResolver() { }
-
     public static boolean supports(RequestHeader header) {
-        return header != null && READERS.containsKey(header);
+        return header != null && supportedHeaders().contains(header);
+    }
+
+    public static Set<RequestHeader> supportedHeaders() {
+        return READERS.keySet();
     }
 
     public static Optional<String> resolve(RequestHeader header, AccessGrantedContext context) {
         if (!supports(header)) {
             return Optional.empty();
         }
-        return Optional.ofNullable(READERS.get(header).apply(Require.notNull(context, DomainException::missingField)));
-    }
-
-    public static Set<RequestHeader> supportedHeaders() {
-        return READERS.keySet();
+        return Optional.ofNullable(READERS.get(header).apply(Require.notNull(context)));
     }
 }

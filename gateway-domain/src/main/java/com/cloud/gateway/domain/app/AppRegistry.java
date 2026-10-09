@@ -1,12 +1,12 @@
 package com.cloud.gateway.domain.app;
 
-import com.cloud.gateway.domain.common.AggregateRootRegistry;
+import com.cloud.gateway.domain.common.AbstractAggregateRootRegistry;
 import com.cloud.gateway.domain.common.DomainError;
 import com.cloud.gateway.domain.common.DomainException;
 
 import java.util.Collection;
 
-public final class AppRegistry extends AggregateRootRegistry<App, AppId> {
+public final class AppRegistry extends AbstractAggregateRootRegistry<App, AppId> {
 
     public AppRegistry(Collection<App> apps) {
         super(apps);

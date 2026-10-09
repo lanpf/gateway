@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.ingress.access.client;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.client.ClientId;
@@ -15,9 +14,6 @@ public record VerifiedClient(
         Instant verifiedAt
 ) {
     public VerifiedClient {
-        Require.notNull(clientId, DomainException::missingField);
-        Require.notNull(credentialId, DomainException::missingField);
-        Require.notNull(verificationMode, DomainException::missingField);
-        Require.notNull(verifiedAt, DomainException::missingField);
+        Require.allNotNull(clientId, credentialId, verificationMode, verifiedAt);
     }
 }

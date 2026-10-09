@@ -9,7 +9,7 @@ public final class AccessDefinitionReader {
     private final EndpointAccessDefinitionRepository endpoints;
     private final AppAccessDefinitionRepository apps;
     private final ClientAccessDefinitionRepository clients;
-    private final CapabilityCompositionDefinitionRepository policies;
+    private final CapabilityPolicyConfigDefinitionRepository policies;
 
     public ObservedAccessDefinitions load() {
         return new ObservedAccessDefinitions(endpoints.load(), apps.load(), clients.load(), policies.load());

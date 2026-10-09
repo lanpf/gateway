@@ -1,7 +1,6 @@
 package com.cloud.gateway.domain.capability.ratelimit;
 
-import com.cloud.gateway.domain.common.DomainException;
-import com.cloud.framework.core.validation.Require;
+import com.cloud.framework.core.util.NullSafe;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
@@ -9,50 +8,51 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Pure applicability and aggregation rules; never invokes adapters or mutates execution records. */
 public final class RateLimitEvaluator {
     private RateLimitEvaluator() { }
 
-    public static List<ApplicableQuota> applicable(List<RateLimitConfig> groups,
-            Map<RateLimitDimension, String> dimensions, boolean ipOnly, Set<RateLimitRuleId> applied) {
-        Require.notNull(groups, DomainException::missingField);
-        Require.notNull(dimensions, DomainException::missingField);
-        Require.notNull(applied, DomainException::missingField);
-        Set<RateLimitRuleId> selected = new HashSet<>(applied);
+    public static List<ApplicableQuota> applicable(
+            List<RateLimitConfig> configs,
+            Map<RateLimitDimension, String> dimensions,
+            boolean ipOnly,
+            Set<RateLimitRuleId> applied) {
+        Set<RateLimitRuleId> selected = new HashSet<>(NullSafe.copyOf(applied));
+
         List<ApplicableQuota> applicable = new ArrayList<>();
-        for (RateLimitConfig group : groups) {
-            Require.notNull(group, DomainException::missingField);
-            for (RateLimitRule rule : group.rules()) {
+        NullSafe.forEach(configs, config -> {
+            NullSafe.forEach(config.rules(), rule -> {
                 if (ipOnly && rule.dimension() != RateLimitDimension.IP) {
-                    continue;
+                    return;
                 }
                 String value = dimensions.get(rule.dimension());
                 if (StringUtils.isBlank(value) || !selected.add(rule.ruleId())) {
-                    continue;
+                    return;
                 }
-                applicable.add(new ApplicableQuota(rule, value, group.failureMode()));
-            }
-        }
+                applicable.add(new ApplicableQuota(rule, value, config.failureMode()));
+            });
+        });
+
         return List.copyOf(applicable);
     }
 
     public static RateLimitDecision aggregate(List<RateLimitDecision> decisions) {
-        Require.notNull(decisions, DomainException::missingField);
-        RateLimitDecision selected = RateLimitDecision.allowed(null, null, Long.MAX_VALUE);
-        for (RateLimitDecision decision : decisions) {
-            Require.notNull(decision, DomainException::missingField);
+        AtomicReference<RateLimitDecision> selected = new AtomicReference<>(RateLimitDecision.allowed(null, null, Long.MAX_VALUE));
+        NullSafe.forEach(decisions, decision -> {
             if (decision.unavailable()) {
-                selected = decision;
-            } else if (!selected.unavailable()) {
-                if (!decision.allowed() && (selected.allowed()
-                        || decision.retryAfter().compareTo(selected.retryAfter()) > 0)) {
-                    selected = decision;
-                } else if (decision.allowed() && selected.allowed() && decision.remaining() < selected.remaining()) {
-                    selected = decision;
+                selected.set(decision);
+            } else if (!selected.get().unavailable()) {
+                if (!decision.allowed() &&
+                        (selected.get().allowed() || decision.retryAfter().compareTo(selected.get().retryAfter()) > 0)) {
+                    selected.set(decision);
+                } else if (decision.allowed() &&
+                        selected.get().allowed() && decision.remaining() < selected.get().remaining()) {
+                    selected.set(decision);
                 }
             }
-        }
-        return selected;
+        });
+        return selected.get();
     }
 }

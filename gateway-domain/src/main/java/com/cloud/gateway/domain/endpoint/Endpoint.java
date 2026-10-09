@@ -1,43 +1,64 @@
 package com.cloud.gateway.domain.endpoint;
 
-import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.framework.core.validation.Require;
 import com.cloud.framework.domain.AggregateRoot;
-
+import lombok.Getter;
+import com.cloud.framework.core.util.NullSafe;
 import java.util.List;
 import java.util.Set;
 
-public record Endpoint(
-        EndpointId endpointId,
-        ServiceId serviceId,
-        RouteId routeId,
-        List<EndpointMatcher> matchers,
-        Set<String> tags,
-        EndpointStatus status,
-        EndpointAccess access
-) implements AggregateRoot<EndpointId>
-{
+/** Immutable aggregate; transitions preserve identity. */
+@Getter
+public final class Endpoint implements AggregateRoot<EndpointId> {
+    private final EndpointId id;
+    private final ServiceId serviceId;
+    private final RouteId routeId;
+    private final List<EndpointMatcher> matchers;
+    private final Set<String> tags;
+    private final EndpointStatus status;
+    private final EndpointAccess access;
 
-    public Endpoint {
-        Require.notNull(endpointId, DomainException::missingField);
-        Require.notNull(serviceId, DomainException::missingField);
-        Require.notNull(routeId, DomainException::missingField);
-
-        Require.notEmpty(matchers, DomainException::invalidObjectField).forEach(value -> Require.notNull(value, DomainException::missingField));
-        matchers = List.copyOf(matchers);
-
-        tags = tags == null ? Set.of() : tags;
-        tags.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
-        tags = Set.copyOf(tags);
-
-        Require.notNull(status, DomainException::missingField);
-        Require.notNull(access, DomainException::missingField);
+    public Endpoint(EndpointId id, ServiceId serviceId, RouteId routeId, List<EndpointMatcher> matchers, Set<String> tags, EndpointStatus status, EndpointAccess access) {
+        Require.allNotNull(id, serviceId, routeId, status, access);
+        this.id = id;
+        this.serviceId = serviceId;
+        this.routeId = routeId;
+        this.matchers = NullSafe.copyOf(Require.notEmpty(matchers));
+        this.tags = NullSafe.copyOf(tags, Require::notBlank);
+        this.status = status;
+        this.access = access;
     }
 
-    @Override
-    public EndpointId getId() {
-        return endpointId();
+
+    public static Endpoint create(EndpointId id, ServiceId serviceId, RouteId routeId,
+                                  List<EndpointMatcher> matchers, Set<String> tags, EndpointAccess access) {
+        return new Endpoint(id, serviceId, routeId, matchers, tags, EndpointStatus.ENABLED, access);
+    }
+
+    public Endpoint edit(ServiceId serviceId, RouteId routeId, List<EndpointMatcher> matchers,
+                         Set<String> tags, EndpointAccess access) {
+        return new Endpoint(id, serviceId, routeId, matchers, tags, status, access);
+    }
+
+    public Endpoint changeStatus(EndpointStatus status) {
+        return new Endpoint(id, serviceId, routeId, matchers, tags, status, access);
+    }
+
+    /** Transport candidates must agree on configuration as well as identity. */
+    public boolean sameDefinition(Endpoint other) {
+        return other != null && id.equals(other.id)
+                && serviceId.equals(other.serviceId) && routeId.equals(other.routeId)
+                && matchers.equals(other.matchers) && tags.equals(other.tags)
+                && status == other.status && access.equals(other.access);
     }
 
     public boolean enabled() { return status == EndpointStatus.ENABLED; }
+
+    @Override
+    public boolean equals(Object other) {
+        return this == other || other instanceof Endpoint that && id.equals(that.id);
+    }
+
+    @Override
+    public int hashCode() { return id.hashCode(); }
 }

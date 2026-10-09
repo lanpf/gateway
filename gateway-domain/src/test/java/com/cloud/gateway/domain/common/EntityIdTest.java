@@ -26,7 +26,7 @@ class EntityIdTest {
         assertEquals(DomainError.DOMAIN_ENTITY_ID_INVALID.getErrorCode(), exception.getErrorCode());
     }
 
-    private static final class TestLongId extends LongEntityId {
+    private static final class TestLongId extends AbstractLongEntityId {
         private TestLongId(Long value) {
             super(value);
         }

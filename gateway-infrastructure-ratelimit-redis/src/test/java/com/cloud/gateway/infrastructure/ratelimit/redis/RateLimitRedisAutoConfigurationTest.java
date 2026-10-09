@@ -1,8 +1,8 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
 import com.cloud.framework.core.naming.NamespaceResolver;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
-import com.cloud.gateway.application.quota.LocalRateLimitQuota;
+import com.cloud.gateway.application.quota.QuotaAcquirer;
+import com.cloud.gateway.application.quota.LocalQuotaAcquirer;
 import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.application.quota.QuotaObserver;
 import org.junit.jupiter.api.Test;
@@ -31,9 +31,9 @@ class RateLimitRedisAutoConfigurationTest {
                 .withBean(NamespaceResolver.class, () -> namespaced -> "gateway")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).hasSingleBean(RateLimitQuota.class);
-                    assertThat(context.getBean(RateLimitQuota.class)).isInstanceOf(RateLimitQuotaAdapter.class);
-                    assertThat(context).hasSingleBean(LocalRateLimitQuota.class);
+                    assertThat(context).hasSingleBean(QuotaAcquirer.class);
+                    assertThat(context.getBean(QuotaAcquirer.class)).isInstanceOf(RedisQuotaAcquirer.class);
+                    assertThat(context).hasSingleBean(LocalQuotaAcquirer.class);
                     assertThat(context).hasSingleBean(QuotaCommandService.class);
                     assertThat(context).hasSingleBean(QuotaObserver.class);
                 });

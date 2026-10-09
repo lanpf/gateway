@@ -16,7 +16,7 @@ public final class SnapshotEndpointMatchSource implements EndpointMatchSource {
     public List<Endpoint> match(EndpointRegistry registry, String httpMethod, String path) {
         PathContainer requestPath = PathContainer.parsePath(path);
         return registry.values().stream()
-                .filter(endpoint -> endpoint.matchers().stream().anyMatch(
+                .filter(endpoint -> endpoint.getMatchers().stream().anyMatch(
                         matcher -> matcher.httpMethod().equalsIgnoreCase(httpMethod)
                                 && parser.parse(matcher.pathPattern()).matches(requestPath)))
                 .toList();

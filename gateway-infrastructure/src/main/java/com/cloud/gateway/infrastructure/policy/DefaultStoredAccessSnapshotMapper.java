@@ -21,7 +21,7 @@ import com.cloud.gateway.domain.endpoint.EndpointMatcher;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Comparator;
@@ -32,16 +32,16 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public final class DefaultStoredAccessSnapshotMapper implements StoredAccessSnapshotMapper {
-    private final CapabilityCompositionStorageMapper policies;
+    private final CapabilityPolicyConfigStorageMapper policies;
     private final AccessSnapshotDocumentMapper documents;
 
     @Override
-    public StoredCapabilityComposition toStoredPolicies(CapabilityComposition source) {
+    public StoredCapabilityPolicyConfig toStoredPolicies(CapabilityPolicyConfig source) {
         return policies.toStored(source);
     }
 
     @Override
-    public CapabilityComposition toDomainPolicies(StoredCapabilityComposition source) {
+    public CapabilityPolicyConfig toDomainPolicies(StoredCapabilityPolicyConfig source) {
         return policies.toDomain(source);
     }
 
@@ -50,7 +50,7 @@ public final class DefaultStoredAccessSnapshotMapper implements StoredAccessSnap
         IngressContent content = source.content();
         return documents.snapshot(source, toStoredEndpoints(content.endpoints()),
                 toStoredApps(content.apps()), toStoredClients(content.clients()),
-                content.capabilities());
+                content.policyConfig());
     }
 
     @Override
@@ -69,7 +69,7 @@ public final class DefaultStoredAccessSnapshotMapper implements StoredAccessSnap
     public List<StoredAccessSnapshot.Endpoint> toStoredEndpoints(EndpointRegistry source) {
         EndpointPathPatternValidator.validate(source);
         return source.values().stream()
-                .sorted(Comparator.comparing(value -> value.endpointId().value()))
+                .sorted(Comparator.comparing(value -> value.getId().value()))
                 .map(documents::endpoint)
                 .toList();
     }
@@ -77,7 +77,7 @@ public final class DefaultStoredAccessSnapshotMapper implements StoredAccessSnap
     @Override
     public Map<String, StoredAccessSnapshot.App> toStoredApps(AppRegistry source) {
         return source.values().stream().collect(Collectors.toMap(
-                app -> app.appId().value(),
+                app -> app.getId().value(),
                 documents::app,
                 (left, right) -> left,
                 TreeMap::new));
@@ -86,7 +86,7 @@ public final class DefaultStoredAccessSnapshotMapper implements StoredAccessSnap
     @Override
     public Map<String, StoredAccessSnapshot.Client> toStoredClients(ClientRegistry source) {
         return source.values().stream().collect(Collectors.toMap(
-                client -> client.clientId().value(),
+                client -> client.getId().value(),
                 documents::client,
                 (left, right) -> left,
                 TreeMap::new));

@@ -9,7 +9,7 @@ import com.cloud.gateway.domain.client.Credential;
 import com.cloud.gateway.domain.client.CredentialId;
 import com.cloud.gateway.domain.client.Credentials;
 import com.cloud.gateway.domain.client.SignatureContract;
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashSet;
@@ -31,7 +31,7 @@ class ClientAccessTest {
 
         assertTrue(client.allowsApp(APP));
         assertFalse(client.allowsApp(new AppId("other")));
-        Client disabled = new Client(client.clientId(), ClientStatus.DISABLED, client.access());
+        Client disabled = new Client(client.getId(), ClientStatus.DISABLED, client.getAccess());
         assertFalse(disabled.allowsApp(APP));
     }
 
@@ -55,7 +55,7 @@ class ClientAccessTest {
 
     @Test
     void shouldRejectNullAppElements() {
-        assertThrows(DomainException.class, () -> new ClientAccess(Collections.singleton(null), null));
+        assertThrows(FrameworkException.class, () -> new ClientAccess(Collections.singleton(null), null));
     }
 
     private static Client client(ClientStatus status) {

@@ -19,6 +19,7 @@ import com.cloud.gateway.domain.security.signature.SignatureAuthenticationRules;
 import com.cloud.gateway.infrastructure.security.spring.signature.RequestSignatureCryptography;
 
 import org.springframework.beans.factory.ObjectProvider;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -72,7 +73,7 @@ public class GatewaySecurityAutoConfiguration {
     SmartInitializingSingleton clientCredentialSecretValidator(
             com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer provider, SecretResolver resolver) {
         return () -> provider.capture().snapshot().content().clients().values().forEach(client -> {
-            com.cloud.gateway.domain.client.Credentials credentials = client.access().credentials();
+            com.cloud.gateway.domain.client.Credentials credentials = client.getAccess().credentials();
             if (credentials == null) {
                 return;
             }
@@ -119,15 +120,18 @@ public class GatewaySecurityAutoConfiguration {
             WebClient.Builder webClientBuilder,
             ReactorLoadBalancerExchangeFilterFunction loadBalancerExchangeFilter,
             GatewaySecurityProperties properties,
-            Clock clock
+            Clock clock,
+            ObjectProvider<MeterRegistry> meterRegistries
     ) {
         String serviceBaseUrl = "http://" + properties.getBrowserSession().getServiceId();
-        return new BrowserSessionVerifierAdapter(
+        BrowserSessionVerifierAdapter adapter = new BrowserSessionVerifierAdapter(
                 webClientBuilder.clone()
                         .baseUrl(serviceBaseUrl)
                         .filter(loadBalancerExchangeFilter)
                         .build(),
                 clock);
+        meterRegistries.ifAvailable(adapter::bindMetrics);
+        return adapter;
     }
 
 }

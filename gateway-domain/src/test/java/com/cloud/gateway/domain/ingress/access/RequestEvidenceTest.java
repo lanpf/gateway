@@ -2,7 +2,7 @@ package com.cloud.gateway.domain.ingress.access;
 
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.ClientId;
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,9 +39,9 @@ class RequestEvidenceTest {
         assertEquals("https://e.com",
                 new RequestEvidence("GET", "/a", null, null, null, " https://e.com ", "ip").origin());
 
-        assertThrows(DomainException.class, () -> new RequestEvidence(" ", "/a", null, null, null, null, "ip"));
-        assertThrows(DomainException.class, () -> new RequestEvidence("GET", " ", null, null, null, null, "ip"));
-        assertThrows(DomainException.class, () -> new RequestEvidence("GET", "/a", null, null, null, " ", "ip"));
-        assertThrows(DomainException.class, () -> new RequestEvidence("GET", "/a", null, null, null, null, " "));
+        assertThrows(FrameworkException.class, () -> new RequestEvidence(" ", "/a", null, null, null, null, "ip"));
+        assertThrows(FrameworkException.class, () -> new RequestEvidence("GET", " ", null, null, null, null, "ip"));
+        assertThrows(FrameworkException.class, () -> new RequestEvidence("GET", "/a", null, null, null, " ", "ip"));
+        assertThrows(FrameworkException.class, () -> new RequestEvidence("GET", "/a", null, null, null, null, " "));
     }
 }

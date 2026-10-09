@@ -28,7 +28,7 @@ import org.springframework.validation.annotation.Validated;
 public class GatewayPolicyDefinitionProperties {
     public static final String PREFIX = "gateway.access-definition";
 
-    @Valid private final CapabilityCompositionProperties policies = new CapabilityCompositionProperties();
+    @Valid private final CapabilityPolicyConfigProperties policies = new CapabilityPolicyConfigProperties();
 
     @NotEmpty @Valid private final List<Endpoint> endpoints = new ArrayList<>();
     @NotEmpty @Valid private final Map<@NotBlank String, App> apps = new LinkedHashMap<>();

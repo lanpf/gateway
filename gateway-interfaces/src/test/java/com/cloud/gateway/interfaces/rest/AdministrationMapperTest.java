@@ -1,5 +1,6 @@
 package com.cloud.gateway.interfaces.rest;
 
+import com.cloud.gateway.domain.common.DomainException;
 import static org.junit.jupiter.api.Assertions.*;
 import com.cloud.gateway.api.enums.ClientVerificationRequirementApiEnum;
 import com.cloud.gateway.api.enums.SubjectAuthenticationRequirementApiEnum;
@@ -10,19 +11,19 @@ import com.cloud.gateway.api.facade.admin.definition.SaveClientCredentialApiComm
 import com.cloud.gateway.application.configuration.definition.RevisionedAccessDefinition;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.*;
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.interfaces.facade.admin.definition.AccessDefinitionApiMapper;
-import com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.AccessDefinitionApiMapStructMapperImpl;
-import com.cloud.gateway.interfaces.rest.mapstruct.GatewayPolicyAdminRestMapStructMapperImpl;
+import com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.AbstractAccessDefinitionApiMapStructMapperImpl;
+import com.cloud.gateway.interfaces.rest.mapstruct.AbstractGatewayPolicyAdminRestMapStructMapperImpl;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class AdministrationMapperTest {
-    private final GatewayPolicyAdminRestMapper rest = new GatewayPolicyAdminRestMapStructMapperImpl();
-    private final AccessDefinitionApiMapper definitions = new AccessDefinitionApiMapStructMapperImpl();
+    private final GatewayPolicyAdminRestMapper rest = new AbstractGatewayPolicyAdminRestMapStructMapperImpl();
+    private final AccessDefinitionApiMapper definitions = new AbstractAccessDefinitionApiMapStructMapperImpl();
 
     @Test
     void shouldUseTargetAppAndIsolateOrigins() {
@@ -41,7 +42,7 @@ class AdministrationMapperTest {
 
     @Test
     void shouldKeepMissingRevisionRejection() {
-        assertThrows(DomainException.class, () -> definitions.toCommand(
+        assertThrows(FrameworkException.class, () -> definitions.toCommand(
                 new SaveAppApiCommand(null, "app", "WEB", Set.of())));
     }
 
@@ -66,10 +67,10 @@ class AdministrationMapperTest {
 
     @Test
     void shouldMapSnapshotVersionThroughItsValueObject() {
-        var mapper = new com.cloud.gateway.interfaces.facade.admin.snapshot.mapstruct.AccessSnapshotApiMapStructMapperImpl();
+        var mapper = new com.cloud.gateway.interfaces.facade.admin.snapshot.mapstruct.AbstractAccessSnapshotApiMapStructMapperImpl();
         var command = mapper.toCommand(new com.cloud.gateway.api.facade.admin.snapshot.RollbackSnapshotApiCommand(7));
         assertEquals(7, command.targetSnapshotVersion().value());
-        assertThrows(DomainException.class, () -> mapper.toCommand(
+        assertThrows(FrameworkException.class, () -> mapper.toCommand(
                 new com.cloud.gateway.api.facade.admin.snapshot.RollbackSnapshotApiCommand(0)));
     }
 

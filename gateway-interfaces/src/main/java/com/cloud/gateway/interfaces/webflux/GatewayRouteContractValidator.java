@@ -21,7 +21,7 @@ public final class GatewayRouteContractValidator implements ApplicationRunner {
             throw new IllegalStateException("Gateway route discovery did not complete");
         }
         for (Endpoint endpoint : provider.capture().snapshot().content().endpoints().values()) {
-            String routeId = endpoint.routeId().value();
+            String routeId = endpoint.getRouteId().value();
             if (!GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(routeId) && !ids.contains(routeId)) {
                 throw new IllegalStateException("Registered endpoint references an unavailable gateway route");
             }

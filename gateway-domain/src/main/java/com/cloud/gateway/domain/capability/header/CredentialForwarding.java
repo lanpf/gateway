@@ -1,7 +1,8 @@
 package com.cloud.gateway.domain.capability.header;
 
-import com.cloud.framework.core.error.BaseException;
+import com.cloud.gateway.domain.common.DomainError;
 import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.framework.core.validation.Require;
 
 import java.util.Set;
@@ -12,12 +13,8 @@ public record CredentialForwarding(
         Set<String> allowedCookieNames
 ) {
     public CredentialForwarding {
-        Require.notNull(authorizationHeader, DomainException::missingField);
-        Require.notNull(cookies, DomainException::missingField);
-
-        allowedCookieNames = allowedCookieNames == null ? Set.of() : allowedCookieNames;
-        allowedCookieNames.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
-        allowedCookieNames = Set.copyOf(allowedCookieNames);
+        Require.allNotNull(authorizationHeader, cookies);
+        allowedCookieNames = NullSafe.copyOf(allowedCookieNames, Require::notBlank);
 
         if (cookies == CookieForwardingMode.STRIP_ALL && !allowedCookieNames.isEmpty()) {
             throw invalid();
@@ -34,7 +31,7 @@ public record CredentialForwarding(
                 Set.of());
     }
 
-    private static BaseException invalid() {
-        return DomainException.invalidObjectField();
+    private static DomainException invalid() {
+        return new DomainException(DomainError.ACCESS_SNAPSHOT_POLICY_INVALID);
     }
 }

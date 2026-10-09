@@ -1,6 +1,6 @@
 package com.cloud.gateway.domain.client;
 
-import com.cloud.framework.core.error.BaseException;
+import com.cloud.gateway.domain.common.DomainError;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.framework.core.validation.Require;
 
@@ -11,7 +11,7 @@ public record Credentials(
         Credential graceCredential
 ) {
     public Credentials {
-        Require.notNull(activeCredential, DomainException::missingField);
+        Require.notNull(activeCredential);
         if (graceCredential != null) {
             if (activeCredential.credentialId().equals(graceCredential.credentialId())) {
                 throw invalid();
@@ -26,7 +26,7 @@ public record Credentials(
         return Optional.ofNullable(graceCredential);
     }
 
-    private static BaseException invalid() {
-        return DomainException.invalidObjectField();
+    private static DomainException invalid() {
+        return new DomainException(DomainError.CLIENT_CREDENTIAL_ROTATION_INVALID);
     }
 }

@@ -25,9 +25,9 @@ public class GatewayAccessDefinitionCommandController {
     private final GatewayPolicyAdminRestMapper mapper;
 
     @PutMapping(ADMIN_POLICY_CONFIGURATION)
-    public Result<DefinitionSaveApiOutput> saveCapabilityComposition(
-            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SaveCapabilityComposition request) {
-        return facade.saveCapabilityComposition(mapper.toCommand(request));
+    public Result<DefinitionSaveApiOutput> saveCapabilityPolicyConfig(
+            @Valid @ClientRequestBody GatewayPolicyAdminRequest.SaveCapabilityPolicyConfig request) {
+        return facade.saveCapabilityPolicyConfig(mapper.toCommand(request));
     }
 
     @PutMapping(ADMIN_POLICIES_APP)

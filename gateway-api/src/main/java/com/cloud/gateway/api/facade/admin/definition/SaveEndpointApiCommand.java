@@ -1,5 +1,6 @@
 package com.cloud.gateway.api.facade.admin.definition;
 
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.framework.core.Request;
 import com.cloud.gateway.api.enums.ClientVerificationRequirementApiEnum;
 import com.cloud.gateway.api.enums.SubjectAuthenticationRequirementApiEnum;
@@ -32,10 +33,10 @@ public record SaveEndpointApiCommand(
         Set<@NotBlank String> requiredAudiences
 ) implements Request {
     public SaveEndpointApiCommand {
-        matchers = matchers == null ? null : List.copyOf(matchers);
-        tags = tags == null ? null : Set.copyOf(tags);
-        requiredScopes = requiredScopes == null ? null : Set.copyOf(requiredScopes);
-        requiredAudiences = requiredAudiences == null ? null : Set.copyOf(requiredAudiences);
+        matchers = matchers == null ? null : NullSafe.copyOf(matchers);
+        tags = tags == null ? null : NullSafe.copyOf(tags);
+        requiredScopes = requiredScopes == null ? null : NullSafe.copyOf(requiredScopes);
+        requiredAudiences = requiredAudiences == null ? null : NullSafe.copyOf(requiredAudiences);
     }
 
     public record MatcherApiCommand(@NotBlank String httpMethod, @NotBlank String pathPattern) { }

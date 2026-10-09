@@ -6,11 +6,11 @@ import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyHistoryProperties;
 import com.cloud.gateway.infrastructure.persistence.nacos.config.NacosPolicyProperties;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosApiPayload;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosHistoryDetailPayload;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosHistoryItemPayload;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosHistoryPagePayload;
-import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosLoginPayload;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosApiResponsePayload;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosHistoryDetailResponsePayload;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosHistoryItemResponsePayload;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosHistoryPageResponsePayload;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosLoginResponsePayload;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -22,6 +22,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
+import com.cloud.framework.core.util.NullSafe;
+import com.cloud.gateway.infrastructure.persistence.nacos.history.payload.NacosLoginRequestPayload;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -29,14 +31,16 @@ import org.springframework.web.client.RestClientException;
 
 @RequiredArgsConstructor
 public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistorySource {
+    private static final String USERNAME_FIELD = "username";
+    private static final String PASSWORD_FIELD = "password";
     private static final String ACCESS_TOKEN_HEADER = "accessToken";
     private static final String LOGIN_PATH = "/v3/auth/user/login";
     private static final String HISTORY_LIST_PATH = "/v3/admin/cs/history/list";
     private static final String HISTORY_DETAIL_PATH = "/v3/admin/cs/history";
     private static final long TOKEN_EXPIRY_SAFETY_SECONDS = 30;
-    private static final ParameterizedTypeReference<NacosApiPayload<NacosHistoryPagePayload>> HISTORY_PAGE_TYPE =
+    private static final ParameterizedTypeReference<NacosApiResponsePayload<NacosHistoryPageResponsePayload>> HISTORY_PAGE_TYPE =
             new ParameterizedTypeReference<>() { };
-    private static final ParameterizedTypeReference<NacosApiPayload<NacosHistoryDetailPayload>> HISTORY_DETAIL_TYPE =
+    private static final ParameterizedTypeReference<NacosApiResponsePayload<NacosHistoryDetailResponsePayload>> HISTORY_DETAIL_TYPE =
             new ParameterizedTypeReference<>() { };
 
     private final RestClient restClient;
@@ -56,13 +60,19 @@ public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistory
     }
 
     private Optional<String> findFirstAvailable(Predicate<String> contentPredicate) {
+        Instant deadline = clock.instant().plus(historyProperties.getQueryTimeout());
         for (int pageNumber = 1; pageNumber <= historyProperties.getMaxPages(); pageNumber++) {
-            List<NacosHistoryItemPayload> items = historyPage(pageNumber);
+            checkDeadline(deadline);
+            List<NacosHistoryItemResponsePayload> items = historyPage(pageNumber);
+            checkDeadline(deadline);
+            if (items.size() > historyProperties.getPageSize()) { throw invalidContent(); }
             if (CollectionUtils.isEmpty(items)) {
                 return Optional.empty();
             }
-            for (NacosHistoryItemPayload item : items) {
+            for (NacosHistoryItemResponsePayload item : items) {
+                checkDeadline(deadline);
                 String content = historyDetail(requiredText(item.id()));
+                checkDeadline(deadline);
                 if (contentPredicate.test(content)) {
                     return Optional.of(content);
                 }
@@ -74,8 +84,8 @@ public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistory
         return Optional.empty();
     }
 
-    private List<NacosHistoryItemPayload> historyPage(int pageNumber) {
-        NacosApiPayload<NacosHistoryPagePayload> response = restClient.get()
+    private List<NacosHistoryItemResponsePayload> historyPage(int pageNumber) {
+        NacosApiResponsePayload<NacosHistoryPageResponsePayload> response = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path(HISTORY_LIST_PATH)
                         .queryParam("dataId", policyProperties.getDataId())
                         .queryParam("groupName", policyProperties.getGroup())
@@ -86,12 +96,12 @@ public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistory
                 .headers(this::addAccessToken)
                 .retrieve()
                 .body(HISTORY_PAGE_TYPE);
-        NacosHistoryPagePayload page = requiredData(response);
-        return page.pageItems() == null ? List.of() : List.copyOf(page.pageItems());
+        NacosHistoryPageResponsePayload page = requiredData(response);
+        return page.pageItems() == null ? List.of() : NullSafe.copyOf(page.pageItems());
     }
 
     private String historyDetail(String historyId) {
-        NacosApiPayload<NacosHistoryDetailPayload> response = restClient.get()
+        NacosApiResponsePayload<NacosHistoryDetailResponsePayload> response = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path(HISTORY_DETAIL_PATH)
                         .queryParam("dataId", policyProperties.getDataId())
                         .queryParam("groupName", policyProperties.getGroup())
@@ -133,15 +143,14 @@ public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistory
     }
 
     private AccessToken login() {
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("username", nacosProperties.getUsername());
-        form.add("password", nacosProperties.getPassword());
-        NacosLoginPayload response = restClient.post()
+        NacosLoginRequestPayload request = new NacosLoginRequestPayload(
+                nacosProperties.getUsername(), nacosProperties.getPassword());
+        NacosLoginResponsePayload response = restClient.post()
                 .uri(LOGIN_PATH)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(form)
+                .body(loginForm(request))
                 .retrieve()
-                .body(NacosLoginPayload.class);
+                .body(NacosLoginResponsePayload.class);
         if (response == null || !StringUtils.hasText(response.accessToken()) || response.tokenTtl() == null
                 || response.tokenTtl() <= TOKEN_EXPIRY_SAFETY_SECONDS) {
             throw invalidContent();
@@ -150,13 +159,26 @@ public final class NacosPolicyHistorySourceAdapter implements NacosPolicyHistory
                 clock.instant().plusSeconds(response.tokenTtl() - TOKEN_EXPIRY_SAFETY_SECONDS));
     }
 
+    private static MultiValueMap<String, String> loginForm(NacosLoginRequestPayload request) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add(USERNAME_FIELD, request.username());
+        form.add(PASSWORD_FIELD, request.password());
+        return form;
+    }
+
+    private void checkDeadline(Instant deadline) {
+        if (Thread.currentThread().isInterrupted() || !clock.instant().isBefore(deadline)) {
+            throw new InfrastructureException(PersistenceNacosError.INFRA_ACL_NACOS_PROVIDER_UNAVAILABLE);
+        }
+    }
+
     private String namespace() {
         return StringUtils.hasText(nacosProperties.getNamespace())
                 ? nacosProperties.getNamespace().trim()
                 : NacosConfigProperties.DEFAULT_NAMESPACE;
     }
 
-    private static <T> T requiredData(NacosApiPayload<T> response) {
+    private static <T> T requiredData(NacosApiResponsePayload<T> response) {
         if (response == null || response.code() == null) {
             throw invalidContent();
         }

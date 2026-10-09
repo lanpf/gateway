@@ -143,6 +143,54 @@ class AccessSnapshotStoreTest {
         assertSame(accepted, store.capture().snapshot());
     }
 
+    @Test
+    void shouldCountRepeatedInvalidNotificationsAndRecoverOnAValidOne() {
+        String initial = codec.encodeSnapshot(PolicyTestFixtures.snapshot(1, true));
+        var operations = new FakeNacosConfigOperations(initial);
+        var store = store(operations, "metrics.yaml");
+        var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        store.bindMetrics(registry);
+        store.initialize();
+        operations.replace("invalid: [");
+        operations.replace("invalid: [");
+        operations.replace("invalid: [");
+        await(() -> registry.get("gateway.access.refresh.failures").functionCounter().count() == 3);
+        assertEquals(1, registry.get("gateway.access.refresh.degraded").gauge().value());
+        String recovered = initial + "\n# recovered\n";
+        operations.replace(recovered);
+        await(() -> registry.get("gateway.access.refresh.degraded").gauge().value() == 0);
+        assertEquals(3, registry.get("gateway.access.refresh.failures").functionCounter().count());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                registry.get("gateway.access.refresh.last_success_seconds").gauge().value() > 0);
+    }
+
+    @Test
+    void shouldRetryFailedLkgPersistenceForTheSameAcceptedSnapshot() {
+        String initial = codec.encodeSnapshot(PolicyTestFixtures.snapshot(2, true));
+        var operations = new FakeNacosConfigOperations(initial);
+        var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        LastKnownGoodAccessSnapshotStore lkg = new LastKnownGoodAccessSnapshotStore() {
+            public java.util.Optional<String> load() { return java.util.Optional.empty(); }
+            public void save(String value) {
+                if (attempts.incrementAndGet() == 1) {
+                    throw new InfrastructureException(com.cloud.gateway.infrastructure.common.InfrastructureError.INFRA_TECH_POLICY_LAST_KNOWN_GOOD_FAILED);
+                }
+            }
+        };
+        var store = new NacosAccessSnapshotStore(operations, properties("lkg-retry.yaml"), codec, lkg);
+        stores.add(store);
+        var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        store.bindMetrics(registry);
+        store.initialize();
+        assertEquals(1, attempts.get());
+        operations.replace(codec.encodeSnapshot(PolicyTestFixtures.snapshot(1, true)));
+        await(() -> registry.get("gateway.access.stale_notifications").functionCounter().count() == 1);
+        assertEquals(1, attempts.get(), "A stale version with the same content must not replace LKG");
+        operations.replace(initial);
+        await(() -> attempts.get() == 2);
+        assertEquals(2, store.capture().snapshot().version().value());
+    }
+
     private NacosAccessSnapshotStore store(FakeNacosConfigOperations operations, String filename) {
         NacosPolicyProperties properties = properties(filename);
         NacosAccessSnapshotStore store = new NacosAccessSnapshotStore(operations, properties, codec,

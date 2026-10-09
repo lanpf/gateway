@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.ingress.access.client;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
 
@@ -8,7 +7,7 @@ public sealed interface ClientVerificationOutcome {
 
     record Verified(VerifiedClient client) implements ClientVerificationOutcome {
         public Verified {
-            Require.notNull(client, DomainException::missingField);
+            Require.notNull(client);
         }
     }
 

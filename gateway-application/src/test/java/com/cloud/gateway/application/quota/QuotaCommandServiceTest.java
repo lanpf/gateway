@@ -6,7 +6,7 @@ import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDimension;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitMode;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitConfig;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
+import com.cloud.gateway.application.quota.QuotaAcquirer;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRuleId;
 import com.cloud.gateway.domain.capability.ratelimit.RedisFailureMode;
@@ -133,11 +133,11 @@ class QuotaCommandServiceTest {
         assertTrue(applied.isEmpty());
     }
 
-    private static QuotaCommandService service(RateLimitQuota quota, LocalRateLimitQuota local, QuotaObserver observer) {
+    private static QuotaCommandService service(QuotaAcquirer quota, LocalQuotaAcquirer local, QuotaObserver observer) {
         return new QuotaCommandService(quota, local, observer);
     }
 
-    private static LocalRateLimitQuota unusedLocal() {
+    private static LocalQuotaAcquirer unusedLocal() {
         return (rule, key) -> { throw new AssertionError("local quota must not run"); };
     }
 

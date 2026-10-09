@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.security.signature;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
 
@@ -21,8 +20,7 @@ public record SignatureAuthenticationRules(Duration maxClockSkew) {
     private static final String SEPARATOR = ":";
 
     public SignatureAuthenticationRules {
-        Require.notNull(maxClockSkew, DomainException::missingField);
-        Require.that(maxClockSkew, v -> !v.isNegative() && !v.isZero(), DomainException::invalidObjectField);
+        Require.valid(maxClockSkew, v -> !v.isNegative() && !v.isZero());
     }
 
     public Optional<Instant> acceptedTimestamp(SignatureInput evidence, Instant now) {

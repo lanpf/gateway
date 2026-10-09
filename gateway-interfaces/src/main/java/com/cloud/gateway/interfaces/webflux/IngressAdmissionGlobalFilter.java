@@ -1,5 +1,8 @@
 package com.cloud.gateway.interfaces.webflux;
 
+import com.cloud.gateway.domain.capability.header.EffectiveHeaderPolicy;
+
+import com.cloud.gateway.domain.capability.resilience.EffectiveTimeoutPolicy;
 import com.cloud.gateway.interfaces.subject.SubjectAuthenticator;
 
 import com.cloud.framework.core.RequestHeader;
@@ -82,7 +85,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
         }
         Endpoint captured = exchange.getAttribute(GatewayRequestAttributes.ENDPOINT);
         if (captured != null) {
-            String routeId = captured.routeId().value();
+            String routeId = captured.getRouteId().value();
             Route delivery = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR);
             boolean local = GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(routeId);
             if (local
@@ -91,7 +94,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
                 return reject(exchange, HttpStatus.NOT_FOUND);
             }
         }
-        EndpointAccess route = captured == null ? null : captured.access();
+        EndpointAccess route = captured == null ? null : captured.getAccess();
 
         boolean signatureEvidenceSubmitted = StringUtils.hasText(
                 exchange.getRequest().getHeaders().getFirst(RequestHeader.TIMESTAMP.headerName()))
@@ -138,7 +141,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
     }
 
     /**
-     * The FORWARD phase: capabilities that shape the upstream call run once, after admission and
+     * The FORWARD phase: policyConfig that shape the upstream call run once, after admission and
      * before it is issued. Two of them only declare what to do -- the timeout budget and the header
      * plan -- so the phase hands those values over and this adapter applies them.
      *
@@ -189,7 +192,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
                 .filter(HeaderApplyCapability.Outcome.class::isInstance)
                 .map(HeaderApplyCapability.Outcome.class::cast)
                 .map(HeaderApplyCapability.Outcome::policy)
-                .map(com.cloud.gateway.domain.capability.header.EffectiveHeaderPolicy::config)
+                .map(EffectiveHeaderPolicy::config)
                 .findFirst().orElse(null);
     }
 
@@ -198,7 +201,7 @@ public final class IngressAdmissionGlobalFilter implements GlobalFilter, Ordered
                 .filter(TimeoutCapability.Outcome.class::isInstance)
                 .map(TimeoutCapability.Outcome.class::cast)
                 .map(TimeoutCapability.Outcome::policy)
-                .map(com.cloud.gateway.domain.capability.resilience.EffectiveTimeoutPolicy::config)
+                .map(EffectiveTimeoutPolicy::config)
                 .findFirst().orElse(null);
     }
 

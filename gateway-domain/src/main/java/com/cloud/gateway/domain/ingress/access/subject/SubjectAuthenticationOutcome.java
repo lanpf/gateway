@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.ingress.access.subject;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
 
@@ -8,7 +7,7 @@ public sealed interface SubjectAuthenticationOutcome {
 
     record Authenticated(AuthenticatedSubject subject) implements SubjectAuthenticationOutcome {
         public Authenticated {
-            Require.notNull(subject, DomainException::missingField);
+            Require.notNull(subject);
         }
     }
 
@@ -16,13 +15,13 @@ public sealed interface SubjectAuthenticationOutcome {
 
     record Rejected(SubjectAuthenticationRejectReason reason) implements SubjectAuthenticationOutcome {
         public Rejected {
-            Require.notNull(reason, DomainException::missingField);
+            Require.notNull(reason);
         }
     }
     /** Required authentication could not complete; must never be treated as absent or authenticated. */
     record Failed(SubjectAuthenticationFailReason reason) implements SubjectAuthenticationOutcome {
         public Failed {
-            Require.notNull(reason, DomainException::missingField);
+            Require.notNull(reason);
         }
     }
 

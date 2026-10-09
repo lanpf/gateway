@@ -1,6 +1,6 @@
 package com.cloud.gateway.domain.endpoint;
 
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -38,16 +38,16 @@ class EndpointMatchTest {
     @Test
     void shouldTreatSameIdWithDivergentContentAsAmbiguous() {
         Endpoint first = endpoint("ONE", "/a/**");
-        Endpoint divergent = new Endpoint(ID, first.serviceId(), first.routeId(),
-                List.of(new EndpointMatcher("GET", "/a/b")), first.tags(), EndpointStatus.ENABLED, first.access());
+        Endpoint divergent = new Endpoint(ID, first.getServiceId(), first.getRouteId(),
+                List.of(new EndpointMatcher("GET", "/a/b")), first.getTags(), EndpointStatus.ENABLED, first.getAccess());
 
         assertInstanceOf(EndpointMatch.Ambiguous.class, EndpointMatch.of(Arrays.asList(first, divergent)));
     }
 
     @Test
     void shouldRejectNullCandidates() {
-        assertThrows(DomainException.class, () -> EndpointMatch.of(null));
-        assertThrows(DomainException.class, () -> EndpointMatch.of(Collections.singletonList(null)));
+        assertThrows(FrameworkException.class, () -> EndpointMatch.of(null));
+        assertThrows(FrameworkException.class, () -> EndpointMatch.of(Collections.singletonList(null)));
     }
 
     private static Endpoint endpoint(String id, String path) {

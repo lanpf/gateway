@@ -9,7 +9,9 @@
 
 ## Scopes and versions
 
-- **JAVA-UTILITY-003** **[REQUIRED][BASELINE]** — Before adding a dependency, evaluate maintenance activity, security, license, and dependency cost; do not add overlapping functionality when existing dependencies suffice.
-- **DEP-SCOPE-001** **[REQUIRED][BASELINE]** — Match dependency scope to use: compile requirements use compile scope, tests use test scope, and `provided` or `optional` requires a genuine runtime-provided or optional capability.
+- **DEP-ADMISSION-REVIEW-001** **[REQUIRED][BASELINE]** — Before adding dependencies, assess maintenance, security, license, and dependency cost.
+- **DEP-OVERLAP-001** **[REQUIRED][BASELINE]** — Do not add functionally overlapping dependencies when existing dependencies meet the need.
+- **DEP-SCOPE-USAGE-001** **[REQUIRED][BASELINE]** — Choose scope by actual use: compile for compilation requirements, test for tests, and provided only for capabilities genuinely supplied by the runtime.
+- **DEP-OPTIONAL-001** **[REQUIRED][BASELINE]** — Use optional only for a genuinely optional capability; it is not a replacement for choosing the correct scope.
 - **DEP-SNAPSHOT-001** **[REQUIRED][BASELINE]** — SNAPSHOT dependencies are forbidden in release branches and production builds and may only be temporary in local or unpublished iteration branches.
 - **DEP-VERSION-001** **[REQUIRED][BASELINE]** — Manage third-party versions centrally; business and feature modules must not override versions independently.

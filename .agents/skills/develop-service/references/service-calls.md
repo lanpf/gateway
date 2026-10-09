@@ -9,11 +9,15 @@
 
 ## Internal service calls
 
-- **SERVICE-CALL-INTERNAL-API-001** **[REQUIRED][TOPIC]** — Internal service calls prefer the callee's published API module and reuse its request and response contracts instead of redefining equivalent objects; depend only on the public API, never on the callee's application, interfaces, or implementation modules.
+- **SERVICE-CALL-INTERNAL-REUSE-001** **[REQUIRED][TOPIC]** — Prefer the callee's published API module and directly reuse request/response contracts rather than redefining equivalents.
+- **SERVICE-CALL-INTERNAL-DEPENDENCY-001** **[REQUIRED][TOPIC]** — Depend only on the callee's public API, never its application, interfaces, or concrete implementation modules.
 
 ## Internal fallback contracts
 
-- **SERVICE-CALL-INTERNAL-FALLBACK-001** **[REQUIRED][TOPIC]** — Define local adapter types only when the callee's API module cannot be referenced or its public contract does not fit the call boundary. The local request implements `Request` and follows the internal-request naming rule; ordinary responses use `Result<T>` and paged responses use `PageResult<T>`. Prefer a `T` type name consistent with the corresponding published contract, but use local semantic naming when an anti-corruption layer, protocol difference, or semantic difference requires a distinct Java type rather than forcing name or type reuse.
+- **SERVICE-CALL-FALLBACK-CONDITION-001** **[REQUIRED][TOPIC]** — Define local adapter types only when the published API cannot be referenced or its public contract does not fit the current call boundary.
+- **SERVICE-CALL-FALLBACK-REQUEST-001** **[REQUIRED][TOPIC]** — A local fallback request implements `Request` and follows the internal-request naming rule.
+- **SERVICE-CALL-FALLBACK-RESPONSE-001** **[REQUIRED][TOPIC]** — Use `Result<T>` for ordinary fallback responses and `PageResult<T>` for paged responses.
+- **SERVICE-CALL-FALLBACK-NAME-001** **[REQUIRED][TOPIC]** — Prefer a fallback response T name consistent with the published contract, but use local semantic names when anti-corruption, protocol, or semantic differences require them; never incorrectly reuse a Java type merely to preserve a name.
 
 ## External service calls
 
@@ -27,4 +31,6 @@
 
 - **SERVICE-CALL-EXTERNAL-MAP-001** **[REQUIRED][TOPIC]** — Use a Map to model an external protocol only when it formally defines dynamic key/value content such as `additionalProperties`, metadata, labels, dynamic identifier keys, runtime-only fields, or uninterpreted extension forwarding.
 - **SERVICE-CALL-EXTERNAL-MAP-ADAPTER-001** **[REQUIRED][TOPIC]** — Use a Map only inside an infrastructure adapter when an SDK or low-level client accepts only a Map, or when form, multipart, or signing input cannot be encoded from a typed payload by the available client.
-- **SERVICE-CALL-EXTERNAL-MAP-002** **[REQUIRED][TOPIC]** — Use a typed payload when the field set is fixed; do not use a Map merely to avoid defining a type or mapper, reuse a generic request object, or quickly assemble a few fields. When a Map is necessary, confine its construction, conversion, and fixed protocol-field names to the matching infrastructure adapter, use external-service-specific constants for fixed keys, and never expose it through a port or to application or domain.
+- **SERVICE-CALL-FIXED-MODEL-001** **[REQUIRED][TOPIC]** — Use typed payloads for fixed field sets; never use Map merely to save type definitions, reuse a generic request, assemble a few fixed fields, or avoid a mapper.
+- **SERVICE-CALL-MAP-CONFINEMENT-001** **[REQUIRED][TOPIC]** — When Map adaptation is necessary, confine construction and conversion to the matching infrastructure adapter; never expose it through ports or to application/domain.
+- **SERVICE-CALL-MAP-CONSTANT-001** **[REQUIRED][TOPIC]** — Use external-service-specific constants for fixed Map protocol keys and keep them in the corresponding infrastructure adapter.

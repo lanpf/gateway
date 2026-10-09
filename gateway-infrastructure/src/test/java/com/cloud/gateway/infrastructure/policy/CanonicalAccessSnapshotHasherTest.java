@@ -1,7 +1,8 @@
 package com.cloud.gateway.infrastructure.policy;
 
-import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
+
+import com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityPolicyConfigStorageMapStructMapperImpl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -23,7 +24,7 @@ import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,7 +36,7 @@ class CanonicalAccessSnapshotHasherTest {
     private static final String SECOND_CLIENT_APP_ID = "app-b";
 
     private final CanonicalAccessSnapshotHasher hasher =
-            new CanonicalAccessSnapshotHasher(new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
+            new CanonicalAccessSnapshotHasher(new DefaultCanonicalPolicyContentMapper(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
 
     @Test
     void shouldProduceSameHashForEquivalentAppInsertionOrders() {
@@ -100,7 +101,7 @@ class CanonicalAccessSnapshotHasherTest {
 
     private static IngressContent contentWithEndpoints(List<App> apps, List<Endpoint> endpoints) {
         return new IngressContent(new AppRegistry(apps), new ClientRegistry(List.of()),
-                new EndpointRegistry(endpoints), CapabilityComposition.empty());
+                new EndpointRegistry(endpoints), CapabilityPolicyConfig.empty());
     }
 
     private static IngressContent contentWithAccess(EndpointAccess access) {
@@ -109,7 +110,7 @@ class CanonicalAccessSnapshotHasherTest {
                         new ServiceId("test-service"), new RouteId("test-route"),
                         List.of(new EndpointMatcher("GET", "/test")), Set.of(),
                         EndpointStatus.ENABLED, access))),
-                CapabilityComposition.empty());
+                CapabilityPolicyConfig.empty());
     }
 
     private static Endpoint endpoint(String endpointId, List<EndpointMatcher> matchers) {

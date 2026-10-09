@@ -1,0 +1,5 @@
+---
+admin:
+  status: "ENABLED"
+  platform: "WEB"
+  allowedOrigins: []

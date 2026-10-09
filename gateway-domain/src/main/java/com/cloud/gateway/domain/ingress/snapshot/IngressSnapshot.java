@@ -17,10 +17,8 @@ public record IngressSnapshot(
         Instant publishedAt
 ) {
     public IngressSnapshot {
-        Require.notNull(version, DomainException::missingField);
-        Require.notNull(content, DomainException::missingField);
-        contentHash = Require.notBlank(contentHash, DomainException::invalidObjectField).trim();
-        Require.notNull(publishedAt, DomainException::missingField);
+        Require.allNotNull(version, content, publishedAt);
+        contentHash = Require.notBlank(contentHash).trim();
         validate(content);
         validateCredentials(content, publishedAt);
     }
@@ -28,7 +26,7 @@ public record IngressSnapshot(
 
     private static void validate(IngressContent content) {
         content.clients().values().stream()
-                .flatMap(client -> client.access().allowedApps().stream())
+                .flatMap(client -> client.getAccess().allowedApps().stream())
                 .forEach(appId -> {
                     if (content.apps().find(appId).isEmpty()) {
                         throw invalid();
@@ -40,7 +38,7 @@ public record IngressSnapshot(
     private static void validateCredentials(IngressContent content, Instant publishedAt) {
         Set<CredentialId> indexed = new HashSet<>();
         content.clients().values().stream()
-                .map(client -> client.access().credentials())
+                .map(client -> client.getAccess().credentials())
                 .filter(Objects::nonNull)
                 .forEach(credentials -> {
                     if (!credentials.activeCredential().validAt(publishedAt)) {
@@ -62,7 +60,7 @@ public record IngressSnapshot(
 
     /** Pure version/content acceptance; source revisions and atomic replacement belong to adapters. */
     public Acceptance acceptanceOf(IngressSnapshot candidate) {
-        Require.notNull(candidate, DomainException::missingField);
+        Require.notNull(candidate);
         if (candidate.version().value() < version.value()) {
             return Acceptance.STALE;
         }

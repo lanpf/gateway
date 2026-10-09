@@ -1,13 +1,13 @@
 package com.cloud.gateway.interfaces.webflux;
 
 import com.cloud.framework.core.RequestHeader;
+import com.cloud.framework.core.error.BaseException;
 import com.cloud.gateway.application.ingress.PreparationStageCommandService;
 import com.cloud.gateway.application.ingress.PreparationStageOutput;
 import com.cloud.gateway.application.ingress.PreparationStageCommand;
 import com.cloud.gateway.domain.app.AppId;
 import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.ingress.access.RequestEvidence;
-import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.endpoint.EndpointMatch;
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -55,7 +55,7 @@ public final class IngressPreparationWebFilter implements WebFilter, Ordered {
                                 Boolean.TRUE);
                         return chain.filter(exchange);
                     });
-                })).onErrorResume(DomainException.class, error -> reject(exchange, HttpStatus.BAD_REQUEST));
+                })).onErrorResume(BaseException.class, error -> reject(exchange, HttpStatus.BAD_REQUEST));
     }
 
     /** Internal paths and malformed declaration header never reach the security chain. */

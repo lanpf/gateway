@@ -1,5 +1,6 @@
 package com.cloud.gateway.api.facade.admin.definition;
 
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.gateway.api.enums.ClientVerificationRequirementApiEnum;
 import com.cloud.gateway.api.enums.EndpointStatusApiEnum;
 import com.cloud.gateway.api.enums.SubjectAuthenticationRequirementApiEnum;
@@ -14,7 +15,7 @@ import java.util.Set;
  */
 public record EndpointsApiView(String sourceRevision, Set<EndpointApiView> endpoints) {
     public EndpointsApiView {
-        endpoints = endpoints == null ? null : Set.copyOf(endpoints);
+        endpoints = endpoints == null ? null : NullSafe.copyOf(endpoints);
     }
 
     public record EndpointApiView(
@@ -30,10 +31,10 @@ public record EndpointsApiView(String sourceRevision, Set<EndpointApiView> endpo
             Set<String> requiredAudiences
     ) {
         public EndpointApiView {
-            matchers = matchers == null ? null : List.copyOf(matchers);
-            tags = tags == null ? null : Set.copyOf(tags);
-            requiredScopes = requiredScopes == null ? null : Set.copyOf(requiredScopes);
-            requiredAudiences = requiredAudiences == null ? null : Set.copyOf(requiredAudiences);
+            matchers = matchers == null ? null : NullSafe.copyOf(matchers);
+            tags = tags == null ? null : NullSafe.copyOf(tags);
+            requiredScopes = requiredScopes == null ? null : NullSafe.copyOf(requiredScopes);
+            requiredAudiences = requiredAudiences == null ? null : NullSafe.copyOf(requiredAudiences);
         }
     }
 

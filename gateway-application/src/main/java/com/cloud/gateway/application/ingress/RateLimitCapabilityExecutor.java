@@ -1,6 +1,7 @@
 package com.cloud.gateway.application.ingress;
 
 import com.cloud.gateway.application.quota.RequestQuotaExecutor;
+import com.cloud.gateway.domain.capability.CapabilityId;
 import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
@@ -11,7 +12,7 @@ public final class RateLimitCapabilityExecutor implements CapabilityExecutor<Rat
     private final RequestQuotaExecutor quotas;
 
     @Override
-    public String capability() { return RateLimitCapability.ID; }
+    public CapabilityId capability() { return RateLimitCapability.ID; }
 
     @Override
     public Class<RateLimitCapability.Unit> unitType() { return RateLimitCapability.Unit.class; }

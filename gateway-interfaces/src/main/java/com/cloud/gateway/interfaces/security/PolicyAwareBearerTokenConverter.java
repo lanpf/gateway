@@ -19,7 +19,7 @@ public final class PolicyAwareBearerTokenConverter implements ServerAuthenticati
     public Mono<Authentication> convert(ServerWebExchange exchange) {
         Endpoint endpoint = exchange.getAttribute(GatewayRequestAttributes.ENDPOINT);
         if (endpoint != null) {
-            EndpointAccess policy = endpoint.access();
+            EndpointAccess policy = endpoint.getAccess();
             if (SubjectAuthenticationSelection.from(policy.subjectAuthenticationRequirement())
                     != SubjectAuthenticationSelection.HOST) {
                 return Mono.empty();

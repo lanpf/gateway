@@ -76,7 +76,7 @@ public final class AccessStageCommandService {
         }
         Client client = prepared.snapshot().content().clients()
                 .find(evidence.declaredClientId()).orElse(null);
-        Credentials credentials = client == null ? null : client.access().credentials();
+        Credentials credentials = client == null ? null : client.getAccess().credentials();
         if (credentials == null || signatureEvidence == null) {
             return CompletableFuture.completedFuture(
                     credentials == null && signatureEvidence != null

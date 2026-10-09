@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.ingress.access;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
 
@@ -24,10 +23,7 @@ public final class AccessEvaluator {
             ClientVerificationOutcome clientVerification,
             SubjectAuthenticationOutcome subjectAuthentication
     ) {
-        Require.notNull(snapshot, DomainException::missingField);
-        Require.notNull(request, DomainException::missingField);
-        Require.notNull(clientVerification, DomainException::missingField);
-        Require.notNull(subjectAuthentication, DomainException::missingField);
+        Require.allNotNull(snapshot, request, clientVerification, subjectAuthentication);
 
         Endpoint endpoint = snapshot.content().endpoints()
                 .find(request.endpointId()).filter(Endpoint::enabled).orElse(null);
@@ -38,7 +34,7 @@ public final class AccessEvaluator {
         if (app == null) {
             return AccessDecision.denied(AccessDenyReason.APP_NOT_FOUND, snapshot.version());
         }
-        VerifiedApp verifiedApp = new VerifiedApp(app.appId(), app.platform());
+        VerifiedApp verifiedApp = new VerifiedApp(app.getId(), app.getPlatform());
 
         AccessDenyReason clientDenyReason = evaluateClient(snapshot, request, clientVerification, endpoint);
         if (clientDenyReason != null) {
@@ -67,7 +63,7 @@ public final class AccessEvaluator {
 
     private static AccessDenyReason evaluateClient(IngressSnapshot snapshot, AccessRequest request, ClientVerificationOutcome clientVerification, Endpoint endpoint) {
         if (request.clientId() == null) {
-            if (endpoint.access().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
+            if (endpoint.getAccess().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
                 return AccessDenyReason.CLIENT_REQUIRED;
             }
             if (!(clientVerification instanceof ClientVerificationOutcome.Absent)) {
@@ -85,7 +81,7 @@ public final class AccessEvaluator {
         }
 
         if (clientVerification instanceof ClientVerificationOutcome.Absent) {
-            if (endpoint.access().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
+            if (endpoint.getAccess().clientVerificationRequirement() == ClientVerificationRequirement.REQUIRED) {
                 return AccessDenyReason.CLIENT_VERIFICATION_REQUIRED;
             }
         }
@@ -105,17 +101,17 @@ public final class AccessEvaluator {
 
 
     private static AccessDenyReason evaluateSubject(SubjectAuthenticationOutcome subjectAuthentication, Endpoint endpoint) {
-        SubjectAuthenticationRequirement requirement = endpoint.access().subjectAuthenticationRequirement();
+        SubjectAuthenticationRequirement requirement = endpoint.getAccess().subjectAuthenticationRequirement();
         if (subjectAuthentication instanceof SubjectAuthenticationOutcome.Absent) {
             if (requirement == SubjectAuthenticationRequirement.REQUIRED) {
                 return AccessDenyReason.SUBJECT_REQUIRED;
             }
         }
         if (subjectAuthentication instanceof SubjectAuthenticationOutcome.Authenticated authenticated) {
-            if (!authenticated.subject().audiences().containsAll(endpoint.access().requiredAudiences())) {
+            if (!authenticated.subject().audiences().containsAll(endpoint.getAccess().requiredAudiences())) {
                 return AccessDenyReason.AUDIENCE_NOT_ALLOWED;
             }
-            if (!authenticated.subject().scopes().containsAll(endpoint.access().requiredScopes())) {
+            if (!authenticated.subject().scopes().containsAll(endpoint.getAccess().requiredScopes())) {
                 return AccessDenyReason.SCOPE_NOT_ALLOWED;
             }
         }

@@ -1,6 +1,7 @@
 package com.cloud.gateway.interfaces.rest;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 import com.cloud.gateway.application.configuration.definition.AccessDefinitionReader;
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
 import com.cloud.gateway.interfaces.config.PolicyAdminAutoConfiguration;
@@ -11,34 +12,23 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import com.cloud.gateway.application.configuration.editing.*;
 import com.cloud.gateway.api.facade.admin.definition.AccessDefinitionCommandFacade;
 import com.cloud.gateway.infrastructure.policy.CapabilityConfigCodecs;
-import com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration;
-import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl;
-import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs;
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 class AdministrationMapperWiringTest {
     @Test
     void shouldAssembleWriteControllerOnlyWithAllWritableUseCases() {
         for (boolean includeCapabilities : java.util.List.of(false, true)) {
             try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-                context.registerBean(CapabilityConfigCodecs.class, () -> CapabilityCodecConfiguration.builtIns(
-                        BuiltInCapabilityConfigs.registry(), new CapabilityNodeStorageMapStructMapperImpl(), new ObjectMapper()));
-                context.registerBean(AccessDefinitionReader.class, () -> new AccessDefinitionReader(
-                        () -> { throw new AssertionError("unexpected read"); },
-                        () -> { throw new AssertionError("unexpected read"); },
-                        () -> { throw new AssertionError("unexpected read"); },
-                        () -> { throw new AssertionError("unexpected read"); }));
+                context.registerBean(CapabilityConfigCodecs.class, () -> mock(CapabilityConfigCodecs.class));
+                context.registerBean(AccessDefinitionReader.class, () -> mock(AccessDefinitionReader.class));
                 context.registerBean(AccessSnapshotCapturer.class,
                         () -> () -> { throw new AssertionError("unexpected capture"); });
                 // This assembly-only test never calls these use cases or their outbound ports.
-                context.registerBean(AppAccessCommandService.class, () -> new AppAccessCommandService(null, null, null));
-                context.registerBean(ClientAccessCommandService.class, () -> new ClientAccessCommandService(null, null, null));
-                context.registerBean(ClientCredentialCommandService.class, () -> new ClientCredentialCommandService(null, null, null));
-                context.registerBean(EndpointAccessCommandService.class, () -> new EndpointAccessCommandService(null, null, null));
+                context.registerBean(AppAccessCommandService.class, () -> mock(AppAccessCommandService.class));
+                context.registerBean(ClientAccessCommandService.class, () -> mock(ClientAccessCommandService.class));
+                context.registerBean(ClientCredentialCommandService.class, () -> mock(ClientCredentialCommandService.class));
+                context.registerBean(EndpointAccessCommandService.class, () -> mock(EndpointAccessCommandService.class));
                 if (includeCapabilities) {
-                    context.registerBean(CapabilityCompositionCommandService.class, () -> new CapabilityCompositionCommandService(
-                            null, null, null, HeaderAdmissionRules.registeredOnly(), BuiltInCapabilityConfigs.registry()));
+                    context.registerBean(CapabilityPolicyConfigCommandService.class, () -> mock(CapabilityPolicyConfigCommandService.class));
                 }
                 context.register(PolicyAdminAutoConfiguration.class);
                 context.refresh();
@@ -51,16 +41,8 @@ class AdministrationMapperWiringTest {
     @Test
     void shouldRegisterOneMapperPerContractWithOverlappingScans() {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-            context.registerBean(com.cloud.gateway.infrastructure.policy.CapabilityConfigCodecs.class,
-                    () -> com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(
-                            com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(),
-                            new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(),
-                            new com.fasterxml.jackson.databind.ObjectMapper()));
-            context.registerBean(AccessDefinitionReader.class, () -> new AccessDefinitionReader(
-                    () -> { throw new AssertionError("unexpected endpoint read"); },
-                    () -> { throw new AssertionError("unexpected app read"); },
-                    () -> { throw new AssertionError("unexpected client read"); },
-                    () -> { throw new AssertionError("unexpected capability read"); }));
+            context.registerBean(CapabilityConfigCodecs.class, () -> mock(CapabilityConfigCodecs.class));
+            context.registerBean(AccessDefinitionReader.class, () -> mock(AccessDefinitionReader.class));
             context.registerBean(AccessSnapshotCapturer.class,
                     () -> () -> { throw new AssertionError("unexpected snapshot capture"); });
             context.scan("com.cloud.gateway.interfaces.rest.mapstruct",

@@ -1,5 +1,6 @@
 package com.cloud.gateway.application.ingress;
 
+import com.cloud.framework.core.util.NullSafe;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +45,6 @@ final class IngressTask<T> extends CompletableFuture<T> {
     }
 
     private synchronized void cancelChildren() {
-        List.copyOf(children).forEach(child -> child.cancel(true));
+        NullSafe.copyOf(children).forEach(child -> child.cancel(true));
     }
 }

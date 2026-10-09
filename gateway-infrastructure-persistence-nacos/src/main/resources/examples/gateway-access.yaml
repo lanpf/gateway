@@ -1,0 +1,79 @@
+---
+snapshotVersion: 1
+endpoints:
+- endpointId: "GATEWAY.ADMIN"
+  serviceId: "gateway"
+  routeId: "gateway-admin"
+  matchers:
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/app"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/client-access"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/client-credential"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/endpoint-access"
+  - httpMethod: "PUT"
+    pathPattern: "/admin/gateway/policies/configuration"
+  - httpMethod: "POST"
+    pathPattern: "/admin/gateway/snapshot/publish"
+  - httpMethod: "POST"
+    pathPattern: "/admin/gateway/snapshot/rollback"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/app"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/client-access"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/policies/endpoint-access"
+  - httpMethod: "GET"
+    pathPattern: "/admin/gateway/snapshot"
+  tags:
+  - "admin"
+  status: "ENABLED"
+  access:
+    clientVerificationRequirement: "OPTIONAL"
+    subjectAuthenticationRequirement: "REQUIRED"
+    requiredScopes:
+    - "admin"
+    requiredAudiences:
+    - "gateway"
+- endpointId: "USER_AUTH.LOGIN"
+  serviceId: "user-auth"
+  routeId: "user-auth"
+  matchers:
+  - httpMethod: "POST"
+    pathPattern: "/api/user-auth/login"
+  tags: []
+  status: "ENABLED"
+  access:
+    clientVerificationRequirement: "OPTIONAL"
+    subjectAuthenticationRequirement: "ANONYMOUS"
+    requiredScopes: []
+    requiredAudiences: []
+apps:
+  admin:
+    status: "ENABLED"
+    platform: "WEB"
+    allowedOrigins: []
+clients: {}
+policies:
+  bundles:
+    standard:
+      bundleId: "standard"
+      capabilities:
+        timeout:
+          connect: "PT1S"
+          read: "PT3S"
+          total: "PT5S"
+  bindings:
+    standard-default:
+      bindingId: "standard-default"
+      bundleId: "standard"
+      serviceId: null
+      endpointId: null
+      tags: []
+      appId: null
+      verifiedClientId: null
+      subjectType: null
+contentHash: "6c722f630612c4b7c32bb871be4b2bb79340bbc366373c4b30ed30b9e6380d98"
+publishedAt: "2026-08-26T00:00:00Z"

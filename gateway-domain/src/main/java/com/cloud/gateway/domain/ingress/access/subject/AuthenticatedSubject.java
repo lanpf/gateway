@@ -1,8 +1,9 @@
 package com.cloud.gateway.domain.ingress.access.subject;
 
 import com.cloud.framework.core.SubjectType;
+import com.cloud.framework.core.error.FrameworkException;
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.framework.core.validation.Require;
-import com.cloud.gateway.domain.common.DomainException;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
@@ -19,26 +20,17 @@ public record AuthenticatedSubject(
         Instant authenticationExpiresAt
 ) {
     public AuthenticatedSubject {
-        Require.notNull(subjectType, DomainException::missingField);
-        Require.notNull(subjectId, DomainException::missingField);
-        Require.notNull(sessionId, DomainException::missingField);
-        Require.notNull(authenticationExpiresAt, DomainException::missingField);
+        Require.allNotNull(subjectType, subjectId, sessionId, authenticationExpiresAt);
 
         switch (subjectType) {
             case HOST_SESSION -> {
-                issuer = Require.notBlank(issuer, DomainException::invalidObjectField).trim();
-
-                audiences = audiences == null ? Set.of() : audiences;
-                audiences.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
-                audiences = Set.copyOf(audiences);
-
-                scopes = scopes == null ? Set.of() : scopes;
-                scopes.forEach(value -> Require.notBlank(value, DomainException::invalidObjectField));
-                scopes = Set.copyOf(scopes);
+                issuer = Require.notBlank(issuer).trim();
+                audiences = NullSafe.copyOf(audiences, Require::notBlank);
+                scopes = NullSafe.copyOf(scopes, Require::notBlank);
             }
             case BROWSER_SESSION -> {
                 if (StringUtils.isNotBlank(issuer) || CollectionUtils.isNotEmpty(audiences) || CollectionUtils.isNotEmpty(scopes)) {
-                    throw DomainException.invalidObjectField();
+                    throw FrameworkException.invalidObject();
                 }
 
                 issuer = null;

@@ -14,7 +14,7 @@ public final class LocalPolicyWebFilter implements WebFilter, Ordered {
     private final IngressAdmissionGlobalFilter access;
     @Override public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         Endpoint endpoint = exchange.getAttribute(GatewayRequestAttributes.ENDPOINT);
-        if (endpoint != null && GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.routeId().value())) {
+        if (endpoint != null && GatewayRequestAttributes.LOCAL_ROUTE_ID.equals(endpoint.getRouteId().value())) {
             return access.filter(exchange, chain::filter);
         }
         return chain.filter(exchange);

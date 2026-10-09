@@ -1,6 +1,5 @@
 package com.cloud.gateway.domain.ingress.access;
 
-import com.cloud.gateway.domain.common.DomainException;
 
 import com.cloud.framework.core.validation.Require;
 
@@ -9,14 +8,12 @@ import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
 public sealed interface AccessDecision {
     record Allowed(AccessGrantedContext grantedContext, SnapshotVersion snapshotVersion) implements AccessDecision {
         public Allowed {
-            Require.notNull(grantedContext, DomainException::missingField);
-            Require.notNull(snapshotVersion, DomainException::missingField);
+            Require.allNotNull(grantedContext, snapshotVersion);
         }
     }
     record Denied(AccessDenyReason denyReason, SnapshotVersion snapshotVersion) implements AccessDecision {
         public Denied {
-            Require.notNull(denyReason, DomainException::missingField);
-            Require.notNull(snapshotVersion, DomainException::missingField);
+            Require.allNotNull(denyReason, snapshotVersion);
         }
     }
 

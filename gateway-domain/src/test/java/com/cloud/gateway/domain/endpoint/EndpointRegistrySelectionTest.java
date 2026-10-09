@@ -1,5 +1,6 @@
 package com.cloud.gateway.domain.endpoint;
 
+import com.cloud.framework.core.error.FrameworkException;
 import com.cloud.gateway.domain.common.DomainException;
 import java.util.Arrays;
 import java.util.List;
@@ -35,11 +36,11 @@ class EndpointRegistrySelectionTest {
 
     @Test
     void shouldRejectNullElementsAndMissingMatchersWithDomainErrors() {
-        assertThrows(DomainException.class, () -> new EndpointRegistry(Arrays.asList((Endpoint) null)));
-        assertThrows(DomainException.class, () -> new Endpoint(new EndpointId("one"), new ServiceId("service"),
+        assertThrows(FrameworkException.class, () -> new EndpointRegistry(Arrays.asList((Endpoint) null)));
+        assertThrows(FrameworkException.class, () -> new Endpoint(new EndpointId("one"), new ServiceId("service"),
                 new RouteId("route"), Arrays.asList((EndpointMatcher) null), Set.of(), EndpointStatus.ENABLED,
                 policy()));
-        assertThrows(DomainException.class, () -> new Endpoint(new EndpointId("one"), new ServiceId("service"),
+        assertThrows(FrameworkException.class, () -> new Endpoint(new EndpointId("one"), new ServiceId("service"),
                 new RouteId("route"), List.of(), Set.of(), EndpointStatus.ENABLED, policy()));
     }
 

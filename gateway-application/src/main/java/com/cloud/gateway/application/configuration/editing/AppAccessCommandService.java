@@ -28,9 +28,10 @@ public final class AppAccessCommandService {
     /** Content-only upsert: creation initializes status to ENABLED, updates preserve the existing status. */
     public Revision save(SaveAppAccessCommand command) {
         return writer.update(repository, command.expectedSourceRevision(), current -> {
-            AppStatus status = current.find(command.appId()).map(App::status).orElse( AppStatus.ENABLED);
             AppAccess access = new AppAccess(command.allowedOrigins());
-            App next = new App(command.appId(), command.platform(), status, access);
+            App next = current.find(command.appId())
+                    .map(existing -> existing.edit(command.platform(), access))
+                    .orElseGet(() -> App.create(command.appId(), command.platform(), access));
             return withApp(current, next);
         });
     }
@@ -39,15 +40,14 @@ public final class AppAccessCommandService {
     public Revision setAppStatus(SetAppStatusCommand command) {
         return writer.update(repository, command.expectedSourceRevision(), current -> {
             App existing = current.find(command.appId()).orElseThrow(() -> new DomainException(DomainError.APP_NOT_FOUND));
-            App next = new App(existing.appId(), existing.platform(), command.status(),
-                    existing.access());
+            App next = existing.changeStatus(command.status());
             return withApp(current, next);
         });
     }
 
     private static AppRegistry withApp(AppRegistry current, App next) {
         Map<AppId, App> updated = new LinkedHashMap<>(current.asMap());
-        updated.put(next.appId(), next);
+        updated.put(next.getId(), next);
         return new AppRegistry(updated.values());
     }
 }

@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.cloud.gateway.application.configuration.definition.CapabilityCompositionDefinitionRepository;
-import com.cloud.gateway.application.configuration.definition.WritableCapabilityCompositionDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.CapabilityPolicyConfigDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.WritableCapabilityPolicyConfigDefinitionRepository;
 import com.cloud.gateway.application.configuration.editing.AppAccessCommandService;
-import com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService;
+import com.cloud.gateway.application.configuration.editing.CapabilityPolicyConfigCommandService;
 import com.cloud.gateway.application.configuration.publication.AccessPublishLock;
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCommandService;
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
@@ -43,8 +43,8 @@ class PolicyInfrastructureAutoConfigurationTest {
                     com.cloud.gateway.infrastructure.policy.AppPropertiesMapper.class,
                     com.cloud.gateway.infrastructure.policy.ClientPropertiesMapper.class,
                     com.cloud.gateway.infrastructure.policy.EndpointPropertiesMapper.class,
-                    com.cloud.gateway.infrastructure.policy.CapabilityCompositionPropertiesMapper.class,
-                    com.cloud.gateway.infrastructure.policy.CapabilityCompositionStorageMapper.class,
+                    com.cloud.gateway.infrastructure.policy.CapabilityPolicyConfigPropertiesMapper.class,
+                    com.cloud.gateway.infrastructure.policy.CapabilityPolicyConfigStorageMapper.class,
                     com.cloud.gateway.infrastructure.policy.AccessSnapshotDocumentMapper.class,
                     com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotMapper.class,
                     com.cloud.gateway.infrastructure.policy.CanonicalPolicyContentMapper.class)) {
@@ -63,9 +63,9 @@ class PolicyInfrastructureAutoConfigurationTest {
             assertNull(context.getBeanProvider(AccessPublishLock.class).getIfAvailable());
             assertNull(context.getBeanProvider(AppAccessCommandService.class).getIfAvailable());
             assertNull(context.getBeanProvider(AccessSnapshotCommandService.class).getIfAvailable());
-            assertNotNull(context.getBean(CapabilityCompositionDefinitionRepository.class));
-            assertNull(context.getBeanProvider(WritableCapabilityCompositionDefinitionRepository.class).getIfAvailable());
-            assertNull(context.getBeanProvider(CapabilityCompositionCommandService.class).getIfAvailable());
+            assertNotNull(context.getBean(CapabilityPolicyConfigDefinitionRepository.class));
+            assertNull(context.getBeanProvider(WritableCapabilityPolicyConfigDefinitionRepository.class).getIfAvailable());
+            assertNull(context.getBeanProvider(CapabilityPolicyConfigCommandService.class).getIfAvailable());
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.cloud.gateway.application.configuration.definition;
 
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.ingress.snapshot.Revision;
 
 import java.util.Objects;
@@ -11,7 +12,6 @@ import java.util.Objects;
  */
 public record RevisionedAccessDefinition<T>(T value, Revision sourceRevision) {
     public RevisionedAccessDefinition {
-        Objects.requireNonNull(value, "value must not be null");
-        Objects.requireNonNull(sourceRevision, "sourceRevision must not be null");
+        Require.allNotNull(value, sourceRevision);
     }
 }

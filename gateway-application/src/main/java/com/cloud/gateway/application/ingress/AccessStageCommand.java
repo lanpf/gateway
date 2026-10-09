@@ -1,5 +1,6 @@
 package com.cloud.gateway.application.ingress;
 
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.application.security.ClientSignatureEvidence;
 import java.util.Objects;
 
@@ -15,6 +16,6 @@ public record AccessStageCommand(
         ClientSignatureEvidence signatureEvidence
 ) {
     public AccessStageCommand {
-        Objects.requireNonNull(prepared, "prepared must not be null");
+        Require.notNull(prepared);
     }
 }

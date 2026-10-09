@@ -1,5 +1,7 @@
 package com.cloud.gateway.infrastructure.policy.properties;
 
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
+
 import com.cloud.gateway.application.configuration.definition.AccessDefinitionReader;
 import com.cloud.gateway.application.configuration.definition.RevisionedAccessDefinition;
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
@@ -10,13 +12,14 @@ import com.cloud.gateway.domain.client.ClientAccess;
 import com.cloud.gateway.domain.client.ClientId;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.client.ClientStatus;
+import com.cloud.framework.core.error.FrameworkException;
 import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundle;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.cloud.gateway.domain.capability.header.HeaderConfig;
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.header.HeaderConfigRule;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -32,10 +35,10 @@ class PropertiesAccessSnapshotCapturerTest {
 
     @Test
     void shouldAssembleImmutableInitialSnapshotThroughApplicationOnce() {
-        IngressContent content = content(CapabilityComposition.empty());
+        IngressContent content = content(CapabilityPolicyConfig.empty());
         AtomicInteger loads = new AtomicInteger();
         PropertiesAccessSnapshotCapturer provider = new PropertiesAccessSnapshotCapturer(reader(content, loads),
-                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(value -> "content-digest", HeaderAdmissionRules.registeredOnly(), com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), CLOCK);
+                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(value -> "content-digest", BuiltInCapabilityCatalog.validator(HeaderConfigRule.empty())), CLOCK);
         assertEquals(1, provider.capture().snapshot().version().value());
         assertEquals(CLOCK.instant(), provider.capture().snapshot().publishedAt());
         assertEquals("properties:content-digest", provider.capture().sourceRevision().value());
@@ -47,11 +50,11 @@ class PropertiesAccessSnapshotCapturerTest {
     void shouldValidateDeploymentHeadersBeforeExposingLocalSnapshot() {
         CapabilityBundleId id = new CapabilityBundleId("header");
         HeaderConfig headers = new HeaderConfig(Set.of(), Map.of("X-Unregistered", "value"), Set.of(), null);
-        CapabilityComposition composition = new CapabilityComposition(
-                Map.of(id, new CapabilityBundle(id, java.util.List.of(headers))), List.of());
+        CapabilityPolicyConfig policyConfig = new CapabilityPolicyConfig(java.util.List.of(new CapabilityBundle(id, java.util.List.of(headers))), List.of());
+        var denied = new HeaderConfigRule(Set.of("x-unregistered"), Set.of());
         assertThrows(DomainException.class, () -> new PropertiesAccessSnapshotCapturer(
-                reader(content(composition), new AtomicInteger()),
-                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(value -> "digest", HeaderAdmissionRules.registeredOnly(), com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), CLOCK));
+                reader(content(policyConfig), new AtomicInteger()),
+                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(value -> "digest", BuiltInCapabilityCatalog.validator(denied)), CLOCK));
     }
 
     @Test
@@ -59,12 +62,12 @@ class PropertiesAccessSnapshotCapturerTest {
         IngressContent invalid = new IngressContent(new AppRegistry(List.of()),
                 new ClientRegistry(List.of(new Client(new ClientId("client"), ClientStatus.ENABLED,
                         new ClientAccess(Set.of(new AppId("missing")), null)))),
-                new EndpointRegistry(List.of()), CapabilityComposition.empty());
+                new EndpointRegistry(List.of()), CapabilityPolicyConfig.empty());
         assertThrows(DomainException.class, () -> new PropertiesAccessSnapshotCapturer(reader(invalid, new AtomicInteger()),
-                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(value -> "digest", HeaderAdmissionRules.registeredOnly(), com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), CLOCK));
+                new com.cloud.gateway.application.configuration.publication.AccessSnapshotAssembler(value -> "digest", BuiltInCapabilityCatalog.validator(HeaderConfigRule.empty())), CLOCK));
     }
 
-    private static IngressContent content(CapabilityComposition policies) {
+    private static IngressContent content(CapabilityPolicyConfig policies) {
         return new IngressContent(new AppRegistry(List.of()), new ClientRegistry(List.of()),
                 new EndpointRegistry(List.of()), policies);
     }
@@ -72,7 +75,7 @@ class PropertiesAccessSnapshotCapturerTest {
     private static AccessDefinitionReader reader(IngressContent content, AtomicInteger loads) {
         return new AccessDefinitionReader(() -> versioned(content.endpoints(), loads),
                 () -> versioned(content.apps(), loads), () -> versioned(content.clients(), loads),
-                () -> versioned(content.capabilities(), loads));
+                () -> versioned(content.policyConfig(), loads));
     }
 
     private static <T> RevisionedAccessDefinition<T> versioned(T value, AtomicInteger loads) {

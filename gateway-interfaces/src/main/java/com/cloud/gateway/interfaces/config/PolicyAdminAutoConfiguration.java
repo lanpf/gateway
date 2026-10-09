@@ -6,12 +6,12 @@ import com.cloud.gateway.api.facade.admin.snapshot.AccessSnapshotCommandFacade;
 import com.cloud.gateway.api.facade.admin.snapshot.AccessSnapshotQueryFacade;
 import com.cloud.gateway.application.configuration.definition.AccessDefinitionReader;
 import com.cloud.gateway.application.configuration.definition.AppAccessDefinitionRepository;
-import com.cloud.gateway.application.configuration.definition.CapabilityCompositionDefinitionRepository;
+import com.cloud.gateway.application.configuration.definition.CapabilityPolicyConfigDefinitionRepository;
 import com.cloud.gateway.application.configuration.definition.ClientAccessDefinitionRepository;
 import com.cloud.gateway.application.configuration.definition.EndpointAccessDefinitionRepository;
 import com.cloud.gateway.application.configuration.editing.AppAccessCommandService;
-import com.cloud.gateway.application.configuration.editing.CapabilityCompositionCommandService;
-import com.cloud.gateway.interfaces.facade.admin.definition.CapabilityCompositionApiMapper;
+import com.cloud.gateway.application.configuration.editing.CapabilityPolicyConfigCommandService;
+import com.cloud.gateway.interfaces.facade.admin.definition.CapabilityPolicyConfigApiMapper;
 import com.cloud.gateway.application.configuration.editing.ClientAccessCommandService;
 import com.cloud.gateway.application.configuration.editing.ClientCredentialCommandService;
 import com.cloud.gateway.application.configuration.editing.EndpointAccessCommandService;
@@ -24,11 +24,11 @@ import com.cloud.gateway.interfaces.rest.GatewayAccessDefinitionQueryController;
 import com.cloud.gateway.interfaces.rest.GatewayAccessSnapshotCommandController;
 import com.cloud.gateway.interfaces.rest.GatewayAccessSnapshotQueryController;
 import com.cloud.gateway.interfaces.rest.GatewayPolicyAdminRestMapper;
-import com.cloud.gateway.interfaces.rest.mapstruct.GatewayPolicyAdminRestMapStructMapper;
+import com.cloud.gateway.interfaces.rest.mapstruct.AbstractGatewayPolicyAdminRestMapStructMapper;
 import com.cloud.gateway.interfaces.facade.admin.definition.AccessDefinitionApiMapper;
-import com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.AccessDefinitionApiMapStructMapper;
+import com.cloud.gateway.interfaces.facade.admin.definition.mapstruct.AbstractAccessDefinitionApiMapStructMapper;
 import com.cloud.gateway.interfaces.facade.admin.snapshot.AccessSnapshotApiMapper;
-import com.cloud.gateway.interfaces.facade.admin.snapshot.mapstruct.AccessSnapshotApiMapStructMapper;
+import com.cloud.gateway.interfaces.facade.admin.snapshot.mapstruct.AbstractAccessSnapshotApiMapStructMapper;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -40,8 +40,8 @@ import org.springframework.context.annotation.Bean;
  * a writable definition store is present (read-only deployments expose the queries alone).
  */
 @AutoConfiguration(afterName = "com.cloud.gateway.infrastructure.policy.config.PolicyInfrastructureAutoConfiguration")
-@ComponentScan(basePackageClasses = {GatewayPolicyAdminRestMapStructMapper.class,
-        AccessDefinitionApiMapStructMapper.class, AccessSnapshotApiMapStructMapper.class})
+@ComponentScan(basePackageClasses = {AbstractGatewayPolicyAdminRestMapStructMapper.class,
+        AbstractAccessDefinitionApiMapStructMapper.class, AbstractAccessSnapshotApiMapStructMapper.class})
 public class PolicyAdminAutoConfiguration {
 
     @Bean @ConditionalOnMissingBean(AccessDefinitionReader.class)
@@ -49,7 +49,7 @@ public class PolicyAdminAutoConfiguration {
             EndpointAccessDefinitionRepository endpoints,
             AppAccessDefinitionRepository apps,
             ClientAccessDefinitionRepository clients,
-            CapabilityCompositionDefinitionRepository capabilities) {
+            CapabilityPolicyConfigDefinitionRepository capabilities) {
         return new AccessDefinitionReader(endpoints, apps, clients, capabilities);
     }
 
@@ -67,15 +67,15 @@ public class PolicyAdminAutoConfiguration {
 
     @Bean
     @ConditionalOnBean({AppAccessCommandService.class, ClientAccessCommandService.class,
-            ClientCredentialCommandService.class, EndpointAccessCommandService.class, CapabilityCompositionCommandService.class})
+            ClientCredentialCommandService.class, EndpointAccessCommandService.class, CapabilityPolicyConfigCommandService.class})
     @ConditionalOnMissingBean(AccessDefinitionCommandFacade.class)
     AccessDefinitionCommandFacade ingressAccessDefinitionCommandFacade(
             AppAccessCommandService appService,
             ClientAccessCommandService clientAccessService,
             ClientCredentialCommandService clientCredentialService,
             EndpointAccessCommandService endpointAccessService,
-            AccessDefinitionApiMapper mapper, CapabilityCompositionCommandService capabilityService,
-            CapabilityCompositionApiMapper capabilityMapper) {
+            AccessDefinitionApiMapper mapper, CapabilityPolicyConfigCommandService capabilityService,
+            CapabilityPolicyConfigApiMapper capabilityMapper) {
         return new DefaultAccessDefinitionCommandFacade(appService, clientAccessService,
                 clientCredentialService, endpointAccessService, mapper, capabilityService, capabilityMapper);
     }

@@ -1,5 +1,6 @@
 package com.cloud.gateway.domain.capability.ratelimit;
 
+import com.cloud.framework.core.error.FrameworkException;
 import com.cloud.gateway.domain.common.DomainException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -73,13 +74,13 @@ class RateLimitEvaluatorTest {
     void shouldRejectInvalidPoliciesAndDuplicateStableRuleIds() {
         assertThrows(DomainException.class,
                 () -> new RateLimitRule(" ", RateLimitDimension.IP, 1, 1, RateLimitMode.EXACT));
-        assertThrows(DomainException.class,
+        assertThrows(FrameworkException.class,
                 () -> new RateLimitRule("x", null, 1, 1, RateLimitMode.EXACT));
         assertThrows(DomainException.class,
                 () -> new RateLimitRule("x", RateLimitDimension.IP, 0, 1, RateLimitMode.EXACT));
         assertThrows(DomainException.class,
                 () -> new RateLimitRule("x", RateLimitDimension.IP, 1, 0, RateLimitMode.EXACT));
-        assertThrows(DomainException.class,
+        assertThrows(FrameworkException.class,
                 () -> new RateLimitRule("x", RateLimitDimension.IP, 1, 1, null));
         assertThrows(DomainException.class, () -> new RateLimitConfig(List.of(
                 rule("same", RateLimitDimension.APP, 1), rule("same", RateLimitDimension.IP, 2)), null));

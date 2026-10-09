@@ -29,13 +29,9 @@ public final class ClientAccessCommandService {
     /** Content-only upsert: preserves credentials, creation initializes status to ENABLED, updates keep it. */
     public Revision save(SaveClientAccessCommand command) {
         return writer.update(repository, command.expectedSourceRevision(), current -> {
-            Client existing = current.find(command.clientId()).orElse(null);
-            ClientAccess access = existing == null
-                    ? new ClientAccess(command.allowedAppIds(), null)
-                    : new ClientAccess(command.allowedAppIds(), existing.access().credentials());
-            Client next = existing == null
-                    ? new Client(command.clientId(), ClientStatus.ENABLED, access)
-                    : new Client(command.clientId(), existing.status(), access);
+            Client next = current.find(command.clientId())
+                    .map(existing -> existing.edit(command.allowedAppIds()))
+                    .orElseGet(() -> Client.create(command.clientId(), command.allowedAppIds()));
             return withClient(current, next);
         });
     }
@@ -44,14 +40,14 @@ public final class ClientAccessCommandService {
     public Revision setClientStatus(SetClientStatusCommand command) {
         return writer.update(repository, command.expectedSourceRevision(), current -> {
             Client existing = current.find(command.clientId()).orElseThrow(() -> new DomainException(DomainError.CLIENT_NOT_FOUND));
-            Client next =  new Client(existing.clientId(), command.status(), existing.access());
+            Client next = existing.changeStatus(command.status());
             return withClient(current, next);
         });
     }
 
     private static ClientRegistry withClient(ClientRegistry current, Client next) {
         Map<ClientId, Client> updated = new LinkedHashMap<>(current.asMap());
-        updated.put(next.clientId(), next);
+        updated.put(next.getId(), next);
         return new ClientRegistry(updated.values());
     }
 }

@@ -1,10 +1,12 @@
 package com.cloud.gateway.infrastructure.persistence.nacos;
 
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
+
+import com.cloud.gateway.domain.capability.header.HeaderConfigRule;
 import com.cloud.gateway.infrastructure.policy.DefaultStoredAccessSnapshotMapper;
 import com.cloud.gateway.infrastructure.policy.DefaultCanonicalPolicyContentMapper;
-import com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityCompositionStorageMapStructMapperImpl;
-import com.cloud.gateway.infrastructure.policy.mapstruct.AccessSnapshotDocumentMapStructMapperImpl;
+import com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityPolicyConfigStorageMapStructMapperImpl;
+import com.cloud.gateway.infrastructure.policy.mapstruct.AbstractAccessSnapshotDocumentMapStructMapperImpl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,7 +30,7 @@ import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.cloud.gateway.infrastructure.policy.CanonicalAccessSnapshotHasher;
 import com.cloud.gateway.infrastructure.policy.lkg.FileLastKnownGoodAccessSnapshotStore;
 import com.cloud.gateway.infrastructure.policy.StoredAccessSnapshotCodec;
@@ -217,15 +219,14 @@ class AccessSnapshotPropagationIT {
 
     private static StoredAccessSnapshotCodec codec() {
         com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
-                new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
-        return new StoredAccessSnapshotCodec(
-                new DefaultStoredAccessSnapshotMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
-                new AccessSnapshotDocumentMapStructMapperImpl(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())))), hasher, new ObjectMapper().findAndRegisterModules(), HeaderAdmissionRules.registeredOnly());
+                new DefaultCanonicalPolicyContentMapper(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
+        return new StoredAccessSnapshotCodec(new DefaultStoredAccessSnapshotMapper(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())),
+                new AbstractAccessSnapshotDocumentMapStructMapperImpl(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper())))), hasher, new ObjectMapper().findAndRegisterModules(), BuiltInCapabilityCatalog.validator(HeaderConfigRule.empty()));
     }
 
     private static IngressSnapshot snapshot(long version, boolean enabled) {
         com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher hasher = new CanonicalAccessSnapshotHasher(
-                new DefaultCanonicalPolicyContentMapper(new CapabilityCompositionStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry(), new com.cloud.gateway.infrastructure.policy.mapstruct.CapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
+                new DefaultCanonicalPolicyContentMapper(new AbstractCapabilityPolicyConfigStorageMapStructMapperImpl(com.cloud.gateway.infrastructure.policy.config.CapabilityCodecConfiguration.builtIns(BuiltInCapabilityCatalog.validator(), new com.cloud.gateway.infrastructure.policy.mapstruct.AbstractCapabilityNodeStorageMapStructMapperImpl(), new com.fasterxml.jackson.databind.ObjectMapper()))), new ObjectMapper());
         EndpointId endpointId = new EndpointId("USER_AUTH.LOGIN");
         EndpointRegistry catalog = new EndpointRegistry(List.of(new Endpoint(
                 endpointId,
@@ -240,7 +241,7 @@ class AccessSnapshotPropagationIT {
                         Set.of(),
                         Set.of()))));
         IngressContent content = new IngressContent(
-                new AppRegistry(List.of()), new ClientRegistry(List.of()), catalog, CapabilityComposition.empty());
+                new AppRegistry(List.of()), new ClientRegistry(List.of()), catalog, CapabilityPolicyConfig.empty());
         return new IngressSnapshot(
                 new SnapshotVersion(version),
                 content,

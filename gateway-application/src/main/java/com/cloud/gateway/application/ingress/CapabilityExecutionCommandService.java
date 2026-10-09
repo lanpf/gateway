@@ -1,9 +1,11 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
+import com.cloud.framework.core.util.NullSafe;
+import com.cloud.gateway.domain.capability.CapabilityId;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyAssembler;
+import com.cloud.gateway.domain.capability.policy.EffectiveCapabilityPolicies;
 import java.util.ArrayList;
-import java.util.HashMap;
+import com.cloud.framework.core.validation.Require;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -20,34 +22,27 @@ import com.cloud.gateway.domain.capability.runtime.CapabilityOutcome;
 import com.cloud.gateway.domain.capability.runtime.CapabilityPlan;
 import com.cloud.gateway.domain.capability.runtime.CapabilityPlanner;
 import com.cloud.gateway.domain.capability.runtime.CapabilityPlanningEntry;
-import org.apache.commons.lang3.Validate;
 
 /** Owns resolve -> plan -> execute for each slot, including denial and cancellation. */
 public final class CapabilityExecutionCommandService {
     private final CapabilityPolicyAssembler assembler;
     private final CapabilityPlanner planner = new CapabilityPlanner();
     private final List<CapabilityRegistration<?>> registrations;
-    private final Map<String, CapabilityExecutor<?>> executors;
+    private final Map<CapabilityId, CapabilityExecutor<?>> executors;
 
     public CapabilityExecutionCommandService(CapabilityPolicyAssembler assembler, List<CapabilityRegistration<?>> registrations,
             List<CapabilityExecutor<?>> executors) {
-        this.assembler = Objects.requireNonNull(assembler, "assembler");
-        this.registrations = List.copyOf(Objects.requireNonNull(registrations, "registrations"));
+        Require.allNotNull(assembler, registrations, executors);
+        this.assembler = assembler;
+        this.registrations = NullSafe.copyOf(registrations);
         CapabilityRegistration.validate(this.registrations, executors);
-        Objects.requireNonNull(executors, "executors");
-        Map<String, CapabilityExecutor<?>> registered = new HashMap<>();
-        for (CapabilityExecutor<?> executor : executors) {
-            Objects.requireNonNull(executor, "executor");
-            Validate.isTrue(registered.putIfAbsent(executor.capability(), executor) == null,
-                    "duplicate capability executor: %s", executor.capability());
-        }
-        this.executors = Map.copyOf(registered);
+        this.executors = NullSafe.copyOf(Require.noDuplicates(executors, CapabilityExecutor::capability));
     }
 
     /** Resolve against this slot's facts, then plan and execute. */
     public CompletionStage<CapabilityExecutionOutput> execute(CapabilityExecutionCommand command) {
-        Objects.requireNonNull(command, "command");
-        return executeAgainst(assembler.assemble(command.composition(), command.context().endpoint(),
+        Require.notNull(command);
+        return executeAgainst(assembler.assemble(command.policyConfig(), command.context().endpoint(),
                 command.context().granted()), command.context(),
                 command.executed());
     }
@@ -67,9 +62,7 @@ public final class CapabilityExecutionCommandService {
             CapabilityContext context, Set<CapabilityExecutionKey> executed) {
         IngressTask<CapabilityExecutionOutput> task = new IngressTask<>();
         try {
-            Objects.requireNonNull(resolved, "resolved");
-            Objects.requireNonNull(context, "context");
-            Objects.requireNonNull(executed, "executed");
+            Require.allNotNull(resolved, context, executed);
             List<CapabilityPlanningEntry<?>> entries = new ArrayList<>();
             registrations.forEach(registration -> entries.add(registration.bind(resolved)));
             CapabilityPlan plan = planner.plan(entries, context, executed);

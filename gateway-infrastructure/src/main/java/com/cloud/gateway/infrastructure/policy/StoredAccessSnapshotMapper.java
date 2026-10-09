@@ -2,20 +2,17 @@ package com.cloud.gateway.infrastructure.policy;
 
 import com.cloud.gateway.domain.ingress.snapshot.IngressContent;
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
-import com.cloud.gateway.domain.app.App;
 import com.cloud.gateway.domain.app.AppRegistry;
-import com.cloud.gateway.domain.client.Client;
 import com.cloud.gateway.domain.client.ClientRegistry;
-import com.cloud.gateway.domain.endpoint.Endpoint;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 
 import java.util.List;
 import java.util.Map;
 
 public interface StoredAccessSnapshotMapper {
-    StoredCapabilityComposition toStoredPolicies(CapabilityComposition source);
-    CapabilityComposition toDomainPolicies(StoredCapabilityComposition source);
+    StoredCapabilityPolicyConfig toStoredPolicies(CapabilityPolicyConfig source);
+    CapabilityPolicyConfig toDomainPolicies(StoredCapabilityPolicyConfig source);
     StoredAccessSnapshot toStore(IngressSnapshot source);
     IngressSnapshot toDomain(StoredAccessSnapshot source);
     IngressContent toDomainContent(StoredAccessSnapshot source);

@@ -1,15 +1,16 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
+import com.cloud.gateway.domain.capability.ratelimit.EffectiveRateLimitPolicy;
 
-import com.cloud.gateway.application.ingress.CapabilityRegistration;
+import com.cloud.gateway.domain.capability.header.EffectiveHeaderPolicy;
 
-import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
+
+import com.cloud.gateway.domain.capability.policy.CapabilityBinding;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundle;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
+import com.cloud.gateway.domain.capability.policy.CapabilityBindingId;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundleId;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -48,7 +49,6 @@ import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointMatch;
 import com.cloud.gateway.domain.client.ClientRegistry;
-import com.cloud.gateway.domain.capability.configuration.*;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointStatus;
@@ -82,7 +82,7 @@ class AccessStageCommandServiceTest {
             new EndpointAccess(ClientVerificationRequirement.OPTIONAL,
                     SubjectAuthenticationRequirement.ANONYMOUS, Set.of(), Set.of()));
     private static final HeaderConfig CLIENT_HEADERS = new HeaderConfig(Set.of(),
-            Map.of("X-Gateway-Test", "verified"), Set.of(), CredentialForwarding.stripAll());
+            Map.of("X-GW-test", "verified"), Set.of(), CredentialForwarding.stripAll());
 
     @Test
     void shouldNotPromoteDeclaredClientToContextBindingOrQuotaDimension() {
@@ -93,7 +93,7 @@ class AccessStageCommandServiceTest {
         AdmissionStageOutput admitted = admit(allowed, Map.of(RateLimitDimension.IP, "192.0.2.1",
                 RateLimitDimension.APP, "app", RateLimitDimension.ENDPOINT, "TEST.GET"));
         assertEquals(HeaderConfig.defaults(CredentialForwarding.stripAll()),
-                admitted.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).config());
+                admitted.capabilities().get(EffectiveHeaderPolicy.class).config());
     }
 
     @Test
@@ -108,7 +108,7 @@ class AccessStageCommandServiceTest {
         AdmissionStageOutput admitted = admit(allowed, Map.of(RateLimitDimension.IP, "192.0.2.1",
                 RateLimitDimension.APP, "app", RateLimitDimension.ENDPOINT, "TEST.GET",
                 RateLimitDimension.CLIENT, "client", RateLimitDimension.SUBJECT, "HOST_SESSION:user"));
-        assertEquals(CLIENT_HEADERS, admitted.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).config());
+        assertEquals(CLIENT_HEADERS, admitted.capabilities().get(EffectiveHeaderPolicy.class).config());
     }
 
     @Test
@@ -139,7 +139,7 @@ class AccessStageCommandServiceTest {
         ClientCredentialAuthenticator authenticator = (credentials, clientId, original, now) -> {
             calls.incrementAndGet();
             assertSame(command.prepared().snapshot().content().clients().find(CLIENT).orElseThrow()
-                    .access().credentials(), credentials);
+                    .getAccess().credentials(), credentials);
             assertSame(evidence, original);
             assertEquals(CLIENT, clientId);
             assertEquals(NOW, now);
@@ -215,10 +215,10 @@ class AccessStageCommandServiceTest {
                         new RateLimitRule(dimension.name(), dimension, 10, 1,
                                 RateLimitMode.EXACT)).toList();
         java.util.List<RateLimitConfig> rateLimits = List.of(new RateLimitConfig(rules, null));
-        assertEquals(expectedDimensions, new RateLimitCapability().units(new com.cloud.gateway.domain.capability.ratelimit.EffectiveRateLimitPolicy(rateLimits), context).stream()
+        assertEquals(expectedDimensions, new RateLimitCapability().units(new EffectiveRateLimitPolicy(rateLimits), context).stream()
                 .collect(java.util.stream.Collectors.toMap(unit -> unit.quota().rule().dimension(), unit -> unit.quota().key())));
         AdmissionStageCommandService admission = new AdmissionStageCommandService(
-                new CapabilityExecutionCommandService(new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicyComposer.INSTANCE))),
+                new CapabilityExecutionCommandService(BuiltInCapabilityCatalog.assembler(), List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(EffectiveRateLimitPolicy.class))),
                         List.of(new RateLimitCapabilityExecutor(planned -> {
                     throw new AssertionError("no configured quota");
                 }))));
@@ -289,10 +289,9 @@ class AccessStageCommandServiceTest {
                 CapabilityExecution.empty()), null);
     }
 
-    private static CapabilityComposition policies() {
+    private static CapabilityPolicyConfig policies() {
         CapabilityBundleId id = new CapabilityBundleId("verified");
-        return new CapabilityComposition(
-                Map.of(id, new CapabilityBundle(id, java.util.List.of(CLIENT_HEADERS))),
+        return new CapabilityPolicyConfig(java.util.List.of(new CapabilityBundle(id, java.util.List.of(CLIENT_HEADERS))),
                 List.of(new CapabilityBinding(new CapabilityBindingId("verified"), id, null, null, Set.of(), null, CLIENT, null)));
     }
 }

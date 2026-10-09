@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.cloud.gateway.domain.common.DomainException;
+import com.cloud.framework.core.error.FrameworkException;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -37,20 +37,20 @@ class AppAccessTest {
 
     @Test
     void shouldRejectOriginContainingNonOriginComponents() {
-        assertThrows(DomainException.class, () -> new AppAccess(Set.of("https://example.com/path")));
-        assertThrows(DomainException.class, () -> new AppAccess(Set.of("https://*.example.com")));
-        assertThrows(DomainException.class, () -> new AppAccess(Set.of("https://user@example.com")));
-        assertThrows(DomainException.class, () -> new AppAccess(Set.of("ftp://example.com")));
+        assertThrows(FrameworkException.class, () -> new AppAccess(Set.of("https://example.com/path")));
+        assertThrows(FrameworkException.class, () -> new AppAccess(Set.of("https://*.example.com")));
+        assertThrows(FrameworkException.class, () -> new AppAccess(Set.of("https://user@example.com")));
+        assertThrows(FrameworkException.class, () -> new AppAccess(Set.of("ftp://example.com")));
     }
 
     @Test
     void shouldTrimAndRequirePlatformOnApp() {
         App app = new App(new AppId("app"), " IOS ", AppStatus.ENABLED, new AppAccess(Set.of()));
 
-        assertEquals("IOS", app.platform());
-        assertThrows(DomainException.class,
+        assertEquals("IOS", app.getPlatform());
+        assertThrows(FrameworkException.class,
                 () -> new App(new AppId("app"), " ", AppStatus.ENABLED, new AppAccess(Set.of())));
-        assertThrows(DomainException.class,
+        assertThrows(FrameworkException.class,
                 () -> new App(new AppId("app"), null, AppStatus.ENABLED, new AppAccess(Set.of())));
     }
 }

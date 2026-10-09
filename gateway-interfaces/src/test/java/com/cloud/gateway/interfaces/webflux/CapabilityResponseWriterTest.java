@@ -16,6 +16,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CapabilityResponseWriterTest {
     @Test
+    void shouldRejectDuplicateAndNullWriters() {
+        SuccessfulOutcomeWriter writer = new SuccessfulOutcomeWriter();
+        assertThrows(com.cloud.framework.core.error.FrameworkException.class,
+                () -> new CapabilityResponseWriter(List.of(writer, writer)));
+        assertThrows(com.cloud.framework.core.error.FrameworkException.class,
+                () -> new CapabilityResponseWriter(java.util.Arrays.asList(writer, null)));
+    }
+
+    @Test
     void shouldProjectRateLimitDenialWithoutExecutingQuota() {
         RequestQuotaGuard quotas = new RequestQuotaGuard(new QuotaCommandService(
                 (rule, key) -> { throw new AssertionError("projection only"); },

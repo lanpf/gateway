@@ -1,9 +1,10 @@
 package com.cloud.gateway.domain.client;
 
 import com.cloud.framework.core.validation.Require;
-import com.cloud.gateway.domain.common.DomainException;
 
 import java.time.Instant;
+import com.cloud.gateway.domain.common.DomainError;
+import com.cloud.gateway.domain.common.DomainException;
 
 public record Credential(
         CredentialId credentialId,
@@ -13,13 +14,10 @@ public record Credential(
         Instant expiresAt
         ) {
     public Credential {
-        Require.notNull(credentialId, DomainException::missingField);
-        Require.notNull(signatureContract, DomainException::missingField);
-        secretRef = Require.notBlank(secretRef, DomainException::invalidObjectField).trim();
-        Require.notNull(validFrom, DomainException::missingField);
-        Require.notNull(expiresAt, DomainException::missingField);
+        Require.allNotNull(credentialId, signatureContract, validFrom, expiresAt);
+        secretRef = Require.notBlank(secretRef).trim();
         if (!validFrom.isBefore(expiresAt)) {
-            throw DomainException.invalidObjectField();
+            throw new DomainException(DomainError.CLIENT_CREDENTIAL_INVALID);
         }
     }
 

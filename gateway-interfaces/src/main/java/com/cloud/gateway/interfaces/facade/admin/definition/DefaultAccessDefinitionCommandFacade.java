@@ -14,11 +14,11 @@ public class DefaultAccessDefinitionCommandFacade implements AccessDefinitionCom
     private final ClientCredentialCommandService clientCredentialService;
     private final EndpointAccessCommandService endpointAccessService;
     private final AccessDefinitionApiMapper mapper;
-    private final CapabilityCompositionCommandService capabilityService;
-    private final CapabilityCompositionApiMapper capabilityMapper;
+    private final CapabilityPolicyConfigCommandService capabilityService;
+    private final CapabilityPolicyConfigApiMapper capabilityMapper;
 
     @Override
-    public Result<DefinitionSaveApiOutput> saveCapabilityComposition(SaveCapabilityCompositionApiCommand command) {
+    public Result<DefinitionSaveApiOutput> saveCapabilityPolicyConfig(SaveCapabilityPolicyConfigApiCommand command) {
         return Result.success(mapper.saved(capabilityService.save(capabilityMapper.toCommand(command))));
     }
 

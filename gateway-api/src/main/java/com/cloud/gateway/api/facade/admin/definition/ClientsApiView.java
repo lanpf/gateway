@@ -1,5 +1,6 @@
 package com.cloud.gateway.api.facade.admin.definition;
 
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.gateway.api.enums.ClientStatusApiEnum;
 import com.cloud.gateway.api.enums.SignatureContractApiEnum;
 
@@ -13,7 +14,7 @@ import java.util.Set;
  */
 public record ClientsApiView(String sourceRevision, Set<ClientApiView> clients) {
     public ClientsApiView {
-        clients = clients == null ? null : Set.copyOf(clients);
+        clients = clients == null ? null : NullSafe.copyOf(clients);
     }
 
     public record ClientApiView(
@@ -24,7 +25,7 @@ public record ClientsApiView(String sourceRevision, Set<ClientApiView> clients) 
             CredentialApiView graceCredential
     ) {
         public ClientApiView {
-            allowedAppIds = allowedAppIds == null ? null : Set.copyOf(allowedAppIds);
+            allowedAppIds = allowedAppIds == null ? null : NullSafe.copyOf(allowedAppIds);
         }
     }
 

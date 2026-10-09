@@ -15,7 +15,7 @@ final class EndpointPathPatternValidator {
         PathPatternParser parser = new PathPatternParser();
         try {
             for (Endpoint endpoint : registry.values()) {
-                for (EndpointMatcher matcher : endpoint.matchers()) {
+                for (EndpointMatcher matcher : endpoint.getMatchers()) {
                     if (!matcher.pathPattern().startsWith("/")) {
                         throw new IllegalArgumentException("Absolute endpoint path required");
                     }

@@ -1,10 +1,10 @@
 package com.cloud.gateway.ingress;
 
-import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.policy.CapabilityBinding;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundle;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
+import com.cloud.gateway.domain.capability.policy.CapabilityBindingId;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundleId;
 
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotCapturer;
 import com.cloud.gateway.application.configuration.publication.RevisionedAccessSnapshot;
@@ -14,7 +14,7 @@ import com.cloud.gateway.application.security.BrowserSessionVerifier;
 import com.cloud.gateway.application.security.BrowserSessionVerificationOutcome;
 import com.cloud.gateway.application.security.ClientCredentialAuthenticator;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
-import com.cloud.gateway.domain.capability.ratelimit.RateLimitQuota;
+import com.cloud.gateway.application.quota.QuotaAcquirer;
 import com.cloud.gateway.domain.capability.header.HeaderConfig;
 import com.cloud.gateway.domain.capability.resilience.TimeoutConfig;
 import com.cloud.gateway.domain.ingress.snapshot.SnapshotVersion;
@@ -33,7 +33,6 @@ import com.cloud.gateway.domain.endpoint.EndpointRegistry;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.app.AppId;
-import com.cloud.gateway.domain.capability.configuration.*;
 import com.cloud.gateway.domain.endpoint.ClientVerificationRequirement;
 import com.cloud.gateway.domain.endpoint.EndpointAccess;
 import com.cloud.gateway.domain.capability.header.CredentialForwarding;
@@ -115,8 +114,8 @@ class GatewayPipelineIT {
                     + ";session=" + request.requestHeaders().get("X-Session-Id")
                     + ";cookies=" + request.requestHeaders().get("Cookie")
                     + ";authorization=" + request.requestHeaders().get("Authorization")
-                    + ";custom=" + request.requestHeaders().get("X-Gateway-App")
-                    + ";version=" + request.requestHeaders().get("X-Gateway-Version");
+                    + ";custom=" + request.requestHeaders().get("X-GW-App")
+                    + ";version=" + request.requestHeaders().get("X-GW-Version");
             return response.header("Content-Type", "text/plain")
                     .header("Cache-Control", "public, max-age=60").sendString(Mono.just(body));
         }).bindNow();
@@ -153,12 +152,19 @@ class GatewayPipelineIT {
         Reply reply = get("/public/echo", Map.of(
                 "X-App-Id", APP.value(), "X-App-Platform", "forged", "X-User-Id", "forged-user",
                 "X-Session-Id", "forged-session", "X-Channel-Code", "forged-channel",
-                "Cookie", "BROWSER_SESSION=forged", "Authorization", "Bearer forged"));
+                "Cookie", "OTHER=forged", "Authorization", "Basic forged"));
         assertEquals(200, reply.status());
         assertTrue(reply.body().contains("app=public-app;platform=browser"));
         assertTrue(reply.body().contains("user=null;client=null;session=null;cookies=null;authorization=null"));
         assertFalse(reply.body().contains("forged"));
         assertEquals(1, downstreamCalls.get());
+    }
+
+    @Test
+    void shouldRejectInvalidBrowserIdentityOnAnAnonymousEndpoint() {
+        Reply reply = get("/public/echo", Map.of("X-App-Id", APP.value(), "Cookie", "BROWSER_SESSION=forged"));
+        assertEquals(401, reply.status());
+        assertEquals(0, downstreamCalls.get(), "An invalid identity must not fall back to anonymous access");
     }
 
     @Test
@@ -177,9 +183,9 @@ class GatewayPipelineIT {
     void shouldApplyHeaderSelectionFromNewSnapshotWithoutRestart() throws InterruptedException {
         assertTrue(get("/public/echo", Map.of("X-App-Id", APP.value())).body().contains("app=public-app"));
         var headers = new HeaderConfig(Set.of(),
-                Map.of("X-Gateway-Version", "v2"), Set.of(), CredentialForwarding.stripAll());
+                Map.of("X-GW-Version", "v2"), Set.of(), CredentialForwarding.stripAll());
         snapshots.set(snapshot(2, true, headers, ordinaryTimeout()));
-        Reply changed = get("/public/echo", Map.of("X-App-Id", APP.value(), "X-Gateway-App", "forged"));
+        Reply changed = get("/public/echo", Map.of("X-App-Id", APP.value(), "X-App-Platform", "forged"));
         assertEquals(200, changed.status());
         assertTrue(changed.body().contains("app=null"));
         assertTrue(changed.body().contains("custom=null;version=v2"));
@@ -191,15 +197,12 @@ class GatewayPipelineIT {
         }
     }
 
-    /** Stage two was removed from v1: a slow downstream is forwarded, never answered by a gateway timeout. */
     @Test
-    void shouldForwardSlowDownstreamWithoutGatewayTimeoutStage() {
+    void shouldApplyTimeoutFromTheCurrentSnapshot() {
         snapshots.set(snapshot(2, true, defaultHeaders(), new TimeoutConfig(
                 Duration.ofSeconds(1), Duration.ofMillis(100), Duration.ofMillis(500))));
         Reply slow = get("/public/slow", Map.of("X-App-Id", APP.value()));
-        assertEquals(200, slow.status());
-        assertTrue(slow.body().contains("late;app=public-app"),
-                () -> "Expected the forwarded header plan, got: " + slow.body());
+        assertEquals(504, slow.status(), "The configured timeout must stop the slow downstream");
         assertEquals(1, downstreamCalls.get());
     }
 
@@ -247,7 +250,7 @@ class GatewayPipelineIT {
         }
         var baseId = new CapabilityBundleId("base");
         var base = new CapabilityBundle(baseId, java.util.List.of(timeout, headers));
-        var policies = new CapabilityComposition(Map.of(baseId, base), List.of(
+        var policies = new CapabilityPolicyConfig(java.util.List.of(base), List.of(
                 new CapabilityBinding(new CapabilityBindingId("base"), baseId, new ServiceId(SERVICE),
                         null, Set.of(), null, null, null)));
         var appRegistry = new AppRegistry(List.of(new App(APP, "browser",
@@ -276,12 +279,19 @@ class GatewayPipelineIT {
             WebFluxAutoConfiguration.class, GatewayAutoConfiguration.class})
     @Import(IngressWebFluxConfiguration.class)
     static class PipelineApplication {
+        @Bean com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfigValidator capabilityValidator() {
+            return com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog.validator();
+        }
+        @Bean com.cloud.gateway.domain.capability.policy.CapabilityPolicyAssembler capabilityAssembler(
+                com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfigValidator validator) {
+            return com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog.assembler(validator);
+        }
         @Bean Clock clock() { return Clock.systemUTC(); }
         @Bean
-        RateLimitQuota rateLimitQuota() {
+        QuotaAcquirer rateLimitQuota() {
             return (rule, value) -> RateLimitDecision.allowed(rule.dimension(), value, 1);
         }
-        @Bean QuotaCommandService quotaCommandService(RateLimitQuota quota) {
+        @Bean QuotaCommandService quotaCommandService(QuotaAcquirer quota) {
             return new QuotaCommandService(quota, quota::tryAcquire, QuotaObserver.noop());
         }
         @Bean ClientCredentialAuthenticator clientCredentialAuthenticator() {

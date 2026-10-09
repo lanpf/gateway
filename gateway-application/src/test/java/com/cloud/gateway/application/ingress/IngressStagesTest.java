@@ -1,13 +1,15 @@
 package com.cloud.gateway.application.ingress;
 
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
+import com.cloud.gateway.domain.capability.ratelimit.EffectiveRateLimitPolicy;
 
-import com.cloud.gateway.application.ingress.CapabilityRegistration;
+import com.cloud.gateway.domain.capability.header.EffectiveHeaderPolicy;
 
-import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
+
+import com.cloud.gateway.domain.capability.policy.CapabilityBinding;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundle;
+import com.cloud.gateway.domain.capability.policy.CapabilityBindingId;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundleId;
 
 import com.cloud.gateway.application.configuration.publication.RevisionedAccessSnapshot;
 import com.cloud.gateway.application.quota.RequestQuotaExecutor;
@@ -43,10 +45,8 @@ import com.cloud.gateway.domain.endpoint.EndpointStatus;
 import com.cloud.gateway.domain.endpoint.ServiceId;
 import com.cloud.gateway.domain.endpoint.RouteId;
 import com.cloud.gateway.domain.endpoint.SubjectAuthenticationRequirement;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
-import com.cloud.gateway.domain.capability.configuration.*;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRuleId;
 import com.cloud.gateway.domain.client.Client;
@@ -58,7 +58,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -175,7 +174,7 @@ class IngressStagesTest {
 
         assertInstanceOf(AccessStageOutput.Allowed.class, result.access());
         assertTrue(result.execution().continues());
-        assertNotNull(result.capabilities().get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE));
+        assertNotNull(result.capabilities().get(EffectiveHeaderPolicy.class));
         assertEquals(1, acquisitions.get());
     }
 
@@ -263,12 +262,12 @@ class IngressStagesTest {
     }
 
     private static CapabilityExecutionCommandService execution(RequestQuotaExecutor quotas) {
-        return new CapabilityExecutionCommandService(new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), planner(),
+        return new CapabilityExecutionCommandService(BuiltInCapabilityCatalog.assembler(), planner(),
                 List.of(new RateLimitCapabilityExecutor(quotas)));
     }
 
     private static List<CapabilityRegistration<?>> planner() {
-        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicyComposer.INSTANCE)));
+        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(EffectiveRateLimitPolicy.class)));
     }
 
     private static IngressAdmissionCommandService ingress(RequestQuotaExecutor quotas) {
@@ -293,16 +292,16 @@ class IngressStagesTest {
                         new ClientRegistry(List.of(new Client(new ClientId("client"), ClientStatus.ENABLED,
                                 new ClientAccess(Set.of(APP), null)))),
                         new EndpointRegistry(List.of(ENDPOINT)),
-                        composition()),
+                        policyConfig()),
                 "hash", NOW);
     }
 
-    private static CapabilityComposition composition() {
+    private static CapabilityPolicyConfig policyConfig() {
         CapabilityBundleId id = new CapabilityBundleId("limits");
         CapabilityBundle bundle = new CapabilityBundle(id, java.util.List.of(new RateLimitConfig(List.of(
                 new RateLimitRule("ip-rule", RateLimitDimension.IP, 10, 1, RateLimitMode.EXACT),
                 new RateLimitRule("app-rule", RateLimitDimension.APP, 10, 1, RateLimitMode.EXACT)), null)));
-        return new CapabilityComposition(Map.of(id, bundle), List.of(new CapabilityBinding(
+        return new CapabilityPolicyConfig(java.util.List.of(bundle), List.of(new CapabilityBinding(
                 new CapabilityBindingId("global"), id, null, null, Set.of(), null, null, null)));
     }
 }

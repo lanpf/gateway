@@ -8,8 +8,8 @@ import com.cloud.gateway.api.facade.admin.definition.EndpointsApiView;
 import com.cloud.gateway.api.facade.admin.definition.SaveEndpointApiCommand;
 import com.cloud.gateway.api.facade.admin.snapshot.SnapshotApiView;
 import com.cloud.gateway.api.facade.admin.snapshot.SnapshotUpdateApiOutput;
-import com.cloud.gateway.api.facade.admin.definition.CapabilityCompositionApiCommand;
-import com.cloud.gateway.api.facade.admin.definition.SaveCapabilityCompositionApiCommand;
+import com.cloud.gateway.api.facade.admin.definition.CapabilityPolicyConfigApiCommand;
+import com.cloud.gateway.api.facade.admin.definition.SaveCapabilityPolicyConfigApiCommand;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -37,12 +37,12 @@ class ApiNamingContractTest {
 
     @Test
     void shouldKeepNestedCapabilityJsonNames() throws Exception {
-        String document = "{\"expectedSourceRevision\":\"r\",\"policies\":{\"bundles\":{},\"bindings\":[]}}";
-        SaveCapabilityCompositionApiCommand command = json.readValue(document, SaveCapabilityCompositionApiCommand.class);
+        String document = "{\"expectedSourceRevision\":\"r\",\"policies\":{\"bundles\":{},\"bindings\":{}}}";
+        SaveCapabilityPolicyConfigApiCommand command = json.readValue(document, SaveCapabilityPolicyConfigApiCommand.class);
         assertEquals(json.readTree(document), json.valueToTree(command));
-        CapabilityCompositionApiCommand composition = json.readValue(
-                "{\"bundles\":{},\"bindings\":[]}", CapabilityCompositionApiCommand.class);
-        assertTrue(composition.bundles().isEmpty());
+        CapabilityPolicyConfigApiCommand policyConfig = json.readValue(
+                "{\"bundles\":{},\"bindings\":{}}", CapabilityPolicyConfigApiCommand.class);
+        assertTrue(policyConfig.bundles().isEmpty());
         assertTrue(command.policies().bindings().isEmpty());
     }
 
@@ -51,11 +51,11 @@ class ApiNamingContractTest {
         String document = """
                 {"bundleId":"example","capabilities":{"budget":{"units":8,"labels":["a"]}}}
                 """;
-        CapabilityCompositionApiCommand.BundleApiCommand decoded = json.readValue(
-                document, CapabilityCompositionApiCommand.BundleApiCommand.class);
+        CapabilityPolicyConfigApiCommand.BundleApiCommand decoded = json.readValue(
+                document, CapabilityPolicyConfigApiCommand.BundleApiCommand.class);
         assertEquals(json.readTree(document), json.valueToTree(decoded));
-        SaveCapabilityCompositionApiCommand.CapabilityCompositionApiCommand.BundleApiCommand nested = json.readValue(
-                document, SaveCapabilityCompositionApiCommand.CapabilityCompositionApiCommand.BundleApiCommand.class);
+        SaveCapabilityPolicyConfigApiCommand.CapabilityPolicyConfigApiCommand.BundleApiCommand nested = json.readValue(
+                document, SaveCapabilityPolicyConfigApiCommand.CapabilityPolicyConfigApiCommand.BundleApiCommand.class);
         assertEquals(json.readTree(document), json.valueToTree(nested));
 
         List<String> labels = new ArrayList<>(List.of("a"));
@@ -63,8 +63,8 @@ class ApiNamingContractTest {
         node.put("labels", labels);
         java.util.Map<String, java.util.Map<String, Object>> nodes = new java.util.HashMap<>();
         nodes.put("budget", node);
-        CapabilityCompositionApiCommand.BundleApiCommand command =
-                new CapabilityCompositionApiCommand.BundleApiCommand("example", nodes);
+        CapabilityPolicyConfigApiCommand.BundleApiCommand command =
+                new CapabilityPolicyConfigApiCommand.BundleApiCommand("example", nodes);
         labels.clear();
         node.clear();
         nodes.clear();
@@ -73,7 +73,7 @@ class ApiNamingContractTest {
         assertThrows(UnsupportedOperationException.class, () -> command.capabilities().get("budget").clear());
         List<?> copied = (List<?>) command.capabilities().get("budget").get("labels");
         assertThrows(UnsupportedOperationException.class, copied::clear);
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityCompositionApiCommand.BundleApiCommand(
+        assertThrows(IllegalArgumentException.class, () -> new CapabilityPolicyConfigApiCommand.BundleApiCommand(
                 "example", java.util.Map.of("budget", java.util.Map.of("value", new Object()))));
     }
 
@@ -84,7 +84,7 @@ class ApiNamingContractTest {
         new HeaderPolicyJsonCustomizer().customize(builder);
         ObjectMapper mapper = builder.build();
         assertThrows(JsonMappingException.class, () -> mapper.readValue(
-                "{\"unexpected\":true}", CapabilityCompositionApiCommand.HeadersApiCommand.class));
+                "{\"unexpected\":true}", CapabilityPolicyConfigApiCommand.HeadersApiCommand.class));
     }
 
     @Test

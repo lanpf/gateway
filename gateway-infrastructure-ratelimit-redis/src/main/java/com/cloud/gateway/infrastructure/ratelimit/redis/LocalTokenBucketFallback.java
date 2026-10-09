@@ -1,5 +1,6 @@
 package com.cloud.gateway.infrastructure.ratelimit.redis;
 
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitDecision;
 import com.cloud.gateway.domain.capability.ratelimit.RateLimitRule;
 import java.time.Duration;
@@ -19,7 +20,7 @@ final class LocalTokenBucketFallback {
     LocalTokenBucketFallback(int maximumBuckets, LongSupplier ticker) {
         Assert.isTrue(maximumBuckets > 0, "maximumBuckets must be positive");
         this.maximumBuckets = maximumBuckets;
-        this.ticker = Objects.requireNonNull(ticker);
+        this.ticker = Require.notNull(ticker);
     }
 
     synchronized RateLimitDecision tryAcquire(RateLimitRule rule, String key, String resolvedKey) {

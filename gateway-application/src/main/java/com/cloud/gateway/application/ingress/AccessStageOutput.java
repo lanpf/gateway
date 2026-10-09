@@ -1,5 +1,6 @@
 package com.cloud.gateway.application.ingress;
 
+import com.cloud.framework.core.validation.Require;
 import com.cloud.gateway.domain.ingress.access.AccessDecision;
 import java.util.Objects;
 
@@ -15,12 +16,11 @@ public sealed interface AccessStageOutput {
     /** A denial adds nothing to the verdict; it is carried to the terminal output as-is. */
     record Denied(AccessDecision.Denied decision) implements AccessStageOutput { }
 
-    /** Carries the original captured facts; admission resolves capabilities from this same snapshot. */
+    /** Carries the original captured facts; admission resolves policyConfig from this same snapshot. */
     record Allowed(AccessDecision.Allowed decision,
                    PreparationStageOutput.Prepared prepared) implements AccessStageOutput {
         public Allowed {
-            Objects.requireNonNull(decision, "decision");
-            Objects.requireNonNull(prepared, "prepared");
+            Require.allNotNull(decision, prepared);
         }
     }
 }

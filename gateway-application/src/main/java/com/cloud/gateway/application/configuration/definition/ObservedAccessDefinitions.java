@@ -5,7 +5,7 @@ import com.cloud.gateway.domain.ingress.snapshot.Revision;
 import com.cloud.gateway.domain.app.AppRegistry;
 import com.cloud.gateway.domain.client.ClientRegistry;
 import com.cloud.gateway.domain.endpoint.EndpointRegistry;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 
 import java.util.List;
 
@@ -14,7 +14,7 @@ public record ObservedAccessDefinitions(
         RevisionedAccessDefinition<EndpointRegistry> endpoints,
         RevisionedAccessDefinition<AppRegistry> apps,
         RevisionedAccessDefinition<ClientRegistry> clients,
-        RevisionedAccessDefinition<CapabilityComposition> policies
+        RevisionedAccessDefinition<CapabilityPolicyConfig> policies
 ) {
     public IngressContent toContent() {
         return new IngressContent(apps.value(), clients.value(), endpoints.value(), policies.value());

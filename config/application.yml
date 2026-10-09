@@ -1,10 +1,15 @@
 spring:
   application:
     name: gateway
+  data:
+    redis:
+      timeout: PT5S
+      connect-timeout: PT2S
   cloud:
     nacos:
       config:
         server-addr: 127.0.0.1:8848
+        config-request-timeout: 5000
         import-check:
           enabled: false
       discovery:
@@ -22,10 +27,20 @@ spring:
                 - RewritePath=/api/user-auth/(?<segment>.*), /api/$\{segment}
                 - RewritePath=/admin/user-auth/(?<segment>.*), /admin/$\{segment}
 
+framework:
+  lock:
+    redis:
+      lease-time: PT90S
+
 gateway:
+  access:
+    operations:
+      timeout: PT60S
+      max-blocking-time: PT10S
+      lease-safety-margin: PT20S
   header:
-    # extra: 除 RequestHeader 枚举与 x-gw- 前缀外，允许普通 set/remove 的额外准入名单（未配置即为空）
-    # deny-set / deny-remove: 分别禁止普通 set 与普通 remove 操作的 header 名单
+    # deny-set / deny-remove: 分别禁止普通 set 与普通 remove 操作的 header 名单；
+    # 名单匹配忽略大小写（规范化小写），已登记 RequestHeader 一律不能作为普通 set/remove 目标，无需列入
     deny-set: [Host, Content-Length, Transfer-Encoding, Authorization, Cookie, Connection, Keep-Alive, TE, Trailer, Upgrade, Proxy-Authorization, Proxy-Authenticate, Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, Signature, Signature-Input]
     deny-remove: [Host, Content-Length, Transfer-Encoding, Authorization, Cookie, Connection, Keep-Alive, TE, Trailer, Upgrade, Proxy-Authorization, Proxy-Authenticate, Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, Signature, Signature-Input]
   access-definition:
@@ -178,9 +193,9 @@ gateway:
                 authorizationHeader: PRESERVE
                 cookies: STRIP_ALL
       bindings:
-        - { binding-id: standard-default, bundle-id: standard }
-        - { binding-id: browser-session, bundle-id: browser-session, endpoint-id: USER_AUTH.BROWSER_SESSION_API }
-        - { binding-id: oauth2-protocol, bundle-id: oauth2-protocol, endpoint-id: USER_AUTH.OAUTH2_PROTOCOL }
+        standard-default: { binding-id: standard-default, bundle-id: standard }
+        browser-session: { binding-id: browser-session, bundle-id: browser-session, endpoint-id: USER_AUTH.BROWSER_SESSION_API }
+        oauth2-protocol: { binding-id: oauth2-protocol, bundle-id: oauth2-protocol, endpoint-id: USER_AUTH.OAUTH2_PROTOCOL }
   security:
     admin-audience: gateway
     access-token:

@@ -1,17 +1,17 @@
 package com.cloud.gateway.domain.capability.ratelimit;
 
-import com.cloud.gateway.domain.common.DomainException;
 import com.cloud.framework.core.validation.Require;
 
 import java.time.Duration;
+import com.cloud.framework.core.error.FrameworkException;
 
 public record RateLimitDecision(boolean allowed, boolean unavailable, RateLimitDimension dimension,
                                 String key, long remaining, Duration retryAfter) {
     public RateLimitDecision {
-        Require.notNull(retryAfter, DomainException::missingField);
+        Require.notNull(retryAfter);
         if ((allowed && unavailable) || remaining < 0 || retryAfter.isNegative()
                 || (allowed && !retryAfter.isZero()) || (unavailable && !retryAfter.isZero())) {
-            throw DomainException.invalidObjectField();
+            throw FrameworkException.invalidObject();
         }
     }
 

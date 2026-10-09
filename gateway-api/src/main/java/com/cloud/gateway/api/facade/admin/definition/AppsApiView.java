@@ -1,5 +1,6 @@
 package com.cloud.gateway.api.facade.admin.definition;
 
+import com.cloud.framework.core.util.NullSafe;
 import com.cloud.gateway.api.enums.AppStatusApiEnum;
 
 import java.util.Set;
@@ -11,12 +12,12 @@ import java.util.Set;
  */
 public record AppsApiView(String sourceRevision, Set<AppApiView> apps) {
     public AppsApiView {
-        apps = apps == null ? null : Set.copyOf(apps);
+        apps = apps == null ? null : NullSafe.copyOf(apps);
     }
 
     public record AppApiView(String appId, String platform, AppStatusApiEnum status, Set<String> allowedOrigins) {
         public AppApiView {
-            allowedOrigins = allowedOrigins == null ? null : Set.copyOf(allowedOrigins);
+            allowedOrigins = allowedOrigins == null ? null : NullSafe.copyOf(allowedOrigins);
         }
     }
 }

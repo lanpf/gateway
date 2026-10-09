@@ -36,7 +36,7 @@ public final class PreparationStageCommandService {
 
         CapabilityContext context = new CapabilityContext(CapabilitySlot.PRE_AUTH, evidence, endpoint, null);
         CapabilityExecutionCommand capabilityCommand = new CapabilityExecutionCommand(
-                snapshot.content().capabilities(), context, Set.of());
+                snapshot.content().policyConfig(), context, Set.of());
         IngressTask<PreparationStageOutput> task = new IngressTask<>();
         task.finish(task.track(capabilities.execute(capabilityCommand))
                 .thenApply(output -> output.execution().continues()

@@ -1,6 +1,12 @@
 package com.cloud.gateway.interfaces.webflux;
 
-import com.cloud.gateway.domain.capability.configuration.EffectiveCapabilityPolicies;
+import com.cloud.gateway.domain.capability.resilience.EffectiveTimeoutPolicy;
+
+import com.cloud.gateway.domain.capability.ratelimit.EffectiveRateLimitPolicy;
+
+import com.cloud.gateway.domain.capability.header.EffectiveHeaderPolicy;
+
+import com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityCatalog;
 
 import com.cloud.gateway.application.ingress.CapabilityRegistration;
 
@@ -8,12 +14,11 @@ import com.cloud.gateway.application.configuration.publication.RevisionedAccessS
 import com.cloud.gateway.application.ingress.*;
 import com.cloud.gateway.application.quota.QuotaCommandService;
 import com.cloud.gateway.domain.app.*;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBinding;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBindingId;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundle;
-import com.cloud.gateway.domain.capability.configuration.CapabilityBundleId;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.configuration.CapabilityPolicyAssembler;
+import com.cloud.gateway.domain.capability.policy.CapabilityBinding;
+import com.cloud.gateway.domain.capability.policy.CapabilityBindingId;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundle;
+import com.cloud.gateway.domain.capability.policy.CapabilityBundleId;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfig;
 import com.cloud.gateway.domain.capability.runtime.CapabilityExecution;
 import com.cloud.gateway.domain.capability.runtime.HeaderApplyCapability;
 import com.cloud.gateway.domain.capability.runtime.RateLimitCapability;
@@ -36,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.route.Route;
@@ -67,7 +71,7 @@ class IngressFiltersTest {
         PreparationStageCommandService preparation = new PreparationStageCommandService(() -> {
             captures.incrementAndGet();
             return new RevisionedAccessSnapshot(snapshot, new Revision("source"));
-        }, new SnapshotEndpointMatchSource(), new CapabilityExecutionCommandService(new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()),
+        }, new SnapshotEndpointMatchSource(), new CapabilityExecutionCommandService(BuiltInCapabilityCatalog.assembler(),
                 planner(), List.of(new RateLimitCapabilityExecutor(planned -> {
             quotas.incrementAndGet();
             return CompletableFuture.completedFuture(RateLimitDecision.allowed(null, null, 1));
@@ -159,7 +163,7 @@ class IngressFiltersTest {
     @Test
     void shouldAnswerGatewayTimeoutWhenTheForwardBudgetExpires() {
         Endpoint endpoint = anonymousEndpoint(GatewayRequestAttributes.LOCAL_ROUTE_ID);
-        MockServerWebExchange exchange = preparedExchange(endpoint, snapshot(endpoint, timeoutComposition()));
+        MockServerWebExchange exchange = preparedExchange(endpoint, snapshot(endpoint, timeoutPolicyConfig()));
         admissionFilter().filter(exchange, ignored -> Mono.never()).block();
         assertEquals(HttpStatus.GATEWAY_TIMEOUT, exchange.getResponse().getStatusCode());
     }
@@ -214,7 +218,7 @@ class IngressFiltersTest {
     @Test
     void shouldPublishTheDeclaredBudgetToTheRouteMetadata() {
         Endpoint endpoint = anonymousEndpoint(GatewayRequestAttributes.LOCAL_ROUTE_ID);
-        MockServerWebExchange exchange = preparedExchange(endpoint, snapshot(endpoint, timeoutComposition()));
+        MockServerWebExchange exchange = preparedExchange(endpoint, snapshot(endpoint, timeoutPolicyConfig()));
         exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR, Route.async()
                 .id("orders").uri(URI.create("http://localhost:9000")).order(0)
                 .asyncPredicate(ignored -> Mono.just(true)).build());
@@ -233,7 +237,7 @@ class IngressFiltersTest {
             throw new AssertionError("no client verification expected");
         }, new AccessEvaluator(), Clock.systemUTC());
         CapabilityExecutionCommandService capabilities = new CapabilityExecutionCommandService(
-                new CapabilityPolicyAssembler(com.cloud.gateway.domain.capability.catalog.BuiltInCapabilityConfigs.registry()), planner(), List.of(new RateLimitCapabilityExecutor(quotas),
+                BuiltInCapabilityCatalog.assembler(), planner(), List.of(new RateLimitCapabilityExecutor(quotas),
                         new TimeoutCapabilityExecutor(), new HeaderApplyCapabilityExecutor()));
         return new IngressAdmissionGlobalFilter(new IngressAdmissionCommandService(access,
                 new AdmissionStageCommandService(capabilities)),
@@ -246,8 +250,8 @@ class IngressFiltersTest {
      * request reaches it, so the two lists must be kept in step here as well as in the configuration.
      */
     private static List<CapabilityRegistration<?>> planner() {
-        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(com.cloud.gateway.domain.capability.ratelimit.RateLimitPolicyComposer.INSTANCE)), new CapabilityRegistration<>(new TimeoutCapability(), config -> config.get(com.cloud.gateway.domain.capability.resilience.TimeoutPolicyComposer.INSTANCE)),
-                new CapabilityRegistration<>(new HeaderApplyCapability(), config -> config.get(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE)));
+        return List.of(new CapabilityRegistration<>(new RateLimitCapability(), config -> config.get(EffectiveRateLimitPolicy.class)), new CapabilityRegistration<>(new TimeoutCapability(), config -> config.get(EffectiveTimeoutPolicy.class)),
+                new CapabilityRegistration<>(new HeaderApplyCapability(), config -> config.get(EffectiveHeaderPolicy.class)));
     }
 
     private static CapabilityResponseWriter responses(RequestQuotaGuard quotas) {
@@ -300,10 +304,10 @@ class IngressFiltersTest {
     }
 
     private static IngressSnapshot snapshot(Endpoint endpoint) {
-        return snapshot(endpoint, CapabilityComposition.empty());
+        return snapshot(endpoint, CapabilityPolicyConfig.empty());
     }
 
-    private static IngressSnapshot snapshot(Endpoint endpoint, CapabilityComposition capabilities) {
+    private static IngressSnapshot snapshot(Endpoint endpoint, CapabilityPolicyConfig capabilities) {
         return new IngressSnapshot(new SnapshotVersion(1), new IngressContent(
                 new AppRegistry(List.of(new App(APP, "web", AppStatus.ENABLED, new AppAccess(Set.of())))),
                 new ClientRegistry(List.of()), new EndpointRegistry(List.of(endpoint)), capabilities),
@@ -313,11 +317,10 @@ class IngressFiltersTest {
     /**
      * A timeout bundle behind a globally scoped binding, so {@code CapabilityPolicyAssembler} matches it for
      * any endpoint. The bundle id and the binding id are deliberately different values: they are two
-     * identities, and the composition rejects a bundle whose map key disagrees with its own id.
+     * identities, and the policy configuration rejects a bundle whose map key disagrees with its own id.
      */
-    private static CapabilityComposition timeoutComposition() {
-        return new CapabilityComposition(
-                Map.of(TIMEOUT_BUNDLE, new CapabilityBundle(TIMEOUT_BUNDLE, java.util.List.of(TIMEOUT))),
+    private static CapabilityPolicyConfig timeoutPolicyConfig() {
+        return new CapabilityPolicyConfig(java.util.List.of(new CapabilityBundle(TIMEOUT_BUNDLE, java.util.List.of(TIMEOUT))),
                 List.of(new CapabilityBinding(TIMEOUT_BINDING, TIMEOUT_BUNDLE, null, null, Set.of(),
                         null, null, null)));
     }

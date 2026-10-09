@@ -1,40 +1,39 @@
 package com.cloud.gateway.infrastructure.policy;
 
 import com.cloud.gateway.application.configuration.publication.AccessSnapshotHasher;
-import com.cloud.gateway.domain.capability.configuration.CapabilityComposition;
-import com.cloud.gateway.domain.capability.header.rules.HeaderAdmissionRules;
+import com.cloud.gateway.domain.capability.policy.CapabilityPolicyConfigValidator;
 
 import com.cloud.gateway.domain.ingress.snapshot.IngressSnapshot;
 import com.cloud.gateway.infrastructure.common.InfrastructureError;
 import com.cloud.gateway.infrastructure.common.InfrastructureException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-public final class StoredAccessSnapshotCodec extends PolicyYamlCodec {
+public final class StoredAccessSnapshotCodec extends AbstractPolicyYamlCodec {
     private final StoredAccessSnapshotMapper mapper;
     private final AccessSnapshotHasher hasher;
-    private final HeaderAdmissionRules headerRules;
+    private final CapabilityPolicyConfigValidator validator;
 
     public StoredAccessSnapshotCodec(
             StoredAccessSnapshotMapper mapper,
             AccessSnapshotHasher hasher,
             ObjectMapper objectMapper,
-            HeaderAdmissionRules headerRules
+            CapabilityPolicyConfigValidator validator
     ) {
         super(objectMapper);
         this.mapper = mapper;
         this.hasher = hasher;
-        this.headerRules = headerRules;
+        this.validator = validator;
     }
 
     public String encodeSnapshot(IngressSnapshot snapshot) {
-        validateHeaderAdmission(snapshot.content().capabilities());
+        validateSnapshot(snapshot);
         return encode(mapper.toStore(snapshot));
     }
 
     public IngressSnapshot decodeSnapshot(String content) {
         IngressSnapshot snapshot = decode(content, StoredAccessSnapshot.class, stored -> {
             IngressSnapshot decoded = mapper.toDomain(stored);
-            validateHeaderAdmission(decoded.content().capabilities());
+            validateSnapshot(decoded);
             return decoded;
         });
         if (!hasher.hash(snapshot.content()).equals(snapshot.contentHash())) {
@@ -43,7 +42,9 @@ public final class StoredAccessSnapshotCodec extends PolicyYamlCodec {
         return snapshot;
     }
 
-    private void validateHeaderAdmission(CapabilityComposition composition) {
-        composition.bundles().values().forEach(bundle -> headerRules.validate(bundle.find(com.cloud.gateway.domain.capability.header.HeaderPolicyComposer.INSTANCE).orElse(null)));
+    private void validateSnapshot(IngressSnapshot snapshot) {
+        validator.validate(snapshot.content().policyConfig(), snapshot.content().apps(),
+                snapshot.content().clients(), snapshot.content().endpoints());
     }
+
 }

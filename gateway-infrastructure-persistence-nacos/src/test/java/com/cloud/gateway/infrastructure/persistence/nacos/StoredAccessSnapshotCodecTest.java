@@ -16,7 +16,7 @@ class StoredAccessSnapshotCodecTest {
     /** Mirrors {@code GatewayPathApiConstants.ADMIN_POLICIES_APP}; the api module is an outer layer. */
     private static final String ADMIN_APP_PATH = "/admin/gateway/policies/app";
     private static final String PACKAGED_EXAMPLE_HASH =
-            "59344a56435c27761724b84594512088c75724898088bc43fe779c6ee34d1f4d";
+            "6c722f630612c4b7c32bb871be4b2bb79340bbc366373c4b30ed30b9e6380d98";
 
     private final StoredAccessSnapshotCodec codec = PolicyTestFixtures.codec();
 
@@ -29,7 +29,7 @@ class StoredAccessSnapshotCodecTest {
         assertEquals(7, decoded.version().value());
         assertEquals(source.contentHash(), decoded.contentHash());
         assertEquals("user-auth", decoded.content().endpoints()
-                .find(new EndpointId("USER_AUTH.LOGIN")).orElseThrow().routeId().value());
+                .find(new EndpointId("USER_AUTH.LOGIN")).orElseThrow().getRouteId().value());
         assertEquals(true, decoded.content().endpoints()
                 .find(new EndpointId("USER_AUTH.LOGIN")).orElseThrow().enabled());
     }

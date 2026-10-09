@@ -10,5 +10,6 @@
 ## Structure and naming
 
 - **TEST-REUSE-001** **[DEFAULT][BASELINE]** — Extract test support only for stable and meaningful reuse; do not create a common test base merely to remove small duplication.
-- **TEST-UNIT-NAME-001** **[REQUIRED][BASELINE]** — Name unit and module contract test classes `*Test` and execute them with Maven Surefire in the test phase.
+- **TEST-UNIT-CLASS-NAME-001** **[REQUIRED][BASELINE]** — Name unit and module contract tests `*Test`.
+- **TEST-UNIT-RUNNER-001** **[REQUIRED][BASELINE]** — Run unit and module contract tests with Maven Surefire in the test phase.
 - **TEST-METHOD-NAME-001** **[REQUIRED][BASELINE]** — Name test methods `should<ExpectedBehavior>` to state the observable behavior directly.

@@ -30,15 +30,14 @@ public final class ClientCredentialCommandService {
     public Revision save(SaveClientCredentialCommand command) {
         return writer.update(repository, command.expectedSourceRevision(), current -> {
             Client existing = current.find(command.clientId()).orElseThrow(() -> new DomainException(DomainError.CLIENT_NOT_FOUND));
-            ClientAccess access = new ClientAccess(existing.access().allowedApps(), command.credentials());
-            Client next = new Client(existing.clientId(), existing.status(), access);
+            Client next = existing.rotateCredentials(command.credentials());
             return withClient(current, next);
         });
     }
 
     private static ClientRegistry withClient(ClientRegistry current, Client next) {
         Map<ClientId, Client> updated = new LinkedHashMap<>(current.asMap());
-        updated.put(next.clientId(), next);
+        updated.put(next.getId(), next);
         return new ClientRegistry(updated.values());
     }
 }
